@@ -299,6 +299,25 @@ class TestTSP:
         assert abs(grm_tsp.TourNetwork(tour, dist).cost() - grm_tsp.tour_length(tour, dist)) < 1e-9
 
 
+class TestText:
+    def test_sentence_categories_without_training(self):
+        """Held-out sentences: mostly right, never a confident error; no known word gives 'unknown'."""
+        import grm_text
+        rt = grm_text.RelationTable(grm_text.TABLE)
+        answers = [(c, rt.classify(s)[0]) for c, sentences in grm_text.TEST.items() for s in sentences]
+        right = sum(a == c for c, a in answers)
+        confident_wrong = sum(a != c and not a.startswith(("unsure", "unknown")) for c, a in answers)
+        assert right >= 0.75 * len(answers)
+        assert confident_wrong == 0
+        assert rt.classify("mon chat dort sur le canapé")[0] == "unknown"
+
+    def test_shares_sum_to_one(self):
+        import grm_text
+        rt = grm_text.RelationTable(grm_text.TABLE)
+        shares = rt.classify("le guitariste joue un solo")[1]
+        assert abs(sum(shares.values()) - 1.0) < 1e-4
+
+
 class TestUncertainties:
     def test_uncertainty_propagates_through_a_power(self):
         # b = a^2, a measured with sigma 0.01 dex  ->  sigma(b) = 0.02 dex

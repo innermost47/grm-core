@@ -9,10 +9,11 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
-| `test_grm.py` | A hardcore test battery: 49 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 56 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
+| `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
 | `grm_guitar.py` | **GRM Guitar**: a six-string guitar simulator whose strings, body, attack and finger noise are all GRM networks |
 
 The cosmology and particle-physics model this engine was built for is presented at [grm.anthony-charretier.fr](https://grm.anthony-charretier.fr), with its own repository: [innermost47/GRM](https://github.com/innermost47/GRM).
@@ -116,7 +117,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 49 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 56 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
@@ -270,6 +271,41 @@ Results on lin318 (318 cities, optimum 42 029), same machine:
 For reference, a simulated annealing run with 2-opt moves (3 million moves, not part of this repository) reached
 42 471 (+1.05 %) in 7 s on the same machine. Method 1 still gives a rough tour on a clustered map; method 2 does
 most of the work. Work in progress.
+
+## Sentence categories without training (`grm_text.py`)
+
+```bash
+python grm_text.py "le gardien a arrêté le penalty"
+python grm_text.py --eval
+```
+
+A table, nothing more: on the left example sentences, on the right their category (5 categories, 25 French
+sentences each, written for the demo). Nothing is fitted. For a new sentence, the GRM core solves a small network:
+
+```
+shares      one positive node s_c per category
+balance     sum of s_c = 1                       what one category gains, the others lose
+evidence    log s_c = log p(c | w)               for every known word w, read from the table,
+                                                 sigma = 0.5 dex / sqrt(times w was seen)
+```
+
+The answer is the leading category when it leads the runner-up by more than 1 sigma (with their covariance),
+otherwise `unsure: A or B`. A sentence with no word in the table gets `unknown`, not a guess. `explain` lists the
+words that pulled the decision. The balance is solved by continuation (loose, then tight), as a tight sum alone
+crawls.
+
+Results on 40 held-out sentences, written separately and never used to build the relations:
+
+| Answer | Count |
+|---|---|
+| right | 32 |
+| unsure, right one among the two | 5 |
+| unsure, right one missing | 3 |
+| confidently wrong | 0 |
+
+Off-topic sentences: 4 of 6 give `unknown`. The two others share a word with the table by chance (`acte`, then `plante` and `besoin`)
+and get an answer: the table is small, and a single shared word is enough. A larger table, or a minimum amount of
+evidence, would be the next step.
 
 ## Status and limits
 - **Work in progress**: names, defaults and interfaces may change.
