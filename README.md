@@ -6,11 +6,12 @@
 
 This repository contains:
 
-| File            | What it is                                                                                                      |
-| --------------- | --------------------------------------------------------------------------------------------------------------- |
-| `grm.py`        | The relational solver: one file, NumPy optional                                                                 |
-| `test_grm.py`   | A hardcore test battery: 49 tests, plus a validation protocol for full models                                   |
-| `grm_model.py`  | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model      |
+| File | What it is |
+|---|---|
+| `grm.py` | The relational solver: one file, NumPy optional |
+| `test_grm.py` | A hardcore test battery: 49 tests, plus a validation protocol for full models |
+| `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
+| `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_guitar.py` | **GRM Guitar**: a six-string guitar simulator whose strings, body, attack and finger noise are all GRM networks |
 
 The cosmology and particle-physics model this engine was built for is presented at [grm.anthony-charretier.fr](https://grm.anthony-charretier.fr), with its own repository: [innermost47/GRM](https://github.com/innermost47/GRM).
@@ -20,14 +21,14 @@ The cosmology and particle-physics model this engine was built for is presented 
 ### Listen to the guitar model
 Every sound below was rendered by `grm_guitar.py`, from the GRM networks only (no samples):
 
-| Sound                                                                     | What you hear                                                             |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [strum_pick.wav](docs/audio/strum_pick.wav)                               | a G chord strummed down with a 0.71 mm pick                               |
-| [strum_fingers.wav](docs/audio/strum_fingers.wav)                         | the same chord strummed with the fingers: softer release, rounder sound   |
-| [folk_loop_pick.wav](docs/audio/folk_loop_pick.wav)                       | C – Am – Em – G, folk strumming pattern, with finger noise between chords |
-| [folk_loop_no_finger_noise.wav](docs/audio/folk_loop_no_finger_noise.wav) | the same loop without finger noise, to compare                            |
-| [travis_fingers.wav](docs/audio/travis_fingers.wav)                       | C – Am, Travis picking (alternating bass) with the fingers                |
-| [palm_muted_rock.wav](docs/audio/palm_muted_rock.wav)                     | a palm-muted power-chord riff at 120 BPM                                  |
+| Sound | What you hear |
+|---|---|
+| [strum_pick.wav](docs/audio/strum_pick.wav) | a G chord strummed down with a 0.71 mm pick |
+| [strum_fingers.wav](docs/audio/strum_fingers.wav) | the same chord strummed with the fingers: softer release, rounder sound |
+| [folk_loop_pick.wav](docs/audio/folk_loop_pick.wav) | C – Am – Em – G, folk strumming pattern, with finger noise between chords |
+| [folk_loop_no_finger_noise.wav](docs/audio/folk_loop_no_finger_noise.wav) | the same loop without finger noise, to compare |
+| [travis_fingers.wav](docs/audio/travis_fingers.wav) | C – Am, Travis picking (alternating bass) with the fingers |
+| [palm_muted_rock.wav](docs/audio/palm_muted_rock.wav) | a palm-muted power-chord riff at 120 BPM |
 
 ---
 
@@ -56,11 +57,11 @@ nodes = {
 ```
 
 ### Relations
-| Type                 | Form                             | Example                                                          |
-| -------------------- | -------------------------------- | ---------------------------------------------------------------- |
+| Type | Form | Example |
+|---|---|---|
 | log-linear (default) | `sum(coeff * log10(node)) = rhs` | `E = m c^2` -> `{"terms": {"E": 1, "m": -1, "c": -2}, "rhs": 0}` |
-| `sum`                | `sum(coeff * value^p) = K`       | `Omega_b + Omega_c + Omega_L = 1`                                |
-| `fn`                 | `f(values) = 0`, any equation    | Koide, cosmological ages                                         |
+| `sum` | `sum(coeff * value^p) = K` | `Omega_b + Omega_c + Omega_L = 1` |
+| `fn` | `f(values) = 0`, any equation | Koide, cosmological ages |
 
 Each relation has a `sigma` (its tolerance, in dex for log-linear relations). A `rhs` may itself be a function of the current values.
 
@@ -75,13 +76,13 @@ out = net.solve(measured_dict={"m": 2.0, "H0": (70.0, 0.01)})   # value, or (val
 ```
 
 ### Results
-| Key                                                             | Meaning                                                                            |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `values`                                                        | best estimate of every node                                                        |
-| `sigma_dex`, `uncertainty`                                      | 1-sigma uncertainty (dex, and relative; absolute for signed nodes)                 |
-| `undetermined`                                                  | nodes nothing determines: their value is only the starting point, not a prediction |
-| `relation_pulls`                                                | residual of every relation in sigma                                                |
-| `covariance`, `cost`, `reduced_chi2`, `converged`, `iterations` | the rest of the fit                                                                |
+| Key | Meaning |
+|---|---|
+| `values` | best estimate of every node |
+| `sigma_dex`, `uncertainty` | 1-sigma uncertainty (dex, and relative; absolute for signed nodes) |
+| `undetermined` | nodes nothing determines: their value is only the starting point, not a prediction |
+| `relation_pulls` | residual of every relation in sigma |
+| `covariance`, `cost`, `reduced_chi2`, `converged`, `iterations` | the rest of the fit |
 
 `leave_one_out(measured)` hides each measurement in turn and predicts it from the rest.
 
@@ -195,6 +196,44 @@ Body dimensions and wood values are typical figures, not measurements of a given
 - fingertip pulp: about 2 N per mm.
 
 ---
+
+## 3-SAT as a GRM network (`grm_sat.py`)
+
+```bash
+python grm_sat.py                                   # alpha = 3.11 (clauses per variable)
+python grm_sat.py --alpha 4.2 --sizes 50 100 200 --trials 5 --restarts 3
+python grm_sat.py --dimacs formula.cnf
+```
+
+Each variable is a positive node o_i whose truth value is v_i = o_i / (1 + o_i); each clause is a relation
+(1 - l_1)(1 - l_2)(1 - l_3) = 0, zero as soon as one literal is true. The GRM engine solves the network, the result
+is rounded, and every clause is checked. A classical WalkSAT runs on the same formulas as a baseline.
+
+First results (random formulas, this machine):
+
+| alpha | N | GRM: formulas fully satisfied | WalkSAT |
+|---|---|---|---|
+| 3.11 | 20 to 200 (3 each) | 12 / 12 | 12 / 12 |
+| 3.11 | 500, 1000 (2 each) | 4 / 4 (6 s and 36 s per formula) | 4 / 4 (under 0.1 s) |
+| 4.2 | 50 / 100 / 200 (5 each, 3 restarts) | 3 / 0 / 1 | 3 / 3 / 4 |
+
+**GRM+** (`--compare`) adds two tensions between successive solves, using `set_sigma` from the core: a binarity
+relation v (1 - v) = 0 per variable, loose at first then tightened round after round (continuous against discrete),
+and a reweighting of every clause still false. On satisfiable formulas only (checked by MiniSat), alpha = 4.2,
+WalkSAT limited to 20 000 flips:
+
+| N | GRM | GRM+ | WalkSAT | GRM+ then WalkSAT |
+|---|---|---|---|---|
+| 50 (6 formulas) | 5 / 6 | 6 / 6 | 6 / 6 | 6 / 6 |
+| 100 (8 formulas) | 4 / 8 | 7 / 8 | 8 / 8 | 8 / 8 |
+| 200 (8 formulas) | 1 / 8 | 1 / 8 | 2 / 8 | 1 / 8 |
+
+GRM+ clearly improves on plain GRM up to N = 100, but does not beat WalkSAT, and both struggle at N = 200 with this
+flip budget. Work in progress.
+
+At alpha = 3.11 random 3-SAT is in its easy region: below a density of 3.52, formulas are satisfiable with high
+probability and a polynomial algorithm finds the solutions ([arXiv math/0310193](https://arxiv.org/abs/math/0310193)).
+The hard region is near the conjectured threshold, about 4.2, where some formulas have no solution at all.
 
 ## Status and limits
 - **Work in progress**: names, defaults and interfaces may change.

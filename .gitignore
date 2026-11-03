@@ -1,7 +1,7 @@
 __pycache__/
 .pytest_cache/
+.vscode/
 *.pyc
 *.wav
 !docs/audio/*.wav
 .venv/
-.vscode

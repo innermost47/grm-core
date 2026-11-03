@@ -13,7 +13,8 @@ Relations (sigma in the relation's own residual unit; dex for log-space relation
                           rhs may be a callable of the current values
     sum                   {"type": "sum", "terms": {node: coeff}, "pow": {node: p}, "K": k}
                           sum(coeff * value^p) = K                charges, fractions of the universe
-    fn                    {"type": "fn", "nodes": [...], "f": callable(values) -> residual}
+    fn                    {"type": "fn", "nodes": [...], "f": callable(values) -> residual,
+                           "grad": optional callable(values) -> {node: d residual / d value}}
                           any equation, written as f(values) = 0  (Koide, cosmological ages...)
 
 What the solver returns for each node:
@@ -145,7 +146,10 @@ class GlobalRelationalNetwork:
                 if not nodes or not callable(rel.get("f")):
                     raise ValueError(f"relation '{name}' (fn) needs 'nodes' and a callable 'f'")
                 self._check_names(name, nodes)
-                self.relations.append({"name": name, "type": "fn", "f": rel["f"], "sigma": sigma,
+                grad = rel.get("grad")
+                if grad is not None and not callable(grad):
+                    raise ValueError(f"relation '{name}': 'grad' must be callable")
+                self.relations.append({"name": name, "type": "fn", "f": rel["f"], "sigma": sigma, "grad": grad,
                                        "nodes": [self.node_to_idx[n] for n in nodes]})
                 continue
             terms = rel.get("terms")
@@ -174,6 +178,25 @@ class GlobalRelationalNetwork:
         self._nonlinear = any(r["type"] != "log" or callable(r["rhs"]) for r in self.relations)
         self._has_callables = self._nonlinear or any(callable(r["sigma"]) for r in self.relations)
         self.x = list(self.x0)  # last solution (solver space), kept for inspection
+
+    # ------------------------------------------------------------------ tuning between solves
+    def set_sigma(self, name, sigma):
+        """Change the tolerance of a relation between two solves (smaller sigma = the relation weighs more).
+        Used for continuation (a constraint tightened step by step) and for reweighting the relations
+        that stay in tension."""
+        if not (callable(sigma) or float(sigma) > 0):
+            raise ValueError("sigma must be positive")
+        if not hasattr(self, "_rel_index"):
+            self._rel_index = {r["name"]: k for k, r in enumerate(self.relations)}
+        if name not in self._rel_index:
+            raise KeyError(f"unknown relation '{name}'")
+        self.relations[self._rel_index[name]]["sigma"] = sigma
+        self._has_callables = self._nonlinear or any(callable(r["sigma"]) for r in self.relations)
+
+    def get_sigma(self, name):
+        if not hasattr(self, "_rel_index"):
+            self._rel_index = {r["name"]: k for k, r in enumerate(self.relations)}
+        return self.relations[self._rel_index[name]]["sigma"]
 
     # ------------------------------------------------------------------ helpers
     def _check_names(self, rel_name, names):
@@ -214,23 +237,35 @@ class GlobalRelationalNetwork:
     def _fd_step(self, i, xi):
         return 1e-6 * max(1.0, abs(xi)) if self.lin[i] else 1e-6
 
-    def _derivative(self, rel, x, xp, xm, h, rhs_only, values, i):
-        """Central difference, falling back to a one-sided one at the edge of a domain."""
+    def _derivative(self, rel, x, h, rhs_only, values, i):
+        """Central difference on node i, falling back to a one-sided one at the edge of a domain.
+        x and values are changed in place and restored (no copy: cheap on large networks)."""
         name = self.nodes_names[i]
+        x0 = x[i]
+        v0 = values[name] if values is not None else None
 
-        def g(z):
+        def g(xi):
+            x[i] = xi
             try:
-                vz = dict(values) if values is not None else self._values(z)
-                vz[name] = self._to_value(i, z[i])
+                if values is not None:
+                    values[name] = self._to_value(i, xi)
+                    vz = values
+                else:
+                    vz = self._values(x)
                 if rhs_only:
                     return -self._eval(rel["rhs"], vz)
-                return self._residual(rel, z, vz)
+                return self._residual(rel, x, vz)
             except (ValueError, ZeroDivisionError, OverflowError, TypeError):
                 return None
-        fp, fm = g(xp), g(xm)
+        try:
+            fp, fm = g(x0 + h), g(x0 - h)
+            f0 = None if (fp is not None and fm is not None) else g(x0)
+        finally:
+            x[i] = x0
+            if values is not None:
+                values[name] = v0
         if fp is not None and fm is not None:
             return (fp - fm) / (2 * h)
-        f0 = g(x)
         if fp is not None and f0 is not None:
             return (fp - f0) / h
         if fm is not None and f0 is not None:
@@ -260,16 +295,20 @@ class GlobalRelationalNetwork:
                             dv = 1.0 if self.lin[i] else v * LN10
                             entries[col[i]] = entries.get(col[i], 0.0) + c * p * v ** (p - 1) * dv
                     probe, rhs_only = [], False
+                elif rel["grad"] is not None:     # analytic gradient given with the relation
+                    for name, dfdv in rel["grad"](values).items():
+                        i = self.node_to_idx[name]
+                        if i in col:
+                            dv = 1.0 if self.lin[i] else values[name] * LN10
+                            entries[col[i]] = entries.get(col[i], 0.0) + dfdv * dv
+                    probe, rhs_only = [], False
                 else:
                     probe, rhs_only = rel["nodes"], False
                 for i in probe:
                     if i not in col:
                         continue
                     h = self._fd_step(i, x[i])
-                    xp, xm = list(x), list(x)
-                    xp[i] += h
-                    xm[i] -= h
-                    d = self._derivative(rel, x, xp, xm, h, rhs_only, values, i)
+                    d = self._derivative(rel, x, h, rhs_only, values, i)
                     if d:
                         entries[col[i]] = entries.get(col[i], 0.0) + d
             rows.append((list(entries.items()), r, w))
@@ -290,6 +329,22 @@ class GlobalRelationalNetwork:
 
     def _step(self, rows, n, lam):
         """Solve the damped, ridge-regularised least-squares step. Returns (delta, R)."""
+        if _np is not None:   # assemble directly into arrays (fast for large networks)
+            live = [(e, r, w) for e, r, w in rows if e]
+            m = len(live)
+            A = _np.zeros((m + n * (2 if lam > 0 else 1), n))
+            b = _np.zeros(A.shape[0])
+            for k, (entries, r, w) in enumerate(live):
+                for a, d in entries:
+                    A[k, a] = w * d
+                b[k] = -w * r
+            idx = _np.arange(n)
+            A[m + idx, idx] = 1.0 / self.prior_sigma
+            if lam > 0:
+                colnorm = _np.sqrt(_np.sum(A[:m] ** 2, axis=0))
+                colnorm[colnorm == 0] = 1.0
+                A[m + n + idx, idx] = math.sqrt(lam) * colnorm
+            return _qr_solve(A, b)
         A, b = [], []
         colnorm = [0.0] * n
         for entries, r, w in rows:

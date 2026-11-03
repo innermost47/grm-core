@@ -254,6 +254,29 @@ class TestRelationTypes:
         assert abs(out["values"]["w"] + 0.9) < 1e-9
 
 
+class TestTuning:
+    def test_set_sigma_moves_the_compromise(self):
+        # two contradictory relations; tightening one pulls the answer towards it
+        nodes = {"a": {"guess": 1.0}}
+        rels = [{"name": "low", "terms": {"a": 1}, "rhs": 0.0, "sigma": 0.01},
+                {"name": "high", "terms": {"a": 1}, "rhs": 1.0, "sigma": 0.01}]
+        net_ = net(nodes, rels)
+        assert abs(math.log10(net_.solve()["values"]["a"]) - 0.5) < 1e-6
+        net_.set_sigma("high", 0.001)
+        assert math.log10(net_.solve()["values"]["a"]) > 0.95
+        assert net_.get_sigma("high") == 0.001
+
+    def test_set_sigma_unknown_relation(self):
+        with pytest.raises(KeyError):
+            net({"a": {"guess": 1.0}}, [{"name": "r", "terms": {"a": 1}, "rhs": 0.0}]).set_sigma("nope", 1.0)
+
+    def test_grm_plus_solves_a_small_3sat(self):
+        import grm_sat
+        clauses = grm_sat.random_3sat(30, 3.5, seed=11)
+        assignment, sat = grm_sat.grm_plus_solve(30, clauses, seed=1)
+        assert sat == grm_sat.count_satisfied(clauses, assignment) == len(clauses)
+
+
 class TestUncertainties:
     def test_uncertainty_propagates_through_a_power(self):
         # b = a^2, a measured with sigma 0.01 dex  ->  sigma(b) = 0.02 dex
