@@ -372,13 +372,16 @@ class GlobalRelationalNetwork:
 
     # ------------------------------------------------------------------ solve
     def solve(self, measured_dict=None, max_iterations=50, damping_lambda=1e-3,
-              tolerance=1e-12, measurement_sigma=1e-4, compute_uncertainty=True, start=None):
+              tolerance=1e-12, measurement_sigma=1e-4, compute_uncertainty=True, start=None,
+              continuation=True):
         """
         measured_dict      {node: value} or {node: (value, sigma_dex)}
         max_iterations     upper bound for the nonlinear case (a linear problem needs 1 to 4 steps)
         damping_lambda     initial Levenberg-Marquardt damping (adapted during the solve)
         measurement_sigma  default sigma (dex) of a measurement given without its own
         start              optional {node: value} starting point (defaults to the guesses)
+        continuation       if the direct solve does not converge and a sum or fn relation is very tight, solve again
+                           with that relation loosened then tightened stage by stage, and keep the better end
         """
         measured_dict = measured_dict or {}
         measurements = []
@@ -421,57 +424,19 @@ class GlobalRelationalNetwork:
             # warm start: solve the log-linear part of the network exactly (it is usually most of it),
             # then refine everything together; keep the original start if the warm one is invalid
             x = self._warm_start(x, measurements, free, col)
-            lam = damping_lambda
-            converged = False
             cost = self._cost(x, measurements)
             if not math.isfinite(cost):
                 raise ValueError("the starting point is outside the domain of a relation "
                                  "(e.g. the square root or arccos of an invalid value): change the guesses")
-            for iterations in range(1, max_iterations + 1):
-                rows, cost = self._rows(x, measurements, col)
-                accepted = False
-                # 1) Gauss-Newton direction with backtracking; 2) if that fails, damped steps
-                try:
-                    gn, _R = self._step(rows, n, 0.0)
-                except ArithmeticError:
-                    gn = None
-                if gn is not None:
-                    alpha = 1.0
-                    for _ in range(25):
-                        delta = [alpha * d for d in gn]
-                        x_new = list(x)
-                        for a, i in enumerate(free):
-                            x_new[i] += delta[a]
-                        new_cost = self._cost(x_new, measurements)
-                        if new_cost <= cost:
-                            accepted = True
-                            break
-                        alpha *= 0.5
-                if not accepted:
-                    for _ in range(30):
-                        try:
-                            delta, _R = self._step(rows, n, lam)
-                        except ArithmeticError:
-                            lam *= 10.0
-                            continue
-                        x_new = list(x)
-                        for a, i in enumerate(free):
-                            x_new[i] += delta[a]
-                        new_cost = self._cost(x_new, measurements)
-                        if new_cost <= cost:
-                            accepted = True
-                            break
-                        lam *= 10.0
-                if not accepted:
-                    converged = True  # no descent direction left: at the minimum
-                    break
-                step = max(abs(d) for d in delta)
-                drop = cost - new_cost
-                x, cost = x_new, new_cost
-                lam = max(lam / 10.0, 1e-15)
-                if step < 1e-12 or drop <= tolerance * max(1.0, cost):
-                    converged = True
-                    break
+            x_start = list(x)
+            x, iterations, converged = self._descend(x, measurements, free, col, n, max_iterations,
+                                                     damping_lambda, tolerance)
+            if not converged and continuation:
+                # a very tight sum or function relation can make every step crawl along it: solve again
+                # by continuation (that relation loosened, then tightened stage by stage) and keep the
+                # better end point. Networks that converge directly never reach this branch.
+                x, iterations, converged = self._continuation(x_start, x, measurements, free, col, n,
+                                                              max_iterations, damping_lambda, tolerance, iterations)
 
         self.x = x
         _, cost = self._rows(x, measurements, {}, jacobian=False)
@@ -507,6 +472,95 @@ class GlobalRelationalNetwork:
                 k for k, s in sigma_dex.items()
                 if s > self.undetermined_sigma * (max(1.0, abs(x[self.node_to_idx[k]])) if self.lin[self.node_to_idx[k]] else 1.0))
         return result
+
+    def _descend(self, x, measurements, free, col, n, max_iterations, damping_lambda, tolerance):
+        """Gauss-Newton with backtracking, then Levenberg-Marquardt damping. Returns (x, iterations, converged)."""
+        lam = damping_lambda
+        converged = False
+        iterations = 0
+        cost = self._cost(x, measurements)
+        self._step_sizes = []        # accepted backtracking factor of each Gauss-Newton step (0: damped step)
+        for iterations in range(1, max_iterations + 1):
+            rows, cost = self._rows(x, measurements, col)
+            accepted = False
+            # 1) Gauss-Newton direction with backtracking; 2) if that fails, damped steps
+            try:
+                gn, _R = self._step(rows, n, 0.0)
+            except ArithmeticError:
+                gn = None
+            if gn is not None:
+                alpha = 1.0
+                for _ in range(25):
+                    delta = [alpha * d for d in gn]
+                    x_new = list(x)
+                    for a, i in enumerate(free):
+                        x_new[i] += delta[a]
+                    new_cost = self._cost(x_new, measurements)
+                    if new_cost <= cost:
+                        accepted = True
+                        self._step_sizes.append(alpha)
+                        break
+                    alpha *= 0.5
+            if not accepted:
+                for _ in range(30):
+                    try:
+                        delta, _R = self._step(rows, n, lam)
+                    except ArithmeticError:
+                        lam *= 10.0
+                        continue
+                    x_new = list(x)
+                    for a, i in enumerate(free):
+                        x_new[i] += delta[a]
+                    new_cost = self._cost(x_new, measurements)
+                    if new_cost <= cost:
+                        accepted = True
+                        self._step_sizes.append(0.0)
+                        break
+                    lam *= 10.0
+            if not accepted:
+                converged = True  # no descent direction left: at the minimum
+                break
+            step = max(abs(d) for d in delta)
+            drop = cost - new_cost
+            x, cost = x_new, new_cost
+            lam = max(lam / 10.0, 1e-15)
+            if step < 1e-12 or drop <= tolerance * max(1.0, cost):
+                converged = True
+                break
+        return x, iterations, converged
+
+    CONTINUATION_START = 1e-2     # loosest sigma of a tight nonlinear relation during continuation
+    CONTINUATION_FACTOR = 100.0   # tightening between two stages
+
+    def _continuation(self, x_start, x_direct, measurements, free, col, n, max_iterations, damping_lambda, tolerance,
+                      iterations_direct):
+        tight = [r for r in self.relations
+                 if r["type"] != "log" and not callable(r["sigma"]) and r["sigma"] < self.CONTINUATION_START]
+        if not tight:
+            return x_direct, iterations_direct, False
+        true_sigma = [r["sigma"] for r in tight]
+        levels = [self.CONTINUATION_START]
+        while levels[-1] > min(true_sigma):
+            levels.append(levels[-1] / self.CONTINUATION_FACTOR)
+        # the whole continuation gets the same iteration budget as the direct solve, shared between stages,
+        # so a network where it does not help costs at most twice its direct solve
+        budget = max(5, max_iterations // len(levels))
+        x = list(x_start)                # the same (warm) start as the direct solve
+        total, converged = iterations_direct, False
+        try:
+            for level in levels:
+                for r, s in zip(tight, true_sigma):
+                    r["sigma"] = max(s, level)
+                if not math.isfinite(self._cost(x, measurements)):
+                    break
+                x, it, converged = self._descend(x, measurements, free, col, n, budget, damping_lambda, tolerance)
+                total += it
+        finally:
+            for r, s in zip(tight, true_sigma):
+                r["sigma"] = s
+        if converged and self._cost(x, measurements) <= self._cost(x_direct, measurements):
+            return x, total, True
+        return x_direct, total, False
 
     def _warm_start(self, x, measurements, free, col):
         linear = [r for r in self.relations if r["type"] == "log" and not callable(r["rhs"])]

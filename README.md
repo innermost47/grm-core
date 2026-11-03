@@ -9,11 +9,12 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
-| `test_grm.py` | A hardcore test battery: 56 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 59 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
+| `grm_pong.py` | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks |
 | `grm_guitar.py` | **GRM Guitar**: a six-string guitar simulator whose strings, body, attack and finger noise are all GRM networks |
 
 The cosmology and particle-physics model this engine was built for is presented at [grm.anthony-charretier.fr](https://grm.anthony-charretier.fr), with its own repository: [innermost47/GRM](https://github.com/innermost47/GRM).
@@ -92,6 +93,7 @@ out = net.solve(measured_dict={"m": 2.0, "H0": (70.0, 0.01)})   # value, or (val
 - weighted least squares solved by **QR factorisation**, not normal equations, so relations as tight as 1e-9 coexist with loose measurements;
 - purely log-linear networks are solved exactly in a few steps;
 - networks with sums or functions use **Levenberg-Marquardt**: Gauss-Newton with backtracking first, then adaptive damping; a warm start from the log-linear part of the network; a finite-difference Jacobian for functions;
+- if a very tight `sum` or `fn` relation makes every step crawl and the solve does not converge, the core solves again by **continuation**: that relation loosened to sigma 1e-2, then tightened by a factor 100 per stage down to its own sigma, and keeps the better end point. It shares the iteration budget of the direct solve between its stages, can be turned off with `continuation=False`, and networks that converge directly are not touched;
 - points outside the domain of a relation (the square root of a negative number, for example) are rejected cleanly;
 - a very weak ridge keeps undetermined directions finite without biasing the determined ones;
 - unknown node names, non-positive values in log space and invalid sigmas raise errors.
@@ -117,7 +119,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 56 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 59 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
@@ -291,8 +293,7 @@ evidence    log s_c = log p(c | w)               for every known word w, read fr
 
 The answer is the leading category when it leads the runner-up by more than 1 sigma (with their covariance),
 otherwise `unsure: A or B`. A sentence with no word in the table gets `unknown`, not a guess. `explain` lists the
-words that pulled the decision. The balance is solved by continuation (loose, then tight), as a tight sum alone
-crawls.
+words that pulled the decision. The tight balance is handled by the core's continuation (see *Numerics*).
 
 Results on 40 held-out sentences, written separately and never used to build the relations:
 
@@ -306,6 +307,38 @@ Results on 40 held-out sentences, written separately and never used to build the
 Off-topic sentences: 4 of 6 give `unknown`. The two others share a word with the table by chance (`acte`, then `plante` and `besoin`)
 and get an answer: the table is small, and a single shared word is enough. A larger table, or a minimum amount of
 evidence, would be the next step.
+
+## GRM Pong (`grm_pong.py`)
+
+```bash
+python grm_pong.py                 # tkinter window
+python grm_pong.py --headless 3    # 3 matches without a window
+```
+
+The ball is the relation, the paddles are its two ends. No paddle has a rule of play: each one solves two small
+networks with what it perceives, every reaction time.
+
+```
+intercept   x + vx * t = x_paddle            the ball comes to my line
+            y_hit = fold(y + vy * t)         the walls fold its path
+            x, y, vx, vy measured, with a noise that grows with the distance -> y_hit and its sigma
+aim         y_land = fold(y_hit + vy_out(o) * T)     the hit offset o sets the return angle
+            escape      high tension when y_land is within the other paddle's reach
+            self reach  I must be able to get to y_hit - o in time
+            edge        the ball may arrive 3 sigma away from y_hit: it must still meet the paddle
+            safety      o measured at 0, sigma 0.4 paddle height
+```
+
+The ball speeds up at each hit, so sooner or later a paddle cannot reach it: a point. Matches are played to 11, then
+a new one starts. The window shows what each paddle thinks: the predicted hit with its uncertainty, the dotted
+relation between the ball and that point, and where it intends to send the ball. Noise, speed, reaction time and
+aiming can be changed for each paddle.
+
+![GRM Pong](docs/grm_pong.png)
+
+With equal settings, a paddle that aims wins 57 % of the points against one that only intercepts (175 to 133 over
+three runs of 1500 s). Aiming only paid off once the edge relation was added: without it, the aiming paddle hit too
+close to the edge for its own uncertainty and lost more points than it won.
 
 ## Status and limits
 - **Work in progress**: names, defaults and interfaces may change.

@@ -244,17 +244,13 @@ class RelationTable:
         known = [w for w in words(sentence) if w in self.count]
         nodes = {f"s_{c}": {"guess": 1.0 / len(self.categories)} for c in self.categories}
         rels = [{"name": "balance", "type": "sum", "terms": {f"s_{c}": 1.0 for c in self.categories},
-                 "K": 1.0, "sigma": 1e-2}]
+                 "K": 1.0, "sigma": 1e-6}]
         for w in known:
             p, n = self.share(w)
             sigma = SIGMA_WORD / math.sqrt(n)
             for c in self.categories:
                 rels.append({"name": f"{w}->{c}", "terms": {f"s_{c}": 1.0}, "rhs": math.log10(p[c]), "sigma": sigma})
-        # continuation: a loose balance first, then the tight one from there (a tight sum alone crawls)
-        net = GlobalRelationalNetwork(nodes, rels, undetermined_sigma=0.5)
-        out = net.solve(max_iterations=50)
-        net.set_sigma("balance", 1e-6)
-        out = net.solve(max_iterations=50, start=out["values"])
+        out = GlobalRelationalNetwork(nodes, rels, undetermined_sigma=0.5).solve(max_iterations=50)
         shares = {c: out["values"][f"s_{c}"] for c in self.categories}
         unc = {c: out["uncertainty"][f"s_{c}"] for c in self.categories}     # relative, 1 sigma
         ranked = sorted(self.categories, key=shares.get, reverse=True)

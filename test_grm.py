@@ -255,6 +255,27 @@ class TestRelationTypes:
 
 
 class TestTuning:
+    def test_tight_sum_is_solved_by_continuation(self):
+        # shares pulled apart in log space, tied by a very tight sum: a direct descent crawls along the sum
+        pulls = {"a": 0.45, "b": 0.27, "c": 0.09, "d": 0.09, "e": 0.09}
+        nodes = {k: {"guess": 0.2} for k in pulls}
+        rels = [{"name": "balance", "type": "sum", "terms": {k: 1.0 for k in pulls}, "K": 1.0, "sigma": 1e-6}]
+        rels += [{"name": f"pull_{k}", "terms": {k: 1.0}, "rhs": math.log10(p), "sigma": 0.3} for k, p in pulls.items()]
+        net = GlobalRelationalNetwork(nodes, rels)
+        out = net.solve(max_iterations=30)
+        assert out["converged"]
+        assert abs(sum(out["values"].values()) - 1.0) < 1e-5
+        # reference: the same network tightened by hand, stage by stage
+        ref = GlobalRelationalNetwork(nodes, rels)
+        values = None
+        for sigma in (1e-2, 1e-4, 1e-6):
+            ref.set_sigma("balance", sigma)
+            values = ref.solve(max_iterations=50, start=values)["values"]
+        for k in pulls:
+            assert out["values"][k] == pytest.approx(values[k], rel=1e-6)
+        assert out["values"]["a"] > out["values"]["b"] > out["values"]["c"]
+        assert net.get_sigma("balance") == 1e-6         # the relation keeps its own sigma afterwards
+
     def test_set_sigma_moves_the_compromise(self):
         # two contradictory relations; tightening one pulls the answer towards it
         nodes = {"a": {"guess": 1.0}}
@@ -316,6 +337,28 @@ class TestText:
         rt = grm_text.RelationTable(grm_text.TABLE)
         shares = rt.classify("le guitariste joue un solo")[1]
         assert abs(sum(shares.values()) - 1.0) < 1e-4
+
+
+class TestPong:
+    def test_intercept_network_predicts_the_bounce(self):
+        import grm_pong as gp
+        # ball at (400, 100) going left and up: it bounces on the top wall before reaching x = 30
+        x, y, vx, vy = 400.0, 100.0, -500.0, -300.0
+        y_hit, sigma, t = gp.intercept_network(30.0, (x, y, vx, vy), 1e-3, 1e-3)
+        assert t == pytest.approx((30.0 - x) / vx, rel=1e-6)
+        assert y_hit == pytest.approx(gp.fold(y + vy * t), abs=1e-3)
+        assert sigma < 0.1
+
+    def test_paddles_play_and_score(self):
+        import grm_pong as gp
+        game = gp.PongGame(seed=5)
+        hits = 0
+        for _ in range(int(120 / gp.DT)):
+            before = game.rally
+            game.step()
+            hits += game.rally > before
+        assert hits > 20                                   # they return the ball
+        assert sum(game.score.values()) + 11 * sum(game.matches.values()) >= 1   # and points are scored
 
 
 class TestUncertainties:
