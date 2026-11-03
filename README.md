@@ -12,6 +12,7 @@ This repository contains:
 | `test_grm.py` | A hardcore test battery: 49 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
+| `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_guitar.py` | **GRM Guitar**: a six-string guitar simulator whose strings, body, attack and finger noise are all GRM networks |
 
 The cosmology and particle-physics model this engine was built for is presented at [grm.anthony-charretier.fr](https://grm.anthony-charretier.fr), with its own repository: [innermost47/GRM](https://github.com/innermost47/GRM).
@@ -234,6 +235,41 @@ flip budget. Work in progress.
 At alpha = 3.11 random 3-SAT is in its easy region: below a density of 3.52, formulas are satisfiable with high
 probability and a polynomial algorithm finds the solutions ([arXiv math/0310193](https://arxiv.org/abs/math/0310193)).
 The hard region is near the conjectured threshold, about 4.2, where some formulas have no solution at all.
+
+## Travelling salesman with the GRM only (`grm_tsp.py`)
+
+```bash
+python grm_tsp.py lin318.tsp --optimum 42029 --plot     # TSPLIB instance (EUC_2D), not included: download it
+                                                        # from http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/
+```
+
+Two GRM methods, no algorithm borrowed from elsewhere:
+
+- **Method 1, the circle by levels (pure GRM, no move).** Relations between groups first, then between cities.
+  Cities linked by a chain of short gaps form a group. Each group centre gets a point on the unit circle, its place
+  in the tour: attraction relations pull centres that are close on the map to close places, dispersion relations
+  (sum of cos k theta and sin k theta = 0) make them fill the circle, and the core solves the network while the
+  attraction is narrowed round after round. Inside a group, cities follow their angle around the group centre,
+  starting from the city facing the previous group.
+- **Method 2, tension refinement.** Every edge of the tour is a relation with residual sqrt(d), so the cost of the
+  network is exactly the tour length. The most tense edges (length beyond the nearest-neighbour distance) are
+  treated first: reversing a piece of tour, or moving one, two or three cities, is kept only if the total tension
+  goes down. Then, round after round, a region around a tense edge (drawn in proportion to its tension) is released
+  and rebuilt where the tension rises least. The network may *breathe*: a rebuild that ends a little higher can be
+  kept, within an allowance that shrinks to zero over the rounds.
+
+![GRM tours of lin318](docs/grm_tsp_lin318.png)
+
+Results on lin318 (318 cities, optimum 42 029), same machine:
+
+| Version | Method 1 | Method 2 | Time |
+|---|---|---|---|
+| first try: plain circle, strict refinement | 85 326 (+103 %) | 44 730 (+6.43 %) | 66 s + 23 s |
+| **current: circle by levels, refinement with pieces and breathing** | **74 500 (+77 %)** | **43 136 (+2.63 %)** | **5 s + 46 s** |
+
+For reference, a simulated annealing run with 2-opt moves (3 million moves, not part of this repository) reached
+42 471 (+1.05 %) in 7 s on the same machine. Method 1 still gives a rough tour on a clustered map; method 2 does
+most of the work. Work in progress.
 
 ## Status and limits
 - **Work in progress**: names, defaults and interfaces may change.

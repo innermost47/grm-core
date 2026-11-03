@@ -277,6 +277,28 @@ class TestTuning:
         assert sat == grm_sat.count_satisfied(clauses, assignment) == len(clauses)
 
 
+class TestTSP:
+    def test_grm_tsp_methods_give_valid_tours(self):
+        import numpy as np
+        import grm_tsp
+        rng = np.random.default_rng(3)
+        coords = rng.random((30, 2)) * 1000
+        dist = grm_tsp.distance_matrix(coords)
+        tour, rounds = grm_tsp.grm_circle(coords, cooling=0.6, verbose=False)
+        assert sorted(tour) == list(range(30)) and rounds > 0
+        refined = grm_tsp.tension_refine(tour, dist, rounds=50, verbose=False)
+        assert sorted(refined) == list(range(30))
+        assert grm_tsp.tour_length(refined, dist) <= grm_tsp.tour_length(tour, dist)
+
+    def test_tour_network_cost_is_the_tour_length(self):
+        import numpy as np
+        import grm_tsp
+        coords = np.random.default_rng(4).random((20, 2)) * 100
+        dist = grm_tsp.distance_matrix(coords)
+        tour = list(range(20))
+        assert abs(grm_tsp.TourNetwork(tour, dist).cost() - grm_tsp.tour_length(tour, dist)) < 1e-9
+
+
 class TestUncertainties:
     def test_uncertainty_propagates_through_a_power(self):
         # b = a^2, a measured with sigma 0.01 dex  ->  sigma(b) = 0.02 dex

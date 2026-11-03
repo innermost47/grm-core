@@ -4,4 +4,6 @@ __pycache__/
 *.pyc
 *.wav
 !docs/audio/*.wav
+*.tsp
+*.tsp.gz
 .venv/
