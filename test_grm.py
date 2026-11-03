@@ -339,6 +339,71 @@ class TestText:
         assert abs(sum(shares.values()) - 1.0) < 1e-4
 
 
+def import_guitar():
+    """grm_guitar imports tkinter for its window; the physics needs only numpy."""
+    import sys
+    pytest.importorskip("numpy")
+    try:
+        import tkinter  # noqa: F401
+    except ImportError:
+        from unittest import mock
+        for name in ("tkinter", "tkinter.filedialog", "tkinter.messagebox", "tkinter.ttk"):
+            sys.modules.setdefault(name, mock.MagicMock())
+    import grm_guitar
+    return grm_guitar
+
+
+class TestGuitar:
+    LOW_E = (0.0061370673, 0.648)
+    HIGH_E = (0.0003835658, 0.648)
+
+    def test_palm_damps_highs_first_and_light_strings_most(self):
+        g = import_guitar()
+        s0, q = (lambda v: (v["s0"], v["q"]))(g.palm_network(*self.LOW_E, 0)["values"])
+        rates = g.palm_sigma(range(10), s0, q)
+        assert all(b > a for a, b in zip(rates[:5], rates[1:6]))       # the first partials die faster and faster
+        s0_hi = g.palm_network(*self.HIGH_E, 0)["values"]["s0"]
+        assert s0_hi > 10 * s0                                           # mu 16 times smaller
+
+    def test_longitudinal_mode_matches_the_measured_one(self):
+        # Pakarinen et al. 2007 report the first longitudinal mode of an open 6th string near 1400 Hz;
+        # the network gives c_L / (2 L) from the steel core alone
+        g = import_guitar()
+        f = {k: g.squeak_network(*self.LOW_E, k, 0, 0, 0.1, 0.6)["values"]["fL"] for k in (0.36, 0.45)}
+        assert f[0.36] == pytest.approx(1400, rel=0.03)
+        assert f[0.45] / f[0.36] == pytest.approx(0.45 / 0.36, rel=1e-6)   # c_L grows with the core share
+
+    def test_winding_pitch_is_speed_over_wire(self):
+        g = import_guitar()
+        v = g.squeak_network(*self.LOW_E, 0.45, 2, 3, 0.1, 0.6)["values"]
+        assert v["fsq"] == pytest.approx(v["v"] / v["p"], rel=1e-6)
+
+    def test_sympathetic_answer_never_exceeds_its_drive(self):
+        import numpy as np
+        g = import_guitar()
+        modes, bv = g.body_modes()
+        sv = g.play_string_model(*self.LOW_E, 70.0, 0, 0.45)["values"]
+        f = np.fft.rfftfreq(1 << 18, 1.0 / g.SAMPLE_RATE)
+        Y = g.bridge_admittance(f, modes, bv)
+        loss = g.bridge_loss(modes, bv, sv["c"], sv["Leff"], sv["Zs"])
+        gain = g.sympathetic_response(np.ones(len(f)), f, Y, sv["f1"], sv["B"], 70.0, sv["Leff"],
+                                      lambda fn: 1.0 / 3.0 + loss(fn),
+                                      lambda fn: (sv["c"] / sv["Leff"]) * sv["Zs"] * np.abs(g.bridge_admittance(fn, modes, bv)))
+        assert np.max(np.abs(gain)) <= 1.0
+
+    def test_player_is_human_but_keeps_time(self):
+        import numpy as np
+        g = import_guitar()
+        step = 1 / 3
+        grid = [(k * step, k % 8) for k in range(48)]
+        strokes = g.player_network(grid, step, 0.22, np.random.default_rng(0))
+        dev = np.array([s["t"] - t for s, (t, _) in zip(strokes, grid)])
+        assert 0.004 < dev.std() < 0.02                                  # musicians: 10 to 20 ms
+        assert all(b["t"] > a["t"] for a, b in zip(strokes, strokes[1:]))
+        up = g.strum_contacts([5, 4, 3, 2, 1, 0], dict(strokes[0], d=g.PICK_DEPTH), up=True)
+        assert 0 not in [i for i, _, _ in up]                            # an upstroke misses the low E
+
+
 class TestPong:
     def test_intercept_network_predicts_the_bounce(self):
         import grm_pong as gp

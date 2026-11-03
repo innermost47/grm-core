@@ -9,13 +9,13 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
-| `test_grm.py` | A hardcore test battery: 59 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 64 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
 | `grm_pong.py` | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks |
-| `grm_guitar.py` | **GRM Guitar**: a six-string guitar simulator whose strings, body, attack and finger noise are all GRM networks |
+| `grm_guitar.py` | **GRM Guitar**: a guitar simulated as one object: strings, bridge, top, air, palm, fingers and the player's arm are all GRM networks |
 
 The cosmology and particle-physics model this engine was built for is presented at [grm.anthony-charretier.fr](https://grm.anthony-charretier.fr), with its own repository: [innermost47/GRM](https://github.com/innermost47/GRM).
 
@@ -28,10 +28,10 @@ Every sound below was rendered by `grm_guitar.py`, from the GRM networks only (n
 |---|---|
 | [strum_pick.wav](docs/audio/strum_pick.wav) | a G chord strummed down with a 0.71 mm pick |
 | [strum_fingers.wav](docs/audio/strum_fingers.wav) | the same chord strummed with the fingers: softer release, rounder sound |
-| [folk_loop_pick.wav](docs/audio/folk_loop_pick.wav) | C – Am – Em – G, folk strumming pattern, with finger noise between chords |
+| [folk_loop_pick.wav](docs/audio/folk_loop_pick.wav) | C – Am – Em – G, folk strumming pattern played three times by the player network (no two strokes alike), with the fingers lifting, landing and rubbing between chords |
 | [folk_loop_no_finger_noise.wav](docs/audio/folk_loop_no_finger_noise.wav) | the same loop without finger noise, to compare |
 | [travis_fingers.wav](docs/audio/travis_fingers.wav) | C – Am, Travis picking (alternating bass) with the fingers |
-| [palm_muted_rock.wav](docs/audio/palm_muted_rock.wav) | a palm-muted power-chord riff at 120 BPM |
+| [palm_muted_rock.wav](docs/audio/palm_muted_rock.wav) | a power-chord riff at 120 BPM, muted by the palm network (skin on the strings near the bridge) |
 
 ---
 
@@ -119,7 +119,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 59 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 64 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
@@ -164,40 +164,93 @@ brightness limit  f_c = 1 / (2 pi tau)                   the string slips off: h
 click energy      E_c = F^2 / (2 * k_c)                  snap of the pick
 ```
 
-**Body**: the air in the box meets the wooden top
+**The player**: the arm meets the tempo (one network per sequence, nodes for every stroke)
+```
+intent            t_k = grid_k, A_k = A0 * accent_k, pluck point, pick depth   drawn with the player's imprecision
+arm               t_k - t_(k-1) = grid_k - grid_(k-1)    the swing keeps its period; same continuity for A, p, d
+hand speed        v_k = pi A_k / step                    half a pendulum swing per step -> time between strings
+pluck force       F_k = F0 A_k / A0                      an upstroke is lighter
+pick depth        o_j = d_k - (y_j - y_c)^2 / (2 R)      along the arc of the wrist: an upstroke misses the bass
+```
+The network finds what the arm actually does, a compromise between each intent and the continuity of the swing:
+about 9 ms of timing spread (musicians: 10 to 20 ms), louder first beats, strums of 40 to 60 ms, a hand that
+wanders along the strings. No two strokes are the same, and no two passes of a loop either.
+
+**Palm**: the side of the hand meets the strings near the bridge
+```
+skin damping      r = R_skin * N                         pressure of the hand
+loss scale        s0 = r / (mu * L_eff)
+position          q = x / L_eff                          x: distance from the bridge
+mode n            sigma_n = s0 * sin^2(n pi q)           added decay rate
+```
+The fundamental survives a little, the highs die within milliseconds, a light string is muted more than a heavy
+one: the muted sound comes out of the contact, not out of a filter.
+
+**Body and bridge**: the air in the box meets the wooden top, the top meets the strings
 ```
 speed of sound    c_air^2 = gamma R T / M
 Helmholtz         f_H = c_air / (2 pi) * sqrt(A / (V * l_neck)),  l_neck = t + 1.7 r
 top plate         f_T = 10.21 / (2 pi a^2) * h * sqrt(E / (12 rho (1 - nu^2)))
 coupling          the two oscillators push apart into the two lowest body resonances
 radiation         f_rad = c_air / (2 pi a): the top radiates the bass poorly below it
+plate rigidity    D = E h^3 / (12 (1 - nu^2))
+plate impedance   Zp = 8 sqrt(D rho h)                   the top seen from the bridge, between its modes
+modal mass        M = beta * rho h pi a^2                the top seen from the bridge, at a mode
+string impedance  Zs = sqrt(T mu)
+bridge loss       sigma_n = (c / L) Zs Re Y(f_n)         each string gives its energy to the top
 ```
 
-**Finger noise**: the finger meets the winding of a wound string
+**The whole guitar.** A guitar is one object: every string pushes on the bridge, and the moving bridge moves every
+string. The bridge velocity is `V = Y F` (all the strings together); mode n of a string answers with
+`F_n = (2T/L)(-iw) Y F_others / (w_n^2 - w^2 + 2i (sigma_n + kappa_n) w)`, where `kappa_n = (c/L) Zs |Y|` is its
+coupling to the bridge. So the open strings nobody plays, and a string the finger has just left, ring in sympathy;
+a note sitting on a body resonance gives its energy away fast. A mode can share energy with the bridge but never
+answer more than it receives (tested).
+
+**Fingers on the frets** (chord changes)
+```
+finger position   x_f = L (1 - 2^(-fret / 12))
+string height     h = h_nut + (h_12 - h_nut) x_f / (L / 2)
+lift              the string jumps back from h: a soft, slow pluck of the open string (low, no click)
+landing           the finger pushes the string onto its fret: a small knock on the stopped string
+```
+**Finger on the winding** (wound strings): measured on real strings by Pakarinen, Penttinen and Bank (JASA 2007), the
+noise has moving harmonics at `k v / p` (one shock per turn of wire, level growing with v) and static harmonics: the
+**longitudinal** modes of the string, while the fingertip damps the transverse ones.
 ```
 winding wire      2 p = D - d_core,  D^2 = d_eq^2 / fill
-slide             dx = |L_1 - L_2|,  v = dx / dt
-squeak            f = v / p          one shock per winding turn
+slide             dx = |L_1 - L_2|,  v = dx / dt,  f = v / p
 friction          P = mu_f * N * v
+longitudinal      c_L^2 mu = E A_core,  f_L = c_L / (2 L)     only the steel core is stretched
 ```
-Each shock rings the string itself, through its own high partials (from its string network): that is where the metallic sound comes from.
+The soft edge of the finger pad spreads each shock over `edge / v`, so most of the noise of a chord change is low.
+Check against the measurement: the paper reports the first longitudinal mode of an open 6th string near 1400 Hz;
+the network gives 1400 Hz for a steel core of 36 % of the equivalent diameter (1750 Hz with the default 45 %).
 
 ### Synthesis
-Modal synthesis of the force of the string on the bridge, with the exact Fourier amplitudes of a string plucked at a point. Higher partials decay faster. The onset is the release itself, shaped only by the release time of the attack network.
+Modal synthesis of the force of each string on the bridge (in newtons), with the exact Fourier amplitudes of a
+string plucked at a point. Each partial decays by its internal losses, the bridge loss and, under the palm, the skin.
+The six strings and the finger noises are then coupled through the bridge, and the whole guitar radiates through its
+body. The onset is the release itself, shaped only by the release time of the attack network.
 
 ### Playing
-- play, strum down or up (adjustable strum speed), arpeggio, palm mute, pick or fingers, steel stiffness on or off;
+- play, strum down or up, arpeggio, palm mute, pick or fingers, steel stiffness, human feel, sympathetic strings;
 - a slow-motion view of the six strings (×100), with fingers on the frets and sliding between chords, and an oscilloscope;
-- **sequencer**: 16 eighth-note steps, tempo, seamless loop. Each step holds a chord, notes written `string:fret` (e.g. `6:3 1:3`) or a rest, and a gesture: ↓ strum down, ↑ strum up, x palm-muted strum, · let ring. **Arpeggio mode** offers up and down, Travis (alternating bass), bass + chord, ballad and pinch patterns;
+- **sequencer**: 16 eighth-note steps, tempo, loop (two passes that differ). Each step holds a chord, notes written
+  `string:fret` (e.g. `6:3 1:3`) or a rest, and a gesture: ↓ strum down, ↑ strum up, x palm-muted strum, · let ring.
+  **Arpeggio mode** offers up and down, Travis (alternating bass), bass + chord, ballad and pinch patterns;
 - WAV export.
 
 ### Hypotheses (all adjustable in the code)
 Body dimensions and wood values are typical figures, not measurements of a given guitar. Other assumptions:
-- share of the steel core in wound strings: 45 %, adjustable with a slider;
-- metal fill of the winding: 80 %;
-- skin-on-steel friction: 0.3;
-- pick plastic: 2.5 GPa, with a 5 mm wide, 4 mm free tip;
-- fingertip pulp: about 2 N per mm.
+- share of the steel core in wound strings: 45 %, adjustable with a slider; metal fill of the winding: 80 %;
+- skin-on-steel friction: 0.3; soft edge of the finger pad: 1 mm; share of the longitudinal force reaching the top: 0.3;
+- pick plastic: 2.5 GPa, with a 5 mm wide, 4 mm free tip; fingertip pulp: about 2 N per mm;
+- palm: 15 mm from the bridge, 1 N per string, skin damping 3 N s/m per newton (no measured value was found);
+- string height: 0.5 mm at the nut, 2.2 mm at the 12th fret; finger lift 3 ms, landing 1 ms;
+- top: half of its mass moves in its first modes;
+- player: timing intent 15 ms (Repp and Su 2013: 10 to 20 ms for musicians), arm continuity 15 ms, swing 10 cm,
+  pick 3 mm deep, wrist arc of 25 cm, accents on beats 1 and 3, upstroke 0.8 of the force.
 
 ---
 
