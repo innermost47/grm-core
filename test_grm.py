@@ -359,11 +359,18 @@ class TestGuitar:
 
     def test_palm_damps_highs_first_and_light_strings_most(self):
         g = import_guitar()
-        s0, q = (lambda v: (v["s0"], v["q"]))(g.palm_network(*self.LOW_E, 0)["values"])
-        rates = g.palm_sigma(range(10), s0, q)
+        palm = g.palm_network(*self.LOW_E, 0)["values"]
+        rates = g.palm_sigma(range(10), palm)
         assert all(b > a for a, b in zip(rates[:5], rates[1:6]))       # the first partials die faster and faster
         s0_hi = g.palm_network(*self.HIGH_E, 0)["values"]["s0"]
-        assert s0_hi > 10 * s0                                           # mu 16 times smaller
+        assert s0_hi > 10 * palm["s0"]                                   # mu 16 times smaller
+
+    def test_palm_blocks_the_highs_on_their_way_to_the_bridge(self):
+        g = import_guitar()
+        palm = g.palm_network(*self.LOW_E, 0)["values"]
+        zs = (70.0 * self.LOW_E[0]) ** 0.5
+        t = g.palm_transmission([100.0, 1000.0, 5000.0], palm, zs)
+        assert t[0] > t[1] > t[2] and t[0] < 1.0
 
     def test_longitudinal_mode_matches_the_measured_one(self):
         # Pakarinen et al. 2007 report the first longitudinal mode of an open 6th string near 1400 Hz;

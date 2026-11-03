@@ -161,7 +161,7 @@ pick tip          k_c = E_p * b * t^3 / (4 * l^3)        a small bending beam (p
 finger            k_c = flesh stiffness
 release time      tau = pi * sqrt(m_c / k_c)             m_c: mass of string touched
 brightness limit  f_c = 1 / (2 pi tau)                   the string slips off: highs softened
-click energy      E_c = F^2 / (2 * k_c)                  snap of the pick
+click energy      E_c = F^2 / (2 * k_c)                  snap of the pick (the pick's own vibration: not a force on the bridge)
 ```
 
 **The player**: the arm meets the tempo (one network per sequence, nodes for every stroke)
@@ -184,7 +184,13 @@ position          q = x / L_eff                          x: distance from the br
 mode n            sigma_n = s0 * sin^2(n pi q)           added decay rate
 ```
 The fundamental survives a little, the highs die within milliseconds, a light string is muted more than a heavy
-one: the muted sound comes out of the contact, not out of a filter.
+one: the muted sound comes out of the contact, not out of a filter. A mode damped faster than it vibrates
+(sigma > w) no longer rings at all: it creeps back to rest (overdamped), so the muted highs leave no crackle.
+Where the palm rests and how hard it presses change from stroke to stroke (player network), harder on the accents.
+The flesh also has a mass and a spring: its impedance `Z_h = r + i w m_h + k_h / (i w)` stands between the string and
+the bridge, and only `T = 2 Zs / (2 Zs + Z_h)` of each wave gets past it (about -11 dB at 100 Hz, -23 dB at 1 kHz,
+-33 dB at 3 kHz on the low E): the bridge never receives the bright part of the pick's attack. While the palm rests,
+it mutes every string under it, including what the fingers do between chords and the strings that answer in sympathy.
 
 **Body and bridge**: the air in the box meets the wooden top, the top meets the strings
 ```
@@ -195,9 +201,12 @@ coupling          the two oscillators push apart into the two lowest body resona
 radiation         f_rad = c_air / (2 pi a): the top radiates the bass poorly below it
 plate rigidity    D = E h^3 / (12 (1 - nu^2))
 plate impedance   Zp = 8 sqrt(D rho h)                   the top seen from the bridge, between its modes
+bridge mass       m_b = share * rho_b V_b                Y_plate = 1 / (Zp + i w m_b): above Zp / (2 pi m_b)
+                                                         the bridge lets less and less treble into the top
 modal mass        M = beta * rho h pi a^2                the top seen from the bridge, at a mode
 string impedance  Zs = sqrt(T mu)
 bridge loss       sigma_n = (c / L) Zs Re Y(f_n)         each string gives its energy to the top
+sound             p ~ i ka / (1 + i ka) * Y(f) F          the force moves the top, the moving top radiates
 ```
 
 **The whole guitar.** A guitar is one object: every string pushes on the bridge, and the moving bridge moves every
@@ -224,6 +233,8 @@ friction          P = mu_f * N * v
 longitudinal      c_L^2 mu = E A_core,  f_L = c_L / (2 L)     only the steel core is stretched
 ```
 The soft edge of the finger pad spreads each shock over `edge / v`, so most of the noise of a chord change is low.
+When the finger slides from fret to fret it rides over the fret wires: each one is a knock of a share of the pressing
+force lasting `crown / v`, a low woody thud. All of it reaches the ear only through the bridge and the body.
 Check against the measurement: the paper reports the first longitudinal mode of an open 6th string near 1400 Hz;
 the network gives 1400 Hz for a steel core of 36 % of the equivalent diameter (1750 Hz with the default 45 %).
 
@@ -246,9 +257,11 @@ Body dimensions and wood values are typical figures, not measurements of a given
 - share of the steel core in wound strings: 45 %, adjustable with a slider; metal fill of the winding: 80 %;
 - skin-on-steel friction: 0.3; soft edge of the finger pad: 1 mm; share of the longitudinal force reaching the top: 0.3;
 - pick plastic: 2.5 GPa, with a 5 mm wide, 4 mm free tip; fingertip pulp: about 2 N per mm;
-- palm: 15 mm from the bridge, 1 N per string, skin damping 3 N s/m per newton (no measured value was found);
+- palm: 15 mm from the bridge (± 3 mm from stroke to stroke), 1 N per string (± 0.12 dex), skin damping 3 N s/m
+  per newton (no measured value was found), 3 g of flesh per string, flesh spring as the fingertip;
+- fret wire crown 2 mm, knock of 0.3 of the finger's pressing force;
 - string height: 0.5 mm at the nut, 2.2 mm at the 12th fret; finger lift 3 ms, landing 1 ms;
-- top: half of its mass moves in its first modes;
+- top: half of its mass moves in its first modes; rosewood bridge of 32 cm3, of which the saddle carries 10 % (set by ear: 30 % sounded dull);
 - player: timing intent 15 ms (Repp and Su 2013: 10 to 20 ms for musicians), arm continuity 15 ms, swing 10 cm,
   pick 3 mm deep, wrist arc of 25 cm, accents on beats 1 and 3, upstroke 0.8 of the force.
 

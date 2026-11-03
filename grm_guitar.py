@@ -191,28 +191,43 @@ def pluck_amplitudes(count, pluck):
 #   added decay rate of mode n:  sigma_n = s0 * sin^2(n pi q)
 # Near the bridge, sin(n pi q) is small for the low modes and grows with n: the fundamental survives a
 # little, the highs die within milliseconds, and a light string is muted more than a heavy one.
+# The flesh is not only a damper: it has a mass and a spring. Its impedance Z_h = r + i w m_h + k_h / (i w)
+# stands between the string and the bridge, so a wave going to the bridge only passes in part:
+#   transmission     T(w) = 2 Zs / (2 Zs + Z_h)           (Zs = sqrt(T mu), the string's own impedance)
+# The mass of the flesh blocks the high frequencies (i w m_h grows with w): the bridge never receives the
+# bright part of the pick's attack, and what moves the top is the low thump.
 PALM_X = 0.015        # m, edge of the hand from the bridge (hypothesis)
 PALM_FORCE = 1.0      # N, pressure of the hand on one string (hypothesis)
 R_SKIN = 3.0          # N s/m per N of pressure, damping of the skin (hypothesis: no measured value found)
+PALM_MASS = 0.003     # kg of flesh moving with one string (hypothesis)
 
 
 def palm_network(mu, L, fret, x_hand=PALM_X, force=PALM_FORCE):
     nodes = {n: {"guess": g} for n, g in {
-        "mu": 1e-3, "L": 0.65, "Leff": 0.6, "x": 0.015, "N": 1.0, "r": 3.0, "s0": 100.0, "q": 0.02}.items()}
+        "mu": 1e-3, "L": 0.65, "Leff": 0.6, "x": 0.015, "N": 1.0, "r": 3.0, "s0": 100.0, "q": 0.02,
+        "mh": 0.003, "kh": 2000.0}.items()}
     rel = [
         {"name": "fret", "terms": {"Leff": 1, "L": -1}, "rhs": -fret * math.log10(2) / 12, "sigma": 1e-9},
         {"name": "skin damping", "terms": {"r": 1, "N": -1}, "rhs": math.log10(R_SKIN), "sigma": 1e-9},
         {"name": "loss scale", "terms": {"s0": 1, "r": -1, "mu": 1, "Leff": 1}, "rhs": 0.0, "sigma": 1e-9},
         {"name": "position", "terms": {"q": 1, "x": -1, "Leff": 1}, "rhs": 0.0, "sigma": 1e-9},
     ]
-    measured = {"mu": (mu, 0.004), "L": (L, 3e-4), "x": (x_hand, 0.05), "N": (force, 0.05)}
+    measured = {"mu": (mu, 0.004), "L": (L, 3e-4), "x": (x_hand, 0.05), "N": (force, 0.05),
+                "mh": (PALM_MASS, 0.1), "kh": (K_FLESH, 0.1)}     # the flesh: same pulp as a fingertip
     return GlobalRelationalNetwork(nodes, rel).solve(measured_dict=measured)
 
 
-def palm_sigma(freqs_n, s0, q):
+def palm_sigma(freqs_n, palm):
     """Added decay rate (1/s) of modes n = 1, 2, ... under the palm."""
     n = np.arange(1, len(freqs_n) + 1, dtype=float)
-    return s0 * np.sin(n * math.pi * q) ** 2
+    return palm["s0"] * np.sin(n * math.pi * palm["q"]) ** 2
+
+
+def palm_transmission(freqs, palm, Zs):
+    """|T| = |2 Zs / (2 Zs + r + i w m_h + k_h / (i w))|: share of the wave that gets past the palm."""
+    w = 2 * math.pi * np.asarray(freqs, dtype=float)
+    zh = palm["r"] + 1j * w * palm["mh"] + palm["kh"] / (1j * w)
+    return np.abs(2 * Zs / (2 * Zs + zh))
 
 
 # ============================================================
@@ -220,10 +235,12 @@ def palm_sigma(freqs_n, s0, q):
 # ============================================================
 
 def synthesize_string(f1, B, duration, pluck, damping, brightness, sample_rate=SAMPLE_RATE,
-                      release_tau=0.0, click=0.0, seed=0, extra_sigma=None, palm=None):
+                      release_tau=0.0, seed=0, extra_sigma=None, palm=None, Zs=None):
     """Modal synthesis of the force of one plucked stiff string on the bridge.
     extra_sigma(freqs) -> added decay rates (energy given to the bridge, from the bridge network);
-    palm = (s0, q) from the palm network, or None."""
+    palm: values of the palm network, or None (Zs: string impedance, for the palm transmission).
+    The snap of the pick is not a force on the bridge: it is the pick's own vibration, and the energy it
+    gives the string is already the pluck itself."""
     count_max = 80
     freqs = partial_frequencies(f1, B, count_max)
     keep = freqs < 0.45 * sample_rate
@@ -240,28 +257,32 @@ def synthesize_string(f1, B, duration, pluck, damping, brightness, sample_rate=S
     if extra_sigma is not None:
         sigma = sigma + extra_sigma(freqs)
     if palm is not None:
-        sigma = sigma + palm_sigma(freqs, *palm)
-    tau = 1.0 / sigma
+        sigma = sigma + palm_sigma(freqs, palm)
+        amps = amps * palm_transmission(freqs, palm, Zs)
     count = int(duration * sample_rate)
     t = np.arange(count) / sample_rate
     signal = np.zeros(count)
     peak = np.max(np.abs(amps)) if len(amps) else 1.0
-    for f, a, ta in zip(freqs, amps, tau):  # partial by partial keeps memory low
+    for f, a, sg in zip(freqs, amps, sigma):  # partial by partial keeps memory low
         if abs(a) < 1e-4 * peak:
             continue                         # inaudible partial (e.g. a node at the pluck point)
-        m = min(count, int(9.2 * ta * sample_rate) + 1)   # stop once it has decayed by 80 dB
-        if m < 2:
-            continue
-        tt = t[:m]
-        signal[:m] += a * np.cos(2.0 * math.pi * f * tt) * np.exp(-tt / ta)
+        w = 2.0 * math.pi * f
+        # a mode released from rest with its decay rate sigma: it rings if sigma < w; if the palm damps it
+        # harder than that, it no longer rings at all and only creeps back to rest (overdamped)
+        if sg < w:
+            wd = math.sqrt(w * w - sg * sg)
+            m = min(count, int(9.2 / sg * sample_rate) + 1)   # stop once it has decayed by 80 dB
+            tt = t[:m]
+            signal[:m] += a * np.exp(-sg * tt) * (np.cos(wd * tt) + (sg / wd) * np.sin(wd * tt))
+        else:
+            r = math.sqrt(sg * sg - w * w)
+            l1, l2 = -sg + r, -sg - r                          # slow and fast return
+            m = min(count, int(9.2 / max(-l1, 1e-6) * sample_rate) + 1)
+            tt = t[:m]
+            signal[:m] += a * (l2 * np.exp(l1 * tt) - l1 * np.exp(l2 * tt)) / (l2 - l1)
     # the onset is the release itself: its sharpness comes only from release_tau (pick or finger)
     if count:
         signal -= signal[0] * np.exp(-np.arange(count) / max(release_tau * sample_rate, 1.0))
-    if click > 0 and count > 0:                # snap of the pick edge: a very short bright burst
-        m = min(count, int(0.004 * sample_rate))
-        noise = np.random.default_rng(seed).standard_normal(m)
-        burst = (noise - np.convolve(noise, np.ones(4) / 4, mode="same")) * np.exp(-np.arange(m) / (0.0008 * sample_rate))
-        signal[:m] += click * burst
     return signal
 
 
@@ -348,14 +369,19 @@ V_REF = 0.3           # m/s, finger speed of the reference level
 
 
 PAD_EDGE = 0.001      # m, softness of the edge of the finger pad on the winding (hypothesis)
+FRET_CROWN = 0.002    # m, width of the crown of a fret wire (typical)
+FRET_BUMP = 0.3       # share of the finger's pressing force that knocks the fret when it rides over it (hypothesis)
 
 
-def synthesize_squeak(fsq, power, duration, f_long, x_ratio, v, sample_rate=SAMPLE_RATE, seed=0):
+def synthesize_squeak(fsq, power, duration, f_long, x_ratio, v, sample_rate=SAMPLE_RATE, seed=0,
+                      bumps=(), force=0.0):
     """Force on the bridge of a finger sliding on a wound string: a train of shocks (one per winding
     turn, rate f = v / p rising and falling with the finger speed), smoothed by the soft edge of the
     finger pad (it takes PAD_EDGE / v to cross a turn: a fast slide over a fine winding is softened
     the most), ringing the string's longitudinal modes n f_L, each weighted by |sin(n pi x)| at the finger
-    position x. The level follows the friction force mu_f N and grows with the speed (P / V_REF)."""
+    position x. The level follows the friction force mu_f N and grows with the speed (P / V_REF).
+    bumps: moments (0..1 of the slide) when the finger rides over a fret wire. Each one is a slow knock of
+    FRET_BUMP * N lasting FRET_CROWN / v_local: a low, woody thud (tens to a few hundred Hz)."""
     count = max(int(duration * sample_rate), 2)
     s = np.linspace(0.0, 1.0, count)
     rng = np.random.default_rng(seed)
@@ -388,7 +414,16 @@ def synthesize_squeak(fsq, power, duration, f_long, x_ratio, v, sample_rate=SAMP
     ring = np.fft.irfft(np.fft.rfft(soft, nfft) * np.fft.rfft(h, nfft), nfft)[:m]
     ring[:count] += 0.5 * soft                         # the shocks themselves (moving harmonics k v / p)
     friction = max(power, 0.0) / V_REF                 # = mu_f N v / V_REF, in newtons
-    return LONG_COUPLING * friction * ring / reference / math.sqrt(len(h) / 3.0)
+    out = LONG_COUPLING * friction * ring / reference / math.sqrt(len(h) / 3.0)
+    for u in bumps:                                     # the finger rides over fret wires
+        v_here = max(v * (math.pi / 2) * math.sin(math.pi * u), 0.02)
+        width = max(4, int(FRET_CROWN / v_here * sample_rate))
+        i0 = int(u * count) - width // 2
+        knock = FRET_BUMP * force * np.sin(np.linspace(0.0, math.pi, width))
+        a, b = max(i0, 0), min(i0 + width, len(out))
+        if b > a:
+            out[a:b] += knock[a - i0:b - i0]
+    return out
 
 
 # ============================================================
@@ -400,7 +435,8 @@ def synthesize_squeak(fsq, power, duration, f_long, x_ratio, v, sample_rate=SAMP
 #                                   arm:    t_k - t_(k-1) = grid_k - grid_(k-1)   (the swing keeps its period)
 #   A_k  swing amplitude (m)        intent: A_k = A0 * accent(k)   (beat 1 strongest, off-beats lighter)
 #                                   arm:    A_k / A_(k-1) = accent(k) / accent(k-1)
-#   p_k  hand position along the strings (pluck point), d_k pick depth into the strings: same pattern
+#   p_k  hand position along the strings (pluck point), d_k pick depth into the strings,
+#   x_k, N_k where the palm rests and how hard it presses: same pattern
 # The intents are drawn with the player's imprecision; the network finds what the arm actually does,
 # a compromise between each intent and the continuity of the swing. Then:
 #   hand speed   v_k = pi A_k / step      (half a pendulum swing per step)
@@ -412,6 +448,8 @@ ARM_SIGMA = 0.015        # s, how closely the swing keeps its period (hypothesis
 AMPLITUDE_SIGMA = 0.07   # dex, stroke to stroke variation of the swing (hypothesis)
 PLUCK_SIGMA = 0.06       # relative, wandering of the hand along the strings (hypothesis)
 DEPTH_SIGMA = 0.0008     # m, wandering of the pick depth (hypothesis)
+PALM_X_SIGMA = 0.003     # m, wandering of the palm along the strings (hypothesis)
+PALM_N_SIGMA = 0.12      # dex, variation of the palm pressure (hypothesis)
 SWING = 0.10             # m, swing amplitude A0 (hypothesis)
 PICK_DEPTH = 0.003       # m, mean depth of the pick into the strings (hypothesis)
 WRIST_RADIUS = 0.25      # m, radius of the arc of the pick (hypothesis)
@@ -423,7 +461,8 @@ ACCENT_DEX = [0.06, -0.04, 0.0, -0.04, 0.03, -0.04, 0.0, -0.04]   # by eighth no
 
 def player_network(strokes, step, pluck, rng, swing=SWING):
     """strokes: list of (grid time, step index in the bar). Returns one dict per stroke:
-    t, A, v (hand speed), force factor, p (pluck point), d (pick depth)."""
+    t, A, v (hand speed), force factor, p (pluck point), d (pick depth), palm_x and palm_N (where and how
+    hard the palm rests, used by the palm-muted strokes)."""
     if not strokes:
         return []
     nodes, rel, measured = {}, [], {}
@@ -433,10 +472,15 @@ def player_network(strokes, step, pluck, rng, swing=SWING):
         nodes[f"A{k}"] = {"guess": swing}
         nodes[f"p{k}"] = {"guess": pluck}
         nodes[f"d{k}"] = {"guess": PICK_DEPTH, "scale": "lin"}
+        nodes[f"x{k}"] = {"guess": PALM_X}
+        nodes[f"N{k}"] = {"guess": PALM_FORCE}
         measured[f"t{k}"] = (grid + rng.normal(0.0, TIMING_SIGMA), TIMING_SIGMA)
         measured[f"A{k}"] = (swing * 10 ** (acc + rng.normal(0.0, AMPLITUDE_SIGMA)), AMPLITUDE_SIGMA)
         measured[f"p{k}"] = (pluck * (1.0 + rng.normal(0.0, PLUCK_SIGMA)), PLUCK_SIGMA / LN10)
         measured[f"d{k}"] = (PICK_DEPTH + rng.normal(0.0, DEPTH_SIGMA), DEPTH_SIGMA)
+        measured[f"x{k}"] = (max(PALM_X + rng.normal(0.0, PALM_X_SIGMA), 0.004), PALM_X_SIGMA / PALM_X / LN10)
+        # the palm presses harder on the accents, like the pick
+        measured[f"N{k}"] = (PALM_FORCE * 10 ** (acc + rng.normal(0.0, PALM_N_SIGMA)), PALM_N_SIGMA)
         if k:
             grid0, idx0 = strokes[k - 1]
             gap = max((grid - grid0) / step, 1.0)
@@ -450,13 +494,17 @@ def player_network(strokes, step, pluck, rng, swing=SWING):
                  "sigma": PLUCK_SIGMA / LN10 * math.sqrt(gap)},
                 {"name": f"pick depth {k}", "type": "sum", "terms": {f"d{k}": 1.0, f"d{k - 1}": -1.0},
                  "K": 0.0, "sigma": DEPTH_SIGMA * math.sqrt(gap)},
+                {"name": f"palm place {k}", "terms": {f"x{k}": 1, f"x{k - 1}": -1}, "rhs": 0.0,
+                 "sigma": PALM_X_SIGMA / PALM_X / LN10 * math.sqrt(gap)},
+                {"name": f"palm pressure {k}", "terms": {f"N{k}": 1, f"N{k - 1}": -1}, "rhs": acc - acc0,
+                 "sigma": PALM_N_SIGMA * math.sqrt(gap)},
             ]
     v = GlobalRelationalNetwork(nodes, rel).solve(measured_dict=measured, compute_uncertainty=False)["values"]
     out = []
     for k in range(len(strokes)):
         A = v[f"A{k}"]
         out.append({"t": v[f"t{k}"], "A": A, "v": math.pi * A / step, "force": A / swing,
-                    "p": v[f"p{k}"], "d": v[f"d{k}"]})
+                    "p": v[f"p{k}"], "d": v[f"d{k}"], "palm_x": v[f"x{k}"], "palm_N": v[f"N{k}"]})
     return out
 
 
@@ -490,11 +538,16 @@ def strum_contacts(order, stroke, up):
 # below, the radiated pressure falls in proportion to f / f_rad.
 # Bridge: the top seen from the strings. Plate rigidity D = E h^3 / (12 (1 - nu^2)); far from its modes the
 # top behaves like an infinite plate of point impedance Zp = 8 sqrt(D rho h); near a mode, like a mass
-# M_m on a spring. Top mass M_top = rho h pi a^2, modal mass M = BETA M_top.
+# M_m on a spring. Top mass M_top = rho h pi a^2, modal mass M = BETA M_top. The strings do not push on
+# the plate directly but on the bridge glued to it, a mass m_b: Y_plate = 1 / (Zp + i w m_b), so above
+# f = Zp / (2 pi m_b) the heavier bridge lets less and less of the high frequencies into the top.
 # Body dimensions and wood values are typical figures, not measurements of a given guitar.
 GAMMA_AIR, R_GAS, M_AIR, T_AIR = 1.4, 8.314462618, 0.028965, 293.15
 NU_WOOD = 0.3
 BETA_MODAL = 0.5    # share of the top mass that moves in its first modes (hypothesis)
+BRIDGE_VOLUME = 3.2e-5   # m^3, a rosewood bridge of about 150 x 30 x 7 mm (typical)
+RHO_BRIDGE = 850.0       # kg/m^3, rosewood (typical)
+BRIDGE_SHARE = 0.1       # share of the bridge mass the saddle carries (hypothesis, set by ear: 0.3 sounded dull)
 PLATE_RATIOS = [21.26 / 10.21, 34.88 / 10.21, 39.77 / 10.21, 51.04 / 10.21, 60.82 / 10.21]
 BODY_DEFAULT = {"V": 0.016, "r": 0.05, "t": 0.0028, "a": 0.17, "h": 0.0028, "E": 1.0e10, "rho": 430.0}
 
@@ -510,7 +563,8 @@ def body_network(size=1.0, top_mm=2.8, coupling=0.35):
     nodes = {n: {"guess": g} for n, g in {
         "Tair": T_AIR, "cair": 340.0, "V": 0.02, "r": 0.05, "A": 0.008, "t": 0.003, "lneck": 0.09, "fH": 120.0,
         "a": 0.17, "h": 0.003, "E": 1e10, "rho": 450.0, "fT": 200.0, "f_lo": 100.0, "f_hi": 220.0,
-        "frad": 300.0, "D": 20.0, "Zp": 40.0, "Mtop": 0.1, "Mm": 0.05}.items()}
+        "frad": 300.0, "D": 20.0, "Zp": 40.0, "Mtop": 0.1, "Mm": 0.05, "Vb": 3e-5, "rhob": 850.0,
+        "mb": 0.008, "fb": 800.0}.items()}
     nodes["Tair"]["fixed"] = True
     for j in range(len(PLATE_RATIOS)):
         nodes[f"f{j + 3}"] = {"guess": 400.0}
@@ -531,12 +585,15 @@ def body_network(size=1.0, top_mm=2.8, coupling=0.35):
         {"name": "plate impedance", "terms": {"Zp": 1, "D": -0.5, "rho": -0.5, "h": -0.5}, "rhs": math.log10(8.0), "sigma": 1e-9},
         {"name": "top mass", "terms": {"Mtop": 1, "rho": -1, "h": -1, "a": -2}, "rhs": math.log10(math.pi), "sigma": 1e-9},
         {"name": "modal mass", "terms": {"Mm": 1, "Mtop": -1}, "rhs": math.log10(BETA_MODAL), "sigma": 1e-9},
+        {"name": "bridge mass", "terms": {"mb": 1, "rhob": -1, "Vb": -1}, "rhs": math.log10(BRIDGE_SHARE), "sigma": 1e-9},
+        {"name": "bridge corner", "terms": {"fb": 1, "mb": 1, "Zp": -1}, "rhs": -math.log10(2 * math.pi), "sigma": 1e-9},
     ]
     for j, ratio in enumerate(PLATE_RATIOS):
         rel.append({"name": f"top mode {j + 3}", "terms": {f"f{j + 3}": 1, "fT": -1}, "rhs": math.log10(ratio), "sigma": 1e-9})
     b = BODY_DEFAULT
     measured = {"V": (b["V"] * size ** 3, 0.01), "r": (b["r"] * size, 0.01), "t": (b["t"], 0.02),
-                "a": (b["a"] * size, 0.01), "h": (top_mm / 1000.0, 0.02), "E": (b["E"], 0.05), "rho": (b["rho"], 0.02)}
+                "a": (b["a"] * size, 0.01), "h": (top_mm / 1000.0, 0.02), "E": (b["E"], 0.05), "rho": (b["rho"], 0.02),
+                "Vb": (BRIDGE_VOLUME, 0.02), "rhob": (RHO_BRIDGE, 0.02)}
     return GlobalRelationalNetwork(nodes, rel).solve(measured_dict=measured)
 
 
@@ -551,14 +608,15 @@ def body_modes(size=1.0, top_mm=2.8, coupling=0.35):
 
 def bridge_admittance(freqs, modes, bv):
     """Velocity of the bridge per newton of string force (s/kg), complex, at the frequencies `freqs`:
-    each body mode is a mass M = Mm / gain on its spring, the rest of the top an infinite plate (1 / Zp)."""
+    each body mode is a mass M = Mm / gain on its spring, the rest of the top an infinite plate seen
+    through the mass of the bridge, 1 / (Zp + i w m_b)."""
     f = np.asarray(freqs, dtype=float)
     w = 2 * math.pi * f
     Y = np.zeros(len(f), dtype=complex)
     for fm, gain, q in modes:
         wm = 2 * math.pi * fm
         Y += 1j * w / ((bv["Mm"] / gain) * (wm * wm - w * w + 1j * w * wm / q))
-    Y += (1.0 / bv["Zp"]) * f * f / (f * f + bv["fT"] ** 2)
+    Y += f * f / (f * f + bv["fT"] ** 2) / (bv["Zp"] + 1j * w * bv["mb"])
     return Y
 
 
@@ -568,30 +626,22 @@ def bridge_loss(modes, bv, c, Leff, Zs):
     return lambda freqs: (c / Leff) * Zs * np.maximum(bridge_admittance(freqs, modes, bv).real, 0.0)
 
 
-def body_impulse(modes, length=0.35):
-    t = np.arange(int(length * SAMPLE_RATE)) / SAMPLE_RATE
-    h = np.zeros_like(t)
-    for f, g, q in modes:
-        h += g * np.sin(2 * math.pi * f * t) * np.exp(-math.pi * f * t / q)
-    return h / np.sqrt(np.sum(h * h))
-
-
-def apply_body(audio, amount, modes, f_rad):
-    """Strings heard through the body (FFT convolution with the body resonances), mixed with the bare
-    strings, then radiated by the top: pressure ~ ka / sqrt(1 + (ka)^2), ka = f / f_rad."""
+def apply_body(audio, amount, modes, bv):
+    """From the force of the strings on the bridge to the sound in the room. The force moves the top
+    (velocity V = Y F, with the bridge admittance of the body network: its modes, the air resonance coupled
+    to the top, and the plate between them), and a moving top of radius a radiates a pressure
+    p ~ i ka / (1 + i ka) * V, ka = f / f_rad: in proportion to frequency below f_rad, flat above.
+    `amount` mixes this radiated sound with the bare force of the strings."""
     if len(audio) == 0:
         return audio
-    h = body_impulse(modes)
-    n = len(audio) + len(h) - 1
-    nfft = 1 << (n - 1).bit_length()
+    nfft = 1 << (len(audio) - 1).bit_length()
     spec = np.fft.rfft(audio, nfft)
-    wet_spec = spec * np.fft.rfft(h, nfft)
+    f = np.fft.rfftfreq(nfft, 1.0 / SAMPLE_RATE)
+    ka = f / bv["frad"]
+    wet_spec = spec * bridge_admittance(f, modes, bv) * (1j * ka / (1 + 1j * ka))
     dry_rms = np.sqrt(np.sum(np.abs(spec) ** 2)) + 1e-12
     wet_rms = np.sqrt(np.sum(np.abs(wet_spec) ** 2)) + 1e-12
     mix = (1.0 - amount) * spec + amount * wet_spec * (dry_rms / wet_rms)
-    f = np.fft.rfftfreq(nfft, 1.0 / SAMPLE_RATE)
-    ka = f / f_rad
-    mix *= ka / np.sqrt(1.0 + ka * ka)
     return np.fft.irfft(mix, nfft)[: len(audio)]
 
 
@@ -624,19 +674,20 @@ def sympathetic_response(drive_spec, f_grid, Y, f1, B, T, Leff, sigma_fn, coupli
 
 
 def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body_amount=0.6,
-                  sympathy=True, open_strings=None):
-    """notes: dicts with i, f1, B, T, Leff, Zs, c, start, length, gain, tau, click, pluck, palm (s0, q) or None.
+                  sympathy=True, open_strings=None, palm_spans=()):
+    """notes: dicts with i, f1, B, T, Leff, Zs, c, start, length, gain, tau, pluck, palm (palm network) or None.
     Every string is rendered as its force on the bridge (newtons); the strings and the finger noises
     then pass through the bridge into each other, and the whole guitar through its body.
-    open_strings: the six strings at rest (same keys), free to answer before anyone plays them."""
+    open_strings: the six strings at rest (same keys), free to answer before anyone plays them.
+    palm_spans: (from, to, [palm values of the six strings]) while the palm rests on the strings."""
     count = int(total * SAMPLE_RATE) + 1
     per_string = np.zeros((6, count))
     release = int(0.015 * SAMPLE_RATE)
     for nt in notes:
         loss = bridge_loss(modes, bv, nt["c"], nt["Leff"], nt["Zs"])
         s = synthesize_string(nt["f1"], nt["B"], nt["length"], nt["pluck"], damping, brightness,
-                              release_tau=nt.get("tau", 0.0), click=nt.get("click", 0.0),
-                              seed=int(nt["start"] * 1000) % 997, extra_sigma=loss, palm=nt.get("palm"))
+                              release_tau=nt.get("tau", 0.0), seed=int(nt["start"] * 1000) % 997,
+                              extra_sigma=loss, palm=nt.get("palm"), Zs=nt["Zs"])
         k = min(release, len(s))
         s[len(s) - k:] *= np.linspace(1.0, 0.0, k)
         start = int(nt["start"] * SAMPLE_RATE)
@@ -648,7 +699,8 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
             scale = nt["T"] * math.pi / nt["Leff"] * Y_REF * nt["gain"]
             per_string[nt["i"], start:end] += scale * s[: end - start]
     for k, sq in enumerate(squeaks):
-        s = synthesize_squeak(sq["fsq"], sq["P"], sq["dur"], sq["fL"], sq["x"], sq["v"], seed=k)
+        s = synthesize_squeak(sq["fsq"], sq["P"], sq["dur"], sq["fL"], sq["x"], sq["v"], seed=k,
+                              bumps=sq.get("bumps", ()), force=sq.get("N", 0.0))
         start = int(sq["start"] * SAMPLE_RATE)
         if start < 0:
             s, start = s[-start:], 0
@@ -676,22 +728,34 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
                     continue
                 end_t = own[j + 1]["start"] if j + 1 < len(own) else total
                 free.append((nt["start"], end_t, nt))
-            states = {}
+            # while the palm rests on the strings (palm-muted playing), a free string is under it too
+            pieces = []
             for a_, b_, nt in free:
-                states.setdefault(round(nt["f1"], 3), (nt, []))[1].append((a_, b_))
+                cuts = sorted({a_, b_} | {t for pa, pb, _ in palm_spans for t in (pa, pb) if a_ < t < b_})
+                for u, w_ in zip(cuts, cuts[1:]):
+                    under = next((pl[i] for pa, pb, pl in palm_spans if pa <= u and w_ <= pb), None)
+                    pieces.append((u, w_, nt, nt.get("palm") or under))
+            states = {}
+            for a_, b_, nt, palm in pieces:
+                key = (round(nt["f1"], 3), None if palm is None else round(palm["s0"], 1))
+                states.setdefault(key, (nt, palm, []))[2].append((a_, b_))
             if not states:
                 continue
             drive = total_spec - specs[i]
-            for nt, spans in states.values():
+            for nt, palm, spans in states.values():
                 loss = bridge_loss(modes, bv, nt["c"], nt["Leff"], nt["Zs"])
 
-                def sigma_fn(fn, loss=loss):
-                    return (1.0 + (fn / 1800.0) ** 2) / damping + loss(fn)
+                def sigma_fn(fn, loss=loss, palm=palm):
+                    sg = (1.0 + (fn / 1800.0) ** 2) / damping + loss(fn)
+                    return sg + (palm_sigma(fn, palm) if palm is not None else 0.0)
 
                 def coupling_fn(fn, nt=nt):
                     return (nt["c"] / nt["Leff"]) * nt["Zs"] * np.abs(bridge_admittance(fn, modes, bv))
-                resp = np.fft.irfft(sympathetic_response(drive, f_grid, Y, nt["f1"], nt["B"], nt["T"], nt["Leff"],
-                                                         sigma_fn, coupling_fn), nfft)[:count]
+                spec_i = sympathetic_response(drive, f_grid, Y, nt["f1"], nt["B"], nt["T"], nt["Leff"],
+                                              sigma_fn, coupling_fn)
+                if palm is not None:              # what the muted string sends back also passes the palm
+                    spec_i = spec_i * palm_transmission(np.maximum(f_grid, 1.0), palm, nt["Zs"])
+                resp = np.fft.irfft(spec_i, nfft)[:count]
                 mask = np.zeros(count)
                 for a_, b_ in spans:
                     ia, ib = int(a_ * SAMPLE_RATE), min(int(b_ * SAMPLE_RATE), count)
@@ -701,7 +765,7 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
                         mask[ia:ia + k] *= np.linspace(0.0, 1.0, k)
                         mask[ib - k:ib] *= np.linspace(1.0, 0.0, k)
                 mix += resp * mask
-    out = apply_body(mix, body_amount, modes, bv["frad"])
+    out = apply_body(mix, body_amount, modes, bv)
     peak = np.max(np.abs(out)) if len(out) else 0.0
     return (out / peak if peak > 0 else out).astype(np.float32)
 
@@ -749,7 +813,7 @@ class GRMGuitarApp:
         self.swing_cm = tk.DoubleVar(value=SWING * 100)
         self.human = tk.BooleanVar(value=True)
         self.sympathy = tk.BooleanVar(value=True)
-        self.body_amount = tk.DoubleVar(value=0.6)
+        self.body_amount = tk.DoubleVar(value=0.85)
         self.body_size = tk.DoubleVar(value=1.0)
         self.palm = tk.BooleanVar(value=False)
         self.loop = tk.BooleanVar(value=True)
@@ -1024,13 +1088,13 @@ class GRMGuitarApp:
             self._model_cache[key] = pluck_network(mu, L, T, fret, pluck, force, tech, float(self.pick_mm.get()))
         return self._model_cache[key]["values"]
 
-    def palm_model(self, i, fret):
+    def palm_model(self, i, fret, x=PALM_X, force=PALM_FORCE):
         L, mu, _ = self.read_inputs(i)
-        key = ("palm", i, fret, L, mu)
+        x, force = round(x * 2000) / 2000, 10 ** (round(math.log10(force) * 50) / 50)   # 0.5 mm, 0.02 dex
+        key = ("palm", i, fret, L, mu, x, force)
         if key not in self._model_cache:
-            self._model_cache[key] = palm_network(mu, L, fret)
-        v = self._model_cache[key]["values"]
-        return v["s0"], v["q"]
+            self._model_cache[key] = palm_network(mu, L, fret, x, force)
+        return self._model_cache[key]["values"]
 
     def action_model(self, i, fret):
         L, _, _ = self.read_inputs(i)
@@ -1039,39 +1103,55 @@ class GRMGuitarApp:
             self._model_cache[key] = action_network(L, fret)
         return self._model_cache[key]["values"]
 
-    def _note(self, i, fret, start, length, gain, tau, click, pluck, palm=None, kind="strike"):
+    def _note(self, i, fret, start, length, gain, tau, pluck, palm=None, kind="strike"):
         v = self.string_model(i, fret)
         _, _, T = self.read_inputs(i)
         return {"i": i, "fret": fret, "f1": v["f1"], "B": v["B"] if self.stiff.get() else 0.0, "T": T,
                 "Leff": v["Leff"], "Zs": v["Zs"], "c": v["c"], "start": start, "length": length,
-                "muted": palm is not None, "palm": palm, "gain": gain, "tau": tau, "click": click,
+                "muted": palm is not None, "palm": palm, "gain": gain, "tau": tau,
                 "pluck": pluck, "kind": kind}
 
-    def note(self, i, fret, start, length, muted=False, force_factor=1.0, pluck=None):
+    def note(self, i, fret, start, length, muted=False, force_factor=1.0, pluck=None, stroke=None):
         """A string struck by the pick or a finger (attack network), possibly under the palm (palm network)."""
         pluck = float(self.pluck.get()) if pluck is None else pluck
         tech = "pick" if self.technique.get() == "Pick" else "finger"
         a = self.attack_model(i, fret, float(self.force.get()) * force_factor, pluck, tech)
-        click = 0.08 * math.sqrt(a["Ec"] / 1e-4) if tech == "pick" else 0.0
-        palm = self.palm_model(i, fret) if muted else None
-        return self._note(i, fret, start, length, a["y0"] / Y_REF, a["tau"], click, pluck, palm)
+        palm = None
+        if muted:
+            palm = self.palm_model(i, fret, *((stroke["palm_x"], stroke["palm_N"]) if stroke else ()))
+        return self._note(i, fret, start, length, a["y0"] / Y_REF, a["tau"], pluck, palm)
 
-    def finger_note(self, i, fret_finger, fret_string, start, length, kind):
+    def finger_note(self, i, fret_finger, fret_string, start, length, kind, palm_stroke=None):
         """A finger lifting from fret_finger (the string jumps back to open, kind 'lift') or landing on
         fret_string (kind 'land'): the action network gives the height of the string under the finger."""
         h = self.action_model(i, fret_finger)
         L, _, _ = self.read_inputs(i)
         apex = max(h["xf"] / L, 0.02)
+        fret = 0 if kind == "lift" else fret_string
+        palm = None
+        if palm_stroke is not None:
+            palm = self.palm_model(i, fret, palm_stroke["palm_x"], palm_stroke["palm_N"])
         if kind == "lift":
-            return self._note(i, 0, start, length, h["h"] / Y_REF, TAU_LIFT, 0.0, apex, kind="lift")
-        return self._note(i, fret_string, start, length, LAND_SHARE * h["h"] / Y_REF, TAU_LAND, 0.0, 0.03, kind="land")
+            return self._note(i, 0, start, length, h["h"] / Y_REF, TAU_LIFT, apex, palm, kind="lift")
+        return self._note(i, fret_string, start, length, LAND_SHARE * h["h"] / Y_REF, TAU_LAND, 0.03, palm, kind="land")
 
     def squeak(self, i, fret_from, fret_to, start, dur):
         """GRM noise of the finger leaving fret_from on wound string i (to fret_to, 0 = lifted)."""
         L, mu, _ = self.read_inputs(i)
         v = squeak_network(mu, L, self.core_fraction(i), fret_from, fret_to, dur, float(self.finger_force.get()))["values"]
         mid = (fret_from + (fret_to if fret_to > 0 else fret_from)) / 2.0
+        bumps = []
+        if fret_from > 0 and fret_to > 0:
+            # the finger rides over the fret wires between the two frets; its position follows the slide
+            # x(u) = x_a + (x_b - x_a) (1 - cos(pi u)) / 2, from just behind one fret to just behind the other
+            pos = lambda k: v["L"] * (1 - 2 ** (-k / 12.0))
+            xa, xb = pos(fret_from) - 0.005, pos(fret_to) - 0.005
+            for k in range(min(fret_from, fret_to), max(fret_from, fret_to)):
+                c = (pos(k) - xa) / (xb - xa)
+                if 0.0 < c < 1.0:
+                    bumps.append(math.acos(1 - 2 * c) / math.pi)
         return {"i": i, "start": start, "dur": dur, "fsq": v["fsq"], "P": v["P"], "fL": v["fL"], "v": v["v"],
+                "bumps": bumps, "N": v["N"],
                 "x": 1 - 2 ** (-mid / 12.0), "from": fret_from, "to": fret_to}
 
     def player_rng(self):
@@ -1088,10 +1168,11 @@ class GRMGuitarApp:
             rng = Exact()
         return player_network(grid, step, float(self.pluck.get()), rng, float(self.swing_cm.get()) / 100.0)
 
-    def change_hand(self, held, new, t_change, lead, notes, last, rng):
+    def change_hand(self, held, new, t_change, lead, notes, last, rng, palm_stroke=None):
         """The fingers leave the frets of `held` and land on those of `new`, before a stroke at t_change + lead.
         Adds lift and landing notes (every string) and winding noises (wound strings); a lifted string stops
-        the note it was ringing. Returns the noises."""
+        the note it was ringing. palm_stroke: the palm stays on the strings (palm-muted playing), so what the
+        fingers do on the strings is muted too. Returns the noises."""
         squeaks = []
         noises = bool(self.squeak_on.get())
         jitter = (lambda: rng.normal(0.0, 0.012)) if rng is not None else (lambda: 0.0)
@@ -1108,7 +1189,7 @@ class GRMGuitarApp:
                     del last[i]
                 if not noises:
                     continue
-                nt = self.finger_note(i, f_old, 0, t_lift, 1.5, "lift")
+                nt = self.finger_note(i, f_old, 0, t_lift, 1.5, "lift", palm_stroke)
                 notes.append(nt)
                 last[i] = nt
                 if STRINGS[i]["wound"]:
@@ -1117,7 +1198,7 @@ class GRMGuitarApp:
                 if i in last:
                     prev = last[i]
                     prev["length"] = max(0.02, min(prev["length"], t_land - prev["start"]))
-                nt = self.finger_note(i, f_new, f_new, t_land, 1.5, "land")
+                nt = self.finger_note(i, f_new, f_new, t_land, 1.5, "land", palm_stroke)
                 notes.append(nt)
                 last[i] = nt
         return squeaks
@@ -1135,13 +1216,15 @@ class GRMGuitarApp:
             t0 = 0.0
             rng = self.player_rng()
             if self.last_frets and frets != self.last_frets:
-                squeaks = self.change_hand(self.last_frets, frets, 0.0, lead, notes, last, rng)
+                palm_stroke = {"palm_x": PALM_X, "palm_N": PALM_FORCE} if self.palm.get() else None
+                squeaks = self.change_hand(self.last_frets, frets, 0.0, lead, notes, last, rng, palm_stroke)
                 t0 = lead
             self.last_frets = frets
             if arpeggio:
                 strokes = self.strokes([(t0 + 0.13 * k, k) for k in range(len(indices))], 0.13)
                 for k, i in enumerate(indices):
-                    nt = self.note(i, frets[i], strokes[k]["t"], dur, self.palm.get(), strokes[k]["force"], strokes[k]["p"])
+                    nt = self.note(i, frets[i], strokes[k]["t"], dur, self.palm.get(), strokes[k]["force"], strokes[k]["p"],
+                                   strokes[k])
                     notes.append(nt)
             else:
                 stroke = self.strokes([(t0, 0)], 0.25)[0]
@@ -1151,23 +1234,25 @@ class GRMGuitarApp:
                         prev = last[i]
                         prev["length"] = max(0.02, min(prev["length"], stroke["t"] + delay - prev["start"]))
                     notes.append(self.note(i, frets[i], max(0.0, stroke["t"] + delay), dur, self.palm.get(),
-                                           stroke["force"] * share, stroke["p"]))
+                                           stroke["force"] * share, stroke["p"], stroke))
             total = max(nt["start"] + nt["length"] for nt in notes) + 0.05
+            spans = [(0.0, total, [self.palm_model(i, frets.get(i, 0)) for i in range(6)])] if self.palm.get() else []
             self.start_playback(notes, total, "Playing: " + " – ".join(STRINGS[i]["note"] for i in indices),
-                                squeaks=squeaks)
+                                squeaks=squeaks, palm_spans=spans)
         except Exception as exc:
             messagebox.showerror("Audio error", str(exc))
 
-    def render(self, notes, total, squeaks):
+    def render(self, notes, total, squeaks, palm_spans=()):
         modes, bv = body_modes(float(self.body_size.get()), float(self.top_mm.get()), float(self.coupling.get()))
-        open_strings = [self._note(i, 0, 0.0, total, 0.0, 0.0, 0.0, 0.5, kind="open") for i in range(6)]
+        open_strings = [self._note(i, 0, 0.0, total, 0.0, 0.0, 0.5, kind="open") for i in range(6)]
         return render_guitar(notes, total, float(self.damping.get()), float(self.brightness.get()), modes, bv,
-                             squeaks, float(self.body_amount.get()), bool(self.sympathy.get()), open_strings)
+                             squeaks, float(self.body_amount.get()), bool(self.sympathy.get()), open_strings,
+                             palm_spans)
 
-    def start_playback(self, notes, total, label, loop_len=None, squeaks=(), loop_from=0.0):
+    def start_playback(self, notes, total, label, loop_len=None, squeaks=(), loop_from=0.0, palm_spans=()):
         """Render the whole guitar, then play once or (loop_len in s) in a seamless loop taken from
         loop_from: what rings across the loop point is already in the rendered passes."""
-        audio = self.render(notes, total, squeaks)
+        audio = self.render(notes, total, squeaks, palm_spans)
         if loop_len:
             a = int(round(loop_from * SAMPLE_RATE))
             audio = audio[a:a + int(round(loop_len * SAMPLE_RATE))]
@@ -1330,6 +1415,7 @@ class GRMGuitarApp:
             rng = self.player_rng()
             # 2) the strokes meet the strings; the left hand changes shape before the strokes that need it
             notes, last, squeaks, held = [], {}, [], {}
+            palm_spans = []
             total = 0.0
             arpeggio_mode = self.seq_mode.get() == "Arpeggio"
             for rep_ in range(passes):
@@ -1340,10 +1426,15 @@ class GRMGuitarApp:
                     single = len(content) == 1 or self.step_vars[k].get() not in CHORDS
                     new = dict(content)
                     if new != held:            # the hand changes shape: fingers leave and land
-                        squeaks += self.change_hand(held, new, stroke["t"] - lead, lead, notes, last, rng)
+                        squeaks += self.change_hand(held, new, stroke["t"] - lead, lead, notes, last, rng,
+                                                    stroke if d == "x" else None)
                     held = new
                     arpeggio = arpeggio_mode and not single
                     up = d == "↑"
+                    if d == "x":                   # the palm rests on all the strings until the next step
+                        palm_spans.append((stroke["t"] - lead, stroke["t"] + step_s,
+                                           [self.palm_model(i, new.get(i, 0), stroke["palm_x"], stroke["palm_N"])
+                                            for i in range(6)]))
                     if arpeggio:               # one slot of the pattern; the other strings keep ringing
                         pattern = self.ARPEGGIOS[self.arp_pattern.get()]
                         chosen = self.arpeggio_slot(content, pattern[k % len(pattern)])
@@ -1359,7 +1450,7 @@ class GRMGuitarApp:
                             prev = last[i]
                             prev["length"] = max(0.02, min(prev["length"], start - prev["start"]))
                         nt = self.note(i, new[i], start, ring, muted=(d == "x"),
-                                       force_factor=stroke["force"] * share, pluck=stroke["p"])
+                                       force_factor=stroke["force"] * share, pluck=stroke["p"], stroke=stroke)
                         notes.append(nt)
                         last[i] = nt
                         total = max(total, start + ring)
@@ -1369,10 +1460,10 @@ class GRMGuitarApp:
             if looping:
                 self.start_playback(notes, max(total, passes * bar), f"Looping sequence, {self.bpm.get()} BPM, "
                                     "two passes that differ (■ Stop to end it)", loop_len=2 * bar, squeaks=squeaks,
-                                    loop_from=offset + bar)
+                                    loop_from=offset + bar, palm_spans=palm_spans)
             else:
                 self.start_playback(notes, total, f"Sequence: {self.STEPS} steps × {passes}, {self.bpm.get()} BPM",
-                                    squeaks=squeaks)
+                                    squeaks=squeaks, palm_spans=palm_spans)
         except Exception as exc:
             messagebox.showerror("Sequencer", str(exc))
 
@@ -1471,7 +1562,7 @@ class GRMGuitarApp:
             amps = pluck_amplitudes(len(n), nt.get("pluck", self.pluck.get())) * nt.get("gain", 1.0)
             sigma = (1.0 + (fn / 1800.0) ** 2) / self.damping.get()
             if nt.get("palm") is not None:
-                sigma = sigma + palm_sigma(fn, *nt["palm"])
+                sigma = sigma + palm_sigma(fn, nt["palm"])
             tau = 1.0 / sigma
             u = np.linspace(0.0, 1.0, pts)
             # standing waves seen in slow motion: real frequencies divided by `slow`
