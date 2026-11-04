@@ -411,6 +411,26 @@ class TestGuitar:
         assert 0 not in [i for i, _, _ in up]                            # an upstroke misses the low E
 
 
+class TestScales:
+    def test_small_predicts_the_large(self):
+        import grm_scales as sc
+        up = sc.run_up()
+        for k in ("R_jup", "M_jup", "rho_rock", "R_potato"):
+            assert abs(math.log10(up["values"][k] / sc.LARGE[k][0])) < math.log10(2.0)   # within a factor 2
+        assert "h_earth" in up["undetermined"]          # the crust's strength is not given by the small
+
+    def test_the_sky_gives_back_the_constants_of_matter(self):
+        import grm_scales as sc
+        far = sc.run_down(with_atom=False)              # no atom: planets, stars, rocks, mountains only
+        for k in ("alpha", "me", "mp"):
+            assert abs(math.log10(far["values"][k] / sc.SMALL[k][0])) < math.log10(2.0)
+
+    def test_mountains_follow_one_over_g(self):
+        import grm_scales as sc
+        rows = {k: z for k, d, z in sc.leave_one_out()}
+        assert all(abs(rows[k]) < 2 for k in ("h_earth", "h_mars", "h_venus"))
+
+
 class TestVoice:
     def test_uniform_tube_resonates_at_odd_quarter_waves(self):
         # a tube closed at the glottis and open at the lips: F_n = (2n - 1) c / (4 L), raised a little by the

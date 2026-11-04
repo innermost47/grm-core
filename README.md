@@ -14,6 +14,7 @@ This repository contains:
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
+| `grm_scales.py` | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension |
 | `grm_voice.py` | **GRM Voice**: a voice made of relations. Lungs, vocal folds, airflow, vocal tract, velum, nose and lips are GRM networks; it says "Bonjour Anthony. Je suis le réseau." |
 | `grm_pong.py` | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks |
 | `grm_guitar.py` | **GRM Guitar**: a guitar simulated as one object: strings, bridge, top, air, palm, fingers and the player's arm are all GRM networks |
@@ -374,6 +375,42 @@ Results on 40 held-out sentences, written separately and never used to build the
 Off-topic sentences: 4 of 6 give `unknown`. The two others share a word with the table by chance (`acte`, then `plante` and `besoin`)
 and get an answer: the table is small, and a single shared word is enough. A larger table, or a minimum amount of
 evidence, would be the next step.
+
+## GRM Scales (`grm_scales.py`)
+
+```bash
+python grm_scales.py
+```
+
+Every scale of the classical world written as a pair in tension that gives a third thing, with established physics
+(Carr & Rees 1979, Weisskopf 1975, Press & Lightman 1983, Lineweaver & Norman 2010):
+
+| relation | pair in tension | what is born |
+|---|---|---|
+| a0 = hbar / (m_e c alpha) | electric pull x quantum agitation | the atom |
+| rho = A m_p / (eta a0)^3 | size of atoms x mass of nuclei | the density of rock |
+| R = a0 (alpha / alpha_G)^1/2 | gravity x electrons that refuse to be squeezed | the largest planet |
+| M = m_p (alpha / alpha_G)^3/2 | gravity x atomic matter | its mass |
+| M = m_p alpha_G^-3/2 | gravity x pressure of hot matter | a star |
+| M_Ch = 3.1 (hbar c / G)^3/2 / (2 m_p)^2 | gravity x relativistic electrons | the heaviest white dwarf |
+| R = 1.5 (sigma_y / G rho^2)^1/2 | gravity x strength of rock | the size from which a body is round |
+| h = S / (rho g) | gravity x strength of the crust | the tallest mountain, on each planet |
+
+Scaling laws carry a tolerance of 0.15 dex (they hold to a factor of a few). The same network is run both ways:
+
+- **up**, from the constants of the small only: rock density within a factor 1.3, Jupiter's radius 1.2 and mass 1.2,
+  a star within 1.9, the size from which asteroids are round 1.5, the heaviest white dwarf 1.44 solar masses. The
+  mountains stay *not determined*: the strength of a planet's crust is not given by the small;
+- **down, from the sky only** (Jupiter, the Sun, rock, asteroids, mountains; no atom): the fine-structure constant
+  comes back within a factor 1.34, the proton mass 1.36, the electron mass 1.8;
+- **cycle**: the large predicted by the small, used as data, gives back the small exactly (the network inverts
+  without loss);
+- **protocol**: each large-scale measurement hidden in turn is recovered within 2 sigma (10 of 10; the two atomic ones
+  follow from the definitions and prove nothing), against 3.4 on average (at most 6) with scrambled values. The
+  tallest mountains of Earth, Mars and Venus follow the 1/g law of one another.
+
+Hypotheses: the mean mass number of rock (20), the spacing of its atoms (4 Bohr radii, loose), the yield strength of
+rock under self-gravity (10 MPa, loose), prefactors of 1 in the scaling laws.
 
 ## GRM Voice (`grm_voice.py`)
 
