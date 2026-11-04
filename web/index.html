@@ -1,0 +1,145 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later  Copyright (C) 2026 Anthony Charretier -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05060f">
+  <title>L'Univers relationnel · The Relational Universe, du Big Bang à la fin des temps</title>
+  <meta name="description" content="Simulation 3D interactive de l'univers, du Big Bang à la fin des temps : chaque nombre (âge, lumière fossile, étoiles, son, musique) est tenu par un seul réseau de relations GRM. Changez les constantes de la physique et regardez l'univers répondre.">
+  <meta name="keywords" content="simulation univers, Big Bang, cosmologie, constantes fondamentales, Big Crunch, Three.js, WebGL, réseau de relations, GRM, musique générative, mode lydien, Planck 2018, relational universe, cosmology simulation">
+  <meta name="author" content="Anthony Charretier">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://simulation.anthony-charretier.fr/">
+
+  <!-- icons -->
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="alternate icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+
+  <!-- sharing: Open Graph and Twitter / X -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="L'Univers relationnel">
+  <meta property="og:url" content="https://simulation.anthony-charretier.fr/">
+  <meta property="og:title" content="L'Univers relationnel · du Big Bang à la fin des temps">
+  <meta property="og:description" content="Tout ce que vous voyez et entendez est tenu par un seul réseau de relations. Touchez les constantes de la physique : l'univers répond, jusqu'au Big Crunch.">
+  <meta property="og:image" content="https://simulation.anthony-charretier.fr/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Notre galaxie et ses voisines aujourd'hui, dans la simulation L'Univers relationnel">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The Relational Universe · from the Big Bang to the end of time">
+  <meta name="twitter:description" content="Every number of this universe, held by one network of relations. Change the constants of physics and watch the universe answer.">
+  <meta name="twitter:image" content="https://simulation.anthony-charretier.fr/og-image.png">
+
+  <!-- structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "L'Univers relationnel (The Relational Universe)",
+    "url": "https://simulation.anthony-charretier.fr/",
+    "description": "Interactive 3D simulation of the universe from the Big Bang to the end of time, where every number is held by a single GRM network of relations. Change the constants of physics and watch the universe, its stars and its music answer.",
+    "applicationCategory": "EducationalApplication",
+    "operatingSystem": "Any (web browser with WebGL)",
+    "inLanguage": ["fr", "en"],
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+    "image": "https://simulation.anthony-charretier.fr/og-image.png",
+    "author": { "@type": "Person", "name": "Anthony Charretier", "url": "https://anthony-charretier.fr" },
+    "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+    "codeRepository": "https://github.com/innermost47/grm-core",
+    "keywords": "cosmology, Big Bang, Big Crunch, fundamental constants, Three.js, WebGL, generative music, GRM"
+  }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <canvas id="scene" aria-label="L'univers en 3D / the universe in 3D"></canvas>
+  <noscript>
+    <h1>L'Univers relationnel · The Relational Universe</h1>
+    <p>Une simulation 3D de l'univers, du Big Bang à la fin des temps, où chaque nombre est tenu par un seul réseau de relations (GRM). Elle a besoin de JavaScript et de WebGL.</p>
+    <p>A 3D simulation of the universe, from the Big Bang to the end of time, where every number is held by one network of relations (GRM). It needs JavaScript and WebGL.</p>
+    <p><a href="https://github.com/innermost47/grm-core">github.com/innermost47/grm-core</a></p>
+  </noscript>
+
+  <section id="intro">
+    <div class="card">
+      <button id="lang" class="lang"></button>
+      <h1 id="title"></h1>
+      <p id="lead" class="lead"></p>
+      <div id="intro-text"></div>
+      <button id="launch" class="primary"></button>
+      <button id="open-settings" class="secondary"></button>
+      <p id="sound-hint" class="hint"></p>
+      <footer>
+        <p id="by"></p>
+        <p><a id="source" href="https://github.com/innermost47/grm-core" target="_blank" rel="noopener"></a> · <span id="license"></span></p>
+      </footer>
+    </div>
+  </section>
+
+  <section id="hud" hidden>
+    <div id="caption">
+      <div id="epoch"></div>
+      <div id="epoch-text"></div>
+      <dl class="readout">
+        <dt id="k-time"></dt><dd id="clock"></dd>
+        <dt id="k-left" hidden></dt><dd id="left" hidden></dd>
+        <dt id="k-temp"></dt><dd id="temp"></dd>
+        <dt id="k-size"></dt><dd id="size"></dd>
+      </dl>
+      <div id="message" hidden><span id="message-text"></span><button id="message-settings" hidden></button></div>
+    </div>
+    <div id="controls">
+      <div class="track"><input id="timeline" type="range" min="0" max="1000" value="0"><span id="today-mark"></span><div id="chapters-marks"></div></div>
+      <div class="buttons">
+        <button id="play"></button><button id="today"></button><button id="toend"></button><button id="newbang"></button>
+        <button id="chapters"></button><button id="btn-settings"></button><button id="btn-elastics"></button><button id="mute"></button>
+      </div>
+    </div>
+  </section>
+  <div id="sun-label" hidden>☉</div>
+
+  <!-- the pause at the start of each epoch, at the end, and today -->
+  <div id="pause" hidden>
+    <div class="pause-card" role="dialog" aria-live="polite" aria-labelledby="pause-title">
+      <div id="pause-kicker" class="kicker"></div>
+      <h2 id="pause-title"></h2>
+      <p id="pause-text"></p>
+      <p id="pause-extra" class="extra" hidden></p>
+      <dl id="pause-values" class="readout"></dl>
+      <button id="pause-main" class="primary"></button>
+      <div class="pause-row"><button id="pause-second"></button><button id="pause-toggle"></button></div>
+    </div>
+  </div>
+
+  <aside id="settings" class="panel" hidden>
+    <header><h2 id="settings-title"></h2><button data-close></button></header>
+    <div class="preset-row"><label id="presets-label" for="presets"></label><select id="presets"></select><button id="reset"></button></div>
+    <button id="settings-launch" class="primary"></button>
+    <div id="sliders"></div>
+    <p id="reset-hint" class="hint"></p>
+    <p id="invalid" class="invalid" hidden></p>
+    <div class="save-row"><input id="save-name" maxlength="40"><button id="save"></button></div>
+  </aside>
+
+  <aside id="elastics" class="panel" hidden>
+    <header><h2 id="elastics-title"></h2><button data-close></button></header>
+    <div id="key-values"></div>
+    <div id="relations"></div>
+  </aside>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

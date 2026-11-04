@@ -118,6 +118,8 @@ def normalize(doc):
         spec = dict(spec or {})
         scale = spec.get("scale", "log")
         spec["scale"] = "lin" if scale in ("lin", "linear") else "log"
+        if spec.pop("emerged", False):          # older name of the flag
+            spec["guessed"] = True
         out["nodes"][str(name)] = spec
     out["relations"] = []
     for rel in doc.get("relations") or []:
@@ -243,12 +245,133 @@ def solve_document(doc, leave_one_out=False):
         # chi2 with dof degrees of freedom: 3-sigma threshold (Wilson-Hilferty approximation)
         z = ((chi2 / dof) ** (1 / 3) - (1 - 2 / (9 * dof))) / math.sqrt(2 / (9 * dof))
         consistent = z < 3.0
-    report = {"result": result, "checks": checks, "pulls": pulls,
+    # Birge ratio (the scale factor of the PDG and CODATA): how much larger the uncertainties would have to be
+    # for the data to agree, if their disagreement were only underestimated errors
+    birge = math.sqrt(chi2 / dof) if dof and dof > 0 else None
+    report = {"result": result, "checks": checks, "pulls": pulls, "birge": birge,
               "valid": (all(c["ok"] for c in checks) if checks else None),
               "consistent": consistent and result["converged"], "measured": measured}
     if leave_one_out and measured:
         report["loo"] = net.leave_one_out(measured)
     return report
+
+
+# ====================================================================== missing nodes
+def _chi2_bic(doc):
+    """chi2, BIC (chi2 + k ln n, n = measurements, k = free nodes) and the report of a document."""
+    report = solve_document(doc)
+    res = report["result"]
+    n = max(len(report["measured"]), 1)
+    free = sum(1 for s in normalize(doc)["nodes"].values() if not s.get("fixed"))
+    return res["cost"], res["cost"] + free * math.log(n), report
+
+
+def _with_factor(doc, where, name):
+    """A copy of doc with a new dimensionless node `name` (nobody measured it) placed at `where`:
+    ("relation", k)     a factor missing in log relation k (the relation was holding without it)
+    ("measurement", m)  a factor between node m and what was read of it (a systematic in that measurement)"""
+    d = copy.deepcopy(normalize(doc))
+    d["nodes"][name] = {"guess": 1.0, "scale": "log", "guessed": True}
+    kind, key = where
+    if kind == "relation":
+        d["relations"][key]["terms"][name] = 1.0
+    else:
+        spec = d["nodes"][key]
+        reading = f"{key}_read"
+        d["nodes"][reading] = {"guess": spec["measured"][0], "scale": "log", "measured": spec.pop("measured")}
+        d["relations"].append({"name": f"{name}: what was read of {key}", "type": "log",
+                               "terms": {reading: 1.0, key: -1.0, name: -1.0}, "rhs": 0.0, "sigma": 1e-9})
+    return d
+
+
+def _placements(doc):
+    d = normalize(doc)
+    out = [("relation", k) for k, r in enumerate(d["relations"]) if r["type"] == "log"]
+    out += [("measurement", n) for n, s in d["nodes"].items()
+            if s.get("measured") not in (None, "", []) and s["scale"] == "log" and not s.get("guessed")]
+    return out
+
+
+def find_missing_nodes(doc, max_nodes=3, z_max=2.0):
+    """When a network is in tension, let nodes nobody mentioned emerge, one after the other (recursive):
+    each round tries one new dimensionless node at every place it could act (a factor in a log relation, or a
+    systematic factor in a measurement), keeps the placement that removes the most tension if it is worth a node
+    (BIC), and looks the value up in the bank of known numbers (grm_bank). Stops when the network is consistent,
+    when no placement is worth a node, or after max_nodes.
+    Returns a list of steps: {name, where, value, sigma_dex, chi2_before, chi2_after, bic_before, bic_after,
+    alternatives (other placements as good), matches, chance, tried, document}.
+    These are perspectives: a node that balances the data is not shown to exist."""
+    import grm_bank
+    steps = []
+    current = normalize(doc)
+    for k in range(max_nodes):
+        chi2, bic, report = _chi2_bic(current)
+        if report["consistent"]:
+            break
+        name = f"X{k + 1}"
+        tried = []
+        for where in _placements(current):
+            cand = _with_factor(current, where, name)
+            try:
+                c2, b2, rep = _chi2_bic(cand)
+            except Exception:
+                continue
+            if not rep["result"]["converged"] or name in rep["result"].get("undetermined", []):
+                continue
+            tried.append((b2, c2, where, cand, rep))
+        if not tried:
+            break
+        tried.sort(key=lambda t: t[0])
+        b2, c2, where, cand, rep = tried[0]
+        if b2 >= bic:
+            break
+        value = rep["result"]["values"][name]
+        sdex = rep["result"]["sigma_dex"][name]
+        # other placements that explain the data as well (the data cannot tell them apart)
+        alternatives = []
+        for b, c, w, d2, r2 in tried[1:]:
+            if b - b2 < 1.0:
+                alternatives.append({"where": w, "value": r2["result"]["values"][name]})
+        found, chance, n_cands = grm_bank.matches(value, sdex, z_max)
+        steps.append({"name": name, "where": where, "value": value, "sigma_dex": sdex, "chi2_before": chi2,
+                      "chi2_after": c2, "bic_before": bic, "bic_after": b2, "alternatives": alternatives,
+                      "matches": found[:5], "chance": chance, "tried": n_cands, "document": cand,
+                      "consistent_after": rep["consistent"]})
+        current = cand
+    return steps
+
+
+def remove_node(doc, name):
+    """The document without node `name`: it leaves the terms of every log and sum relation. A guessed node is undone
+    as it was made: the relation it added (a systematic factor in a measurement) goes, and the measurement returns
+    to its node."""
+    d = copy.deepcopy(normalize(doc))
+    spec = d["nodes"].pop(name, None)
+    if spec is None:
+        return d
+    if spec.get("guessed"):
+        kept = []
+        for rel in d["relations"]:
+            if rel.get("name", "").startswith(f"{name}: what was read of "):
+                target = rel["name"][len(f"{name}: what was read of "):]
+                reading = f"{target}_read"
+                if reading in d["nodes"] and target in d["nodes"]:
+                    d["nodes"][target]["measured"] = d["nodes"].pop(reading).get("measured")
+                continue
+            kept.append(rel)
+        d["relations"] = kept
+    for rel in d["relations"]:
+        if rel["type"] in ("log", "sum"):
+            (rel.get("terms") or {}).pop(name, None)
+            (rel.get("pow") or {}).pop(name, None)
+    return d
+
+
+def describe_placement(doc, where):
+    kind, key = where
+    if kind == "relation":
+        return f"a factor in relation '{normalize(doc)['relations'][key].get('name') or key}'"
+    return f"a systematic factor in the measurement of {key}"
 
 
 def preset_document(preset):
@@ -320,6 +443,9 @@ if tk is not None:
                 self.tip.destroy()
                 self.tip = None
 
+    LEGEND = ("Drag to move, wheel or + − to zoom, click a node or a relation to read it.  Blue ring: measured · purple: "
+              "guessed · green / red: check passes / fails · yellow: undetermined · orange / red link: pulled beyond 2 / 3 σ")
+
     NODE_COLUMNS = [("name", "Name", 9), ("guess", "Guess", 8), ("scale", "Scale", 4), ("meas", "Measured", 11),
                     ("sigma", "σ (dex)", 8), ("expected", "Expected", 11), ("tol", "Tol. (rel)", 7),
                     ("fixed", "Fixed", 3)]
@@ -386,6 +512,9 @@ if tk is not None:
             s.configure("Treeview", rowheight=22, font=("Consolas", 10))
             s.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
             s.configure("Panel.TCheckbutton", background=COLORS["panel"])
+            s.configure("Guessed.TEntry", foreground=COLORS["open"], fieldbackground="#f3e8ff")
+            s.configure("Guessed.TLabel", background=COLORS["open"], foreground="white", font=("Segoe UI", 7, "bold"),
+                        padding=(2, 0))
 
         # ------------------------------------------------------------------ layout
         def _build(self):
@@ -404,8 +533,10 @@ if tk is not None:
             ttk.Button(top, text="New", command=self.new_network).pack(side="left", padx=2)
             ttk.Button(top, text="Open JSON…", command=self.import_json).pack(side="left", padx=2)
             ttk.Button(top, text="Save JSON…", command=self.export_json).pack(side="left", padx=2)
+            ttk.Button(top, text="Export results…", command=self.export_results).pack(side="left", padx=2)
             ttk.Button(top, text="▶ Solve  (F5)", style="Accent.TButton", command=self.solve).pack(side="right", padx=2)
             ttk.Button(top, text="Leave one out", command=lambda: self.solve(leave_one_out=True)).pack(side="right", padx=2)
+            ttk.Button(top, text="Missing nodes?", command=self.missing_nodes).pack(side="right", padx=2)
             ttk.Checkbutton(top, text="Solve live", variable=self.live).pack(side="right", padx=8)
 
             # the problem: title, category, description, sources
@@ -469,6 +600,25 @@ if tk is not None:
             self.canvas = tk.Canvas(cf, background=COLORS["panel"], highlightthickness=0, height=240)
             self.canvas.pack(fill="both", expand=True)
             self.canvas.bind("<Configure>", lambda e: self._draw())
+            # navigation: drag to move, wheel to zoom (around the pointer), click a node or a relation to read it
+            self.view = {"scale": 1.0, "ox": 0.0, "oy": 0.0}
+            self._press = None
+            self._hits = []
+            self.canvas.bind("<ButtonPress-1>", self._canvas_press)
+            self.canvas.bind("<B1-Motion>", self._canvas_drag)
+            self.canvas.bind("<ButtonRelease-1>", self._canvas_release)
+            self.canvas.bind("<MouseWheel>", lambda e: self._zoom(1.15 if e.delta > 0 else 1 / 1.15, e.x, e.y))
+            self.canvas.bind("<Button-4>", lambda e: self._zoom(1.15, e.x, e.y))
+            self.canvas.bind("<Button-5>", lambda e: self._zoom(1 / 1.15, e.x, e.y))
+            nav = tk.Frame(self.canvas, background=COLORS["panel"])
+            for text, cmd in (("+", lambda: self._zoom(1.25)), ("−", lambda: self._zoom(0.8)), ("fit", self._fit)):
+                ttk.Button(nav, text=text, width=3 if text != "fit" else 4, style="Small.TButton", command=cmd).pack(side="left", padx=1)
+            nav.place(relx=1.0, x=-6, y=6, anchor="ne")
+            # under the picture: the legend, or what was clicked
+            self.info = tk.Label(cf, text=LEGEND, anchor="w", justify="left", background="#f6f8fa",
+                                 foreground=COLORS["muted"], font=("Segoe UI", 8), padx=6, pady=3, wraplength=520)
+            self.info.pack(fill="x", side="bottom", before=self.canvas)
+            cf.bind("<Configure>", lambda e: self.info.configure(wraplength=max(200, e.width - 20)))
             rf = ttk.LabelFrame(right, text=" Solved values ", padding=2)
             right.add(rf, weight=3)
             cols = ("node", "value", "unit", "unc", "check", "expected")
@@ -527,7 +677,8 @@ if tk is not None:
             values = {"name": name, "guess": fmt(spec.get("guess", "")), "meas": fmt(meas[0]) if meas else "",
                       "sigma": fmt(meas[1]) if len(meas) > 1 else "", "expected": fmt(spec.get("expected", "")),
                       "tol": fmt(spec.get("tolerance", ""))}
-            widgets = {"frame": row, "unit": spec.get("unit", ""), "cells": []}
+            guessed = bool(spec.get("guessed") or spec.get("emerged"))
+            widgets = {"frame": row, "unit": spec.get("unit", ""), "cells": [], "guessed": guessed}
             for k, (key, _, width) in enumerate(NODE_COLUMNS):
                 if key == "scale":
                     w = ttk.Combobox(parent, values=["log", "lin"], width=width - 1, state="readonly")
@@ -535,8 +686,14 @@ if tk is not None:
                     w.bind("<<ComboboxSelected>>", lambda e: self.form_changed())
                 elif key == "fixed":
                     var = tk.BooleanVar(value=bool(spec.get("fixed", False)))
-                    w = ttk.Checkbutton(parent, variable=var, command=self.form_changed, style="Panel.TCheckbutton")
                     widgets["fixed_var"] = var
+                    if spec.get("guessed") or spec.get("emerged"):
+                        # a node the network asked for (never fixed): said here, where the eye looks
+                        w = ttk.Label(parent, text="guessed", style="Guessed.TLabel")
+                        Tooltip(w, "Guessed by 'Missing nodes?': it balances the network, nobody measured it. "
+                                   "A perspective to consider, not a finding.")
+                    else:
+                        w = ttk.Checkbutton(parent, variable=var, command=self.form_changed, style="Panel.TCheckbutton")
                 else:
                     w = ttk.Entry(parent, width=width)
                     w.insert(0, values[key])
@@ -548,6 +705,8 @@ if tk is not None:
                            command=lambda: self._delete(self.node_rows, row))
             b.grid(row=row, column=len(NODE_COLUMNS), padx=2)
             widgets["cells"].append(b)
+            if guessed:                          # a node the network asked for: nobody measured it
+                widgets["name"].configure(style="Guessed.TEntry")
             self.node_rows.append(widgets)
 
         def add_relation_row(self, rel=None):
@@ -589,6 +748,20 @@ if tk is not None:
             r["rhs"].configure(state="disabled" if kind == "fn" else "normal")
 
         def _delete(self, rows, row):
+            if rows is self.node_rows:
+                # a node leaves the relations with it (and a guessed node is undone as it was made)
+                gone = next((r for r in rows if r["frame"] == row), None)
+                name = gone["name"].get().strip() if gone else ""
+                if name:
+                    doc = remove_node(self.document_from_forms(), name)
+                    self.forms_from_document(doc)
+                    self._syncing = True
+                    try:
+                        self._write_json(doc)
+                    finally:
+                        self._syncing = False
+                    self._schedule_solve()
+                    return
             for r in [r for r in rows if r["frame"] == row]:
                 for w in r["cells"]:
                     w.destroy()
@@ -650,6 +823,8 @@ if tk is not None:
                     spec["fixed"] = True
                 if r.get("unit"):
                     spec["unit"] = r["unit"]
+                if r.get("guessed"):
+                    spec["guessed"] = True
                 doc["nodes"][name] = spec
             for r in self.rel_rows:
                 kind = r["type"].get() or "log"
@@ -791,6 +966,110 @@ if tk is not None:
                     json.dump(self.document_from_forms(), f, indent=2, ensure_ascii=False)
                 self.status.configure(text=f"Saved {path}")
 
+        def export_results(self):
+            """The solved values (CSV, one row per node) or the whole report (JSON)."""
+            report = self.last_report
+            if report is None:
+                messagebox.showinfo("Export", "Solve the network first.")
+                return
+            path = filedialog.asksaveasfilename(defaultextension=".csv", initialfile="grm_results.csv",
+                                                filetypes=[("CSV", "*.csv"), ("JSON", "*.json")])
+            if not path:
+                return
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write(results_json(self.document_from_forms(), report) if path.lower().endswith(".json")
+                        else results_csv(self.document_from_forms(), report))
+            self.status.configure(text=f"Exported {path}")
+
+        # ------------------------------------------------------------------ the picture: navigation
+        def _screen(self, x, y):
+            c = self.canvas
+            cx, cy = max(c.winfo_width(), 200) / 2, max(c.winfo_height(), 160) / 2
+            v = self.view
+            return cx + x * v["scale"] + v["ox"], cy + y * v["scale"] + v["oy"]
+
+        def _zoom(self, factor, sx=None, sy=None):
+            c = self.canvas
+            cx, cy = max(c.winfo_width(), 200) / 2, max(c.winfo_height(), 160) / 2
+            sx = cx if sx is None else sx
+            sy = cy if sy is None else sy
+            v = self.view
+            new = min(8.0, max(0.2, v["scale"] * factor))
+            k = new / v["scale"]
+            # the point under the pointer stays where it is
+            v["ox"] = (sx - cx) - (sx - cx - v["ox"]) * k
+            v["oy"] = (sy - cy) - (sy - cy - v["oy"]) * k
+            v["scale"] = new
+            self._draw()
+
+        def _fit(self):
+            self.view = {"scale": 1.0, "ox": 0.0, "oy": 0.0}
+            self._draw()
+
+        def _canvas_press(self, e):
+            self._press = (e.x, e.y, self.view["ox"], self.view["oy"], False)
+
+        def _canvas_drag(self, e):
+            if not self._press:
+                return
+            x0, y0, ox, oy, _ = self._press
+            if abs(e.x - x0) + abs(e.y - y0) > 3:
+                self._press = (x0, y0, ox, oy, True)
+                self.view["ox"], self.view["oy"] = ox + e.x - x0, oy + e.y - y0
+                self._draw()
+
+        def _canvas_release(self, e):
+            if self._press and not self._press[4]:
+                self._read_at(e.x, e.y)
+            self._press = None
+
+        def _read_at(self, x, y):
+            """What is under the pointer: a node or a relation, said in the line under the picture."""
+            best = None
+            for kind, name, hx, hy, r in self._hits:
+                d = math.hypot(x - hx, y - hy)
+                if d <= r and (best is None or d < best[0]):
+                    best = (d, kind, name)
+            if best is None:
+                self.info.configure(text=LEGEND, foreground=COLORS["muted"], font=("Segoe UI", 8))
+                return
+            self.info.configure(foreground=COLORS["ink"], font=("Segoe UI", 9))
+            _, kind, name = best
+            report = self.last_report
+            doc = normalize(self.document_from_forms())
+            if kind == "node":
+                spec = doc["nodes"].get(name, {})
+                parts = [f"{name}"]
+                if report and name in report["result"]["values"]:
+                    v = report["result"]["values"][name]
+                    unc = report["result"]["uncertainty"][name]
+                    lin = spec.get("scale") == "lin"
+                    parts.append(f"= {fmt(v)} {spec.get('unit', '')}".rstrip())
+                    parts.append(f"± {fmt(unc)}" if lin else f"± {unc * 100:.3g} %")
+                if spec.get("measured"):
+                    parts.append(f"· measured {fmt(spec['measured'][0])} (σ {fmt(spec['measured'][1])} dex)")
+                if spec.get("expected") not in (None, ""):
+                    c = next((k for k in (report or {}).get("checks", []) if k["node"] == name), None)
+                    parts.append(f"· expected {fmt(spec['expected'])}" + (f" ({'✓' if c['ok'] else '✗'})" if c else ""))
+                if spec.get("guessed"):
+                    parts.append("· guessed: nobody measured it, the network asked for it")
+                if report and name in report["result"].get("undetermined", []):
+                    parts.append("· not determined by the network")
+                self.info.configure(text="  ".join(parts))
+            else:
+                k = int(name)
+                rel = doc["relations"][k]
+                rname = rel.get("name") or f"relation {k + 1}"
+                if rel["type"] == "fn":
+                    body = f"{rel.get('expr', '')} = 0"
+                elif rel["type"] == "sum":
+                    body = " + ".join(f"{c}·{n}^{(rel.get('pow') or {}).get(n, 1)}" for n, c in rel["terms"].items()) + f" = {rel.get('K', 0)}"
+                else:
+                    body = " + ".join(f"{c}·log {n}" for n, c in rel["terms"].items()) + f" = {fmt(float(rel.get('rhs', 0)))}"
+                pull = (report or {}).get("result", {}).get("relation_pulls", {}).get(rname)
+                self.info.configure(text=f"{rname} ({rel['type']}):  {body}   ·   σ {fmt(float(rel.get('sigma', 1e-3)))}"
+                                         + (f"   ·   pull {pull:+.2f} σ" if pull is not None else ""))
+
         # ------------------------------------------------------------------ solve and show
         def _schedule_solve(self):
             if not self.live.get():
@@ -810,6 +1089,85 @@ if tk is not None:
                 return
             self.last_report = report
             self._show(report, doc)
+
+        # ------------------------------------------------------------------ missing nodes
+        def missing_nodes(self):
+            doc = self.document_from_forms()
+            try:
+                steps = find_missing_nodes(doc)
+            except Exception as err:          # the network itself cannot be solved: say why, where the user looks
+                self._show_error(f"Missing nodes: the network must solve first. {err}")
+                return
+            win = tk.Toplevel(self.root)
+            win.title("Missing nodes: perspectives, not findings")
+            win.geometry("820x620")
+            win.configure(background=COLORS["bg"])
+            text = tk.Text(win, wrap="word", font=("Segoe UI", 10), background=COLORS["panel"], relief="flat",
+                           padx=12, pady=10)
+            text.pack(fill="both", expand=True, padx=8, pady=8)
+            text.tag_configure("h", font=("Segoe UI", 12, "bold"))
+            text.tag_configure("muted", foreground=COLORS["muted"])
+            text.tag_configure("warn", foreground=COLORS["warn"])
+            text.tag_configure("ok", foreground=COLORS["ok"])
+            put = lambda s, *tags: text.insert("end", s, tags)
+            report = solve_document(doc)
+            if not steps:
+                if report["consistent"]:
+                    put("Nothing is missing.\n", "h")
+                    put("The network is consistent with its data: adding a node would only fit the noise.\n", "muted")
+                else:
+                    put("No single node can be added that is worth it.\n", "h")
+                    put("No placement of one new factor removes enough tension to pay for itself (BIC), or the new "
+                        "node would stay undetermined. The tension may come from a relation of another form, or from "
+                        "several causes at once.\n", "muted")
+            put("How this works: a node nobody measured is tried at every place it could act (a factor in a log "
+                "relation, or a systematic factor in one measurement). The placement that removes the most tension is "
+                "kept if it is worth one more node (Bayesian information criterion), then its value is looked up in a "
+                "bank of known numbers. Again, while tension remains (at most 3 nodes).\n\n", "muted")
+            for k, st in enumerate(steps):
+                put(f"{st['name']}: {describe_placement(doc if k == 0 else steps[k - 1]['document'], st['where'])}\n", "h")
+                rel = (10 ** st["sigma_dex"] - 1) * 100
+                put(f"value {fmt(st['value'])} ± {rel:.2g} %   ·   chi2 {st['chi2_before']:.3g} -> {st['chi2_after']:.3g}"
+                    f"   ·   BIC {st['bic_before']:.3g} -> {st['bic_after']:.3g}\n")
+                if st["alternatives"]:
+                    put("Equally good for the data (it cannot tell them apart):\n", "warn")
+                    for a in st["alternatives"]:
+                        put(f"   · {describe_placement(doc if k == 0 else steps[k - 1]['document'], a['where'])}: "
+                            f"{fmt(a['value'])}\n", "warn")
+                if st["matches"]:
+                    put(f"Known numbers within 2 sigma (bank of {st['tried']} candidates):\n")
+                    for label, v, z, source in st["matches"]:
+                        put(f"   · {label} = {fmt(v)}   ({z:.2f} sigma)   {source}\n")
+                else:
+                    put(f"No known number within 2 sigma (bank of {st['tried']} candidates).\n")
+                verdict = ("so many numbers lie this close that a match means nothing" if st["chance"] >= 1 else
+                           "a match this close would happen by chance about " + f"{st['chance']:.2g} times: suggestive at most"
+                           if st["chance"] >= 0.05 else "few numbers lie this close: a match would be worth a look")
+                put(f"By chance, about {st['chance']:.2g} candidates would fall in this window: {verdict}.\n",
+                    "warn" if st["chance"] >= 0.05 else "ok")
+                put(f"After {st['name']}: {'consistent' if st['consistent_after'] else 'tension remains'}.\n\n")
+                b = ttk.Button(text, text=f"Add {st['name']} (and the nodes before it) to the network",
+                               command=lambda d=st["document"]: self._adopt(d, win))
+                text.window_create("end", window=b)
+                put("\n\n")
+            put("A node that balances the data is a perspective to consider, never a proof that it exists: the same "
+                "numbers could come from an error in one measurement, from a relation that is only approximate, or from "
+                "physics of a different form.\n", "muted")
+            text.configure(state="disabled")
+
+        def _adopt(self, doc, win):
+            win.destroy()
+            self.preset_var.set("")
+            meta = dict(self.meta)
+            meta["title"] = (meta.get("title") or "Network") + " + guessed nodes"
+            doc = dict(doc, **{k: v for k, v in meta.items() if k not in ("nodes", "relations")})
+            self.forms_from_document(doc)
+            self._syncing = True
+            try:
+                self._write_json(doc)
+            finally:
+                self._syncing = False
+            self.solve()
 
         def _show_error(self, message):
             self.verdict.configure(text="⚠  Cannot solve", background="#fff8c5", foreground=COLORS["warn"])
@@ -839,6 +1197,10 @@ if tk is not None:
                 lines.append(f"χ² = {chi2:.3g} for {dof} degree(s) of freedom (χ²/dof = {chi2 / dof:.3g}): {state}.")
             else:
                 lines.append("No redundancy (dof = 0): every measurement is used to fix a node, nothing is checked twice.")
+            if report["birge"] is not None and report["birge"] > 1:
+                lines.append(f"Birge ratio S = {report['birge']:.2f}: if the disagreement were only underestimated "
+                             f"uncertainties, they would have to be {report['birge']:.2f} times larger (the scale factor of "
+                             "the PDG and CODATA). The ± column shows them scaled.")
             if report["pulls"]:
                 what, p = report["pulls"][0]
                 lines.append(f"Largest pull: {what} at {p:+.2f} σ.")
@@ -848,6 +1210,8 @@ if tk is not None:
                 lines.append("Not determined by the network (value = guess): " + ", ".join(sorted(undetermined)) + ".")
             if self.meta.get("category") == "open":
                 lines.append("Open problem: a result here measures a tension or the size of a hypothesis; it is not a solution.")
+            if not report["consistent"]:
+                lines.append("Something may be missing: try 'Missing nodes?' (perspectives to consider, not findings).")
             if "loo" in report:
                 parts = [f"{k}: predicted {fmt(v['predicted'])} vs measured {fmt(v['measured'])} ({v['pull']:+.2f} σ)"
                          for k, v in report["loo"].items() if v["determined"]]
@@ -859,7 +1223,7 @@ if tk is not None:
             nodes = normalize(doc)["nodes"]
             for name, v in res["values"].items():
                 lin = nodes.get(name, {}).get("scale") == "lin"
-                unc = res["uncertainty"][name]
+                unc = res["uncertainty"][name] * (report["birge"] if (report["birge"] or 0) > 1 else 1.0)
                 unit = nodes.get(name, {}).get("unit", "")
                 unc_text = (fmt(unc) if lin else (f"{unc * 100:.2g} %" if unc >= 1e-4 else f"{unc:.1e}"))
                 c = checks.get(name)
@@ -883,8 +1247,9 @@ if tk is not None:
         def _draw(self):
             c = self.canvas
             c.delete("all")
+            self._hits = []
             w, h = max(c.winfo_width(), 200), max(c.winfo_height(), 160)
-            doc = self.document_from_forms() if (self.node_rows or self.rel_rows) else {"nodes": {}, "relations": []}
+            doc = normalize(self.document_from_forms()) if (self.node_rows or self.rel_rows) else {"nodes": {}, "relations": []}
             names = list(doc["nodes"])
             if not names:
                 return
@@ -892,13 +1257,16 @@ if tk is not None:
             checks = {k["node"]: k for k in report["checks"]} if report else {}
             undetermined = set(report["result"].get("undetermined", [])) if report else set()
             pulls = report["result"]["relation_pulls"] if report else {}
-            cx, cy = w / 2, h / 2
-            rn = min(cx - 60, cy - 30)
-            pos = {n: (cx + rn * math.cos(2 * math.pi * k / len(names) - math.pi / 2),
-                       cy + rn * math.sin(2 * math.pi * k / len(names) - math.pi / 2)) for k, n in enumerate(names)}
-            rels = doc["relations"]
+            zoom = self.view["scale"]
+            radius = {n: max(20, 4 * len(n) + 6) for n in names}
+            # nodes on a circle (world coordinates, centred on 0); room left for the largest node
+            rn = max(40.0, min(w / 2, h / 2) - max(radius.values()) - 8)
+            world = {n: (rn * math.cos(2 * math.pi * k / len(names) - math.pi / 2),
+                         rn * math.sin(2 * math.pi * k / len(names) - math.pi / 2)) for k, n in enumerate(names)}
+            pos = {n: self._screen(*xy) for n, xy in world.items()}
+            ox, oy = self._screen(0, 0)
             # relations as small squares between their nodes (a factor graph)
-            for k, rel in enumerate(rels):
+            for k, rel in enumerate(doc["relations"]):
                 if rel.get("type") == "fn":
                     try:
                         _, members = compile_expression(rel.get("expr", ""), set(names))
@@ -908,33 +1276,79 @@ if tk is not None:
                     members = [n for n in (rel.get("terms") or {}) if n in pos]
                 if not members:
                     continue
-                mx = sum(pos[n][0] for n in members) / len(members)
-                my = sum(pos[n][1] for n in members) / len(members)
+                mx = sum(world[n][0] for n in members) / len(members)
+                my = sum(world[n][1] for n in members) / len(members)
                 if len(members) == 1:
-                    mx, my = cx + (pos[members[0]][0] - cx) * 0.55, cy + (pos[members[0]][1] - cy) * 0.55
-                mx, my = mx + 6 * math.cos(k), my + 6 * math.sin(k)
+                    mx, my = world[members[0]][0] * 0.55, world[members[0]][1] * 0.55
+                mx, my = self._screen(mx + 6 * math.cos(k), my + 6 * math.sin(k))
                 p = abs(pulls.get(rel.get("name") or f"relation {k + 1}", 0.0))
                 col = COLORS["bad"] if p >= 3 else COLORS["warn"] if p >= 2 else COLORS["edge"]
                 for n in members:
                     c.create_line(mx, my, *pos[n], fill=col, width=2 if p >= 2 else 1)
-                c.create_rectangle(mx - 6, my - 6, mx + 6, my + 6, fill=col, outline="")
+                q = 6 * min(zoom, 2)
+                c.create_rectangle(mx - q, my - q, mx + q, my + q, fill=col, outline="")
+                self._hits.append(("relation", str(k), mx, my, q + 4))
                 label = rel.get("name", "")
-                c.create_text(mx, my - 12, text=label if len(label) <= 22 else label[:21] + "…", fill=COLORS["muted"],
-                              font=("Segoe UI", 8))
+                c.create_text(mx, my - 12 * min(zoom, 2), text=label if len(label) <= 22 else label[:21] + "…",
+                              fill=COLORS["muted"], font=("Segoe UI", max(7, int(8 * min(zoom, 1.6)))))
             for n, (x, y) in pos.items():
                 spec = doc["nodes"][n]
-                fill = "#ffffff"
+                guessed = bool(spec.get("guessed"))
+                fill = "#f3e8ff" if guessed else "#ffffff"
                 if n in checks:
                     fill = "#dafbe1" if checks[n]["ok"] else "#ffebe9"
                 elif n in undetermined:
                     fill = "#fff8c5"
-                outline = COLORS["accent"] if spec.get("measured") else COLORS["ink"]
-                r = max(20, 4 * len(n) + 6)
-                c.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline=outline, width=3 if spec.get("measured") else 1)
-                c.create_text(x, y, text=n, fill=COLORS["ink"], font=("Segoe UI", 9, "bold"))
-            c.create_text(8, h - 8, anchor="sw", fill=COLORS["muted"], font=("Segoe UI", 8),
-                          text="blue ring: measured · green / red: check passes / fails · yellow: undetermined · "
-                               "orange / red link: relation pulled beyond 2 / 3 σ")
+                outline = COLORS["open"] if guessed else COLORS["accent"] if spec.get("measured") else COLORS["ink"]
+                r = radius[n] * zoom
+                extra = {"dash": (4, 3)} if guessed else {}
+                c.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline=outline,
+                              width=3 if (spec.get("measured") or guessed) else 1, **extra)
+                c.create_text(x, y, text=n, fill=COLORS["open"] if guessed else COLORS["ink"],
+                              font=("Segoe UI", max(7, int(9 * min(zoom, 2))), "bold"))
+                self._hits.append(("node", n, x, y, r))
+
+
+def results_rows(doc, report):
+    """One row per node: what the network found, and what was known of it."""
+    doc = normalize(doc)
+    res = report["result"]
+    checks = {c["node"]: c for c in report["checks"]}
+    s = report.get("birge") if (report.get("birge") or 0) > 1 else None
+    rows = []
+    for name, v in res["values"].items():
+        spec = doc["nodes"].get(name, {})
+        m = spec.get("measured") or [None, None]
+        c = checks.get(name)
+        rows.append({"node": name, "value": v, "unit": spec.get("unit", ""), "scale": spec.get("scale", "log"),
+                     "uncertainty": res["uncertainty"][name], "uncertainty_birge": (res["uncertainty"][name] * s) if s else None,
+                     "sigma_dex": res["sigma_dex"][name], "measured": m[0], "measured_sigma_dex": m[1],
+                     "expected": c["expected"] if c else None, "check": (None if not c else bool(c["ok"])),
+                     "guessed": bool(spec.get("guessed")), "undetermined": name in res.get("undetermined", [])})
+    return rows
+
+
+def results_csv(doc, report):
+    import csv
+    import io
+    rows = results_rows(doc, report)
+    out = io.StringIO()
+    wr = csv.DictWriter(out, fieldnames=list(rows[0].keys()) if rows else ["node"])
+    wr.writeheader()
+    for r in rows:
+        wr.writerow({k: ("" if v is None else v) for k, v in r.items()})
+    return out.getvalue()
+
+
+def results_json(doc, report):
+    res = report["result"]
+    return json.dumps({
+        "title": normalize(doc).get("title", ""),
+        "nodes": results_rows(doc, report),
+        "relation_pulls": res["relation_pulls"], "chi2": res["cost"], "dof": res["dof"], "birge": report.get("birge"),
+        "valid": report["valid"], "consistent": report["consistent"], "converged": res["converged"],
+        "network": normalize(doc),
+    }, indent=2, ensure_ascii=False)
 
 
 def main():

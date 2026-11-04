@@ -1,0 +1,1034 @@
+[
+ {
+  "id": "rydberg",
+  "doc": {
+   "nodes": {
+    "Rinf": {
+     "guess": 10000000.0,
+     "expected": 10973731.56816,
+     "tolerance": 1e-09,
+     "unit": "1/m",
+     "scale": "log"
+    },
+    "alpha": {
+     "guess": 0.0073,
+     "measured": [
+      0.0072973525693,
+      6.51e-11
+     ],
+     "scale": "log"
+    },
+    "me": {
+     "guess": 9.1e-31,
+     "measured": [
+      9.1093837015e-31,
+      1.3e-10
+     ],
+     "unit": "kg",
+     "scale": "log"
+    },
+    "c": {
+     "guess": 300000000.0,
+     "measured": [
+      299792458.0,
+      1e-12
+     ],
+     "unit": "m/s",
+     "scale": "log"
+    },
+    "h": {
+     "guess": 6.6e-34,
+     "measured": [
+      6.62607015e-34,
+      1e-12
+     ],
+     "unit": "J s",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "Rydberg",
+     "type": "log",
+     "terms": {
+      "Rinf": 1,
+      "alpha": -2,
+      "me": -1,
+      "c": -1,
+      "h": 1
+     },
+     "rhs": -0.3010299956639812,
+     "sigma": 1e-12
+    }
+   ]
+  },
+  "values": {
+   "Rinf": 10973731.568138594,
+   "alpha": 0.007297352569299999,
+   "me": 9.109383701499976e-31,
+   "c": 299792457.99999994,
+   "h": 6.626070150000036e-34
+  },
+  "sigma_dex": {
+   "Rinf": 1.839973912858549e-10,
+   "alpha": 6.51e-11,
+   "me": 1.3e-10,
+   "c": 1e-12,
+   "h": 1e-12
+  },
+  "cost": 0.0,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "bohr",
+  "doc": {
+   "nodes": {
+    "a0": {
+     "guess": 5e-11,
+     "expected": 5.29177210903e-11,
+     "tolerance": 1e-09,
+     "unit": "m",
+     "scale": "log"
+    },
+    "alpha": {
+     "guess": 0.0073,
+     "measured": [
+      0.0072973525693,
+      6.51e-11
+     ],
+     "scale": "log"
+    },
+    "me": {
+     "guess": 9.1e-31,
+     "measured": [
+      9.1093837015e-31,
+      1.3e-10
+     ],
+     "unit": "kg",
+     "scale": "log"
+    },
+    "c": {
+     "guess": 300000000.0,
+     "measured": [
+      299792458.0,
+      1e-12
+     ],
+     "unit": "m/s",
+     "scale": "log"
+    },
+    "h": {
+     "guess": 6.6e-34,
+     "measured": [
+      6.62607015e-34,
+      1e-12
+     ],
+     "unit": "J s",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "Bohr radius",
+     "type": "log",
+     "terms": {
+      "a0": 1,
+      "me": 1,
+      "c": 1,
+      "alpha": 1,
+      "h": -1
+     },
+     "rhs": -0.798179868358115,
+     "sigma": 1e-12
+    }
+   ]
+  },
+  "values": {
+   "a0": 5.291772109044975e-11,
+   "alpha": 0.007297352569299999,
+   "me": 9.109383701499976e-31,
+   "c": 299792457.99999994,
+   "h": 6.626070150000036e-34
+  },
+  "sigma_dex": {
+   "a0": 1.4539948418065311e-10,
+   "alpha": 6.51e-11,
+   "me": 1.3e-10,
+   "c": 1e-12,
+   "h": 1e-12
+  },
+  "cost": 0.0,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "kepler",
+  "doc": {
+   "nodes": {
+    "GM": {
+     "guess": 1e+20,
+     "expected": 1.3271244e+20,
+     "tolerance": 1e-05,
+     "unit": "m^3/s^2",
+     "scale": "log"
+    },
+    "a": {
+     "guess": 150000000000.0,
+     "measured": [
+      149597870700.0,
+      1e-10
+     ],
+     "unit": "m",
+     "scale": "log"
+    },
+    "T": {
+     "guess": 30000000.0,
+     "measured": [
+      31558149.7635456,
+      1e-10
+     ],
+     "unit": "s",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "Kepler III",
+     "type": "log",
+     "terms": {
+      "GM": 1,
+      "a": -3,
+      "T": 2
+     },
+     "rhs": 1.59635973671623,
+     "sigma": 1e-12
+    }
+   ]
+  },
+  "values": {
+   "GM": 1.3271282905081935e+20,
+   "a": 149597870700.00015,
+   "T": 31558149.76354562
+  },
+  "sigma_dex": {
+   "GM": 3.605565142942227e-10,
+   "a": 1e-10,
+   "T": 1e-10
+  },
+  "cost": 3.155443620884047e-06,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "sound",
+  "doc": {
+   "nodes": {
+    "c": {
+     "guess": 300.0,
+     "expected": 343.2,
+     "tolerance": 0.001,
+     "unit": "m/s",
+     "scale": "log"
+    },
+    "gamma": {
+     "guess": 1.4,
+     "measured": [
+      1.4,
+      4.34e-05
+     ],
+     "scale": "log"
+    },
+    "R": {
+     "guess": 8.3,
+     "measured": [
+      8.314462618,
+      1e-12
+     ],
+     "unit": "J/(mol K)",
+     "scale": "log"
+    },
+    "T": {
+     "guess": 300.0,
+     "measured": [
+      293.15,
+      4.34e-05
+     ],
+     "unit": "K",
+     "scale": "log"
+    },
+    "M": {
+     "guess": 0.03,
+     "measured": [
+      0.0289647,
+      4.34e-06
+     ],
+     "unit": "kg/mol",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "ideal gas sound speed",
+     "type": "log",
+     "terms": {
+      "c": 2,
+      "gamma": -1,
+      "R": -1,
+      "T": -1,
+      "M": 1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-12
+    }
+   ]
+  },
+  "values": {
+   "c": 343.2349805813274,
+   "gamma": 1.4,
+   "R": 8.314462617999999,
+   "T": 293.15,
+   "M": 0.028964700000000006
+  },
+  "sigma_dex": {
+   "c": 3.076505972690444e-05,
+   "gamma": 4.339999999999995e-05,
+   "R": 1e-12,
+   "T": 4.339999999999995e-05,
+   "M": 4.34e-06
+  },
+  "cost": 1.9721522630525295e-07,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "sun_luminosity",
+  "doc": {
+   "nodes": {
+    "L": {
+     "guess": 1e+26,
+     "expected": 3.828e+26,
+     "tolerance": 0.001,
+     "unit": "W",
+     "scale": "log"
+    },
+    "sigmaSB": {
+     "guess": 5.7e-08,
+     "measured": [
+      5.670374419e-08,
+      1e-12
+     ],
+     "unit": "W/(m^2 K^4)",
+     "scale": "log"
+    },
+    "R": {
+     "guess": 700000000.0,
+     "measured": [
+      695700000.0,
+      4.34e-05
+     ],
+     "unit": "m",
+     "scale": "log"
+    },
+    "T": {
+     "guess": 6000.0,
+     "measured": [
+      5772.0,
+      4.34e-05
+     ],
+     "unit": "K",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "Stefan-Boltzmann",
+     "type": "log",
+     "terms": {
+      "L": 1,
+      "sigmaSB": -1,
+      "R": -2,
+      "T": -4
+     },
+     "rhs": 1.0992098640220962,
+     "sigma": 1e-12
+    }
+   ]
+  },
+  "values": {
+   "L": 3.827990903152582e+26,
+   "sigmaSB": 5.670374418999995e-08,
+   "R": 695699999.9999992,
+   "T": 5772.0
+  },
+  "sigma_dex": {
+   "L": 0.00019409070044697793,
+   "sigmaSB": 1e-12,
+   "R": 4.339999999999979e-05,
+   "T": 4.339999999999931e-05
+  },
+  "cost": 3.155443620884047e-06,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "pendulum",
+  "doc": {
+   "nodes": {
+    "g": {
+     "guess": 10.0,
+     "expected": 9.81,
+     "tolerance": 0.002,
+     "unit": "m/s^2",
+     "scale": "log"
+    },
+    "L": {
+     "guess": 1.0,
+     "measured": [
+      1.0,
+      0.000434
+     ],
+     "unit": "m",
+     "scale": "log"
+    },
+    "T": {
+     "guess": 2.0,
+     "measured": [
+      2.006,
+      0.000217
+     ],
+     "unit": "s",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "pendulum",
+     "type": "log",
+     "terms": {
+      "T": 1,
+      "L": -0.5,
+      "g": 0.5
+     },
+     "rhs": 0.798179868358115,
+     "sigma": 1e-12
+    }
+   ]
+  },
+  "values": {
+   "g": 9.810652192067229,
+   "L": 1.0,
+   "T": 2.006
+  },
+  "sigma_dex": {
+   "g": 0.0006137686860697716,
+   "L": 0.0004339999999999183,
+   "T": 0.00021699999999997448
+  },
+  "cost": 4.323878253247509e-48,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "pythagoras",
+  "doc": {
+   "nodes": {
+    "a": {
+     "guess": 1.0,
+     "measured": [
+      3.0,
+      1e-06
+     ],
+     "scale": "log"
+    },
+    "b": {
+     "guess": 1.0,
+     "measured": [
+      4.0,
+      1e-06
+     ],
+     "scale": "log"
+    },
+    "c": {
+     "guess": 1.0,
+     "expected": 5.0,
+     "tolerance": 1e-06,
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "right triangle",
+     "type": "sum",
+     "terms": {
+      "a": 1,
+      "b": 1,
+      "c": -1
+     },
+     "pow": {
+      "a": 2,
+      "b": 2,
+      "c": 2
+     },
+     "K": 0.0,
+     "sigma": 1e-09
+    }
+   ]
+  },
+  "values": {
+   "a": 3.0,
+   "b": 4.0,
+   "c": 4.999999999999999
+  },
+  "sigma_dex": {
+   "a": 1e-06,
+   "b": 1e-06,
+   "c": 7.343023900788049e-07
+  },
+  "cost": 5.048709793414474e-11,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "wien",
+  "doc": {
+   "nodes": {
+    "x": {
+     "guess": 3.0,
+     "expected": 4.965114231744276,
+     "tolerance": 1e-09,
+     "scale": "log"
+    },
+    "b": {
+     "guess": 0.003,
+     "expected": 0.002897771955,
+     "tolerance": 1e-08,
+     "unit": "m K",
+     "scale": "log"
+    },
+    "h": {
+     "guess": 6.6e-34,
+     "measured": [
+      6.62607015e-34,
+      1e-12
+     ],
+     "unit": "J s",
+     "scale": "log"
+    },
+    "c": {
+     "guess": 300000000.0,
+     "measured": [
+      299792458.0,
+      1e-12
+     ],
+     "unit": "m/s",
+     "scale": "log"
+    },
+    "k": {
+     "guess": 1.4e-23,
+     "measured": [
+      1.380649e-23,
+      1e-12
+     ],
+     "unit": "J/K",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "peak of Planck's law",
+     "type": "fn",
+     "expr": "x - 5 * (1 - exp(-x))",
+     "sigma": 1e-12
+    },
+    {
+     "name": "Wien constant",
+     "type": "log",
+     "terms": {
+      "b": 1,
+      "x": 1,
+      "h": -1,
+      "c": -1,
+      "k": 1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-12
+    }
+   ]
+  },
+  "values": {
+   "x": 4.965114231744276,
+   "b": 0.0028977719551851887,
+   "h": 6.626070150000036e-34,
+   "c": 299792457.99999994,
+   "k": 1.3806489999999998e-23
+  },
+  "sigma_dex": {
+   "x": 9.063091127095553e-14,
+   "b": 2.0020524373946364e-12,
+   "h": 1e-12,
+   "c": 1e-12,
+   "k": 1e-12
+  },
+  "cost": 7.888609052210118e-07,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "hubble_tension",
+  "doc": {
+   "nodes": {
+    "H0": {
+     "guess": 70.0,
+     "unit": "km/s/Mpc",
+     "scale": "log"
+    },
+    "H0_cmb": {
+     "guess": 70.0,
+     "measured": [
+      67.4,
+      0.00322
+     ],
+     "unit": "km/s/Mpc",
+     "scale": "log"
+    },
+    "H0_ladder": {
+     "guess": 70.0,
+     "measured": [
+      73.04,
+      0.00618
+     ],
+     "unit": "km/s/Mpc",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "CMB measures H0",
+     "type": "log",
+     "terms": {
+      "H0_cmb": 1,
+      "H0": -1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-09
+    },
+    {
+     "name": "ladder measures H0",
+     "type": "log",
+     "terms": {
+      "H0_ladder": 1,
+      "H0": -1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-09
+    }
+   ]
+  },
+  "values": {
+   "H0": 68.5664576067896,
+   "H0_cmb": 68.56645760678946,
+   "H0_ladder": 68.56645760678971
+  },
+  "sigma_dex": {
+   "H0": 0.002855626676647203,
+   "H0_cmb": 0.0028556266766471042,
+   "H0_ladder": 0.0028556266766473037
+  },
+  "cost": 25.08341268100555,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "hubble_sound_horizon",
+  "doc": {
+   "nodes": {
+    "H0": {
+     "guess": 70.0,
+     "unit": "km/s/Mpc",
+     "scale": "log"
+    },
+    "H0_cmb": {
+     "guess": 70.0,
+     "measured": [
+      67.4,
+      0.00322
+     ],
+     "unit": "km/s/Mpc",
+     "scale": "log"
+    },
+    "H0_ladder": {
+     "guess": 70.0,
+     "measured": [
+      73.04,
+      0.00618
+     ],
+     "unit": "km/s/Mpc",
+     "scale": "log"
+    },
+    "r_ratio": {
+     "guess": 1.0,
+     "measured": [
+      1.0,
+      0.0434
+     ],
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "CMB measures H0 r_s",
+     "type": "log",
+     "terms": {
+      "H0_cmb": 1,
+      "H0": -1,
+      "r_ratio": -1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-09
+    },
+    {
+     "name": "ladder measures H0",
+     "type": "log",
+     "terms": {
+      "H0_ladder": 1,
+      "H0": -1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-09
+    }
+   ]
+  },
+  "values": {
+   "H0": 72.92406609698239,
+   "H0_cmb": 67.42907253680525,
+   "H0_ladder": 72.92406609698239,
+   "r_ratio": 0.9246477349073039
+  },
+  "sigma_dex": {
+   "H0": 0.006118614835176914,
+   "H0_cmb": 0.0032113485846418837,
+   "H0_ladder": 0.006118614835176836,
+   "r_ratio": 0.006880428845817179
+  },
+  "cost": 0.6304318997651994,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "neutron_lifetime",
+  "doc": {
+   "nodes": {
+    "tau": {
+     "guess": 880.0,
+     "unit": "s",
+     "scale": "log"
+    },
+    "tau_beam": {
+     "guess": 880.0,
+     "measured": [
+      887.7,
+      0.00108
+     ],
+     "unit": "s",
+     "scale": "log"
+    },
+    "tau_bottle": {
+     "guess": 880.0,
+     "measured": [
+      877.82,
+      0.000109
+     ],
+     "unit": "s",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "beam measures tau",
+     "type": "log",
+     "terms": {
+      "tau_beam": 1,
+      "tau": -1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-09
+    },
+    {
+     "name": "bottle measures tau",
+     "type": "log",
+     "terms": {
+      "tau_bottle": 1,
+      "tau": -1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-09
+    }
+   ]
+  },
+  "values": {
+   "tau": 877.9190724564786,
+   "tau_beam": 877.9190724564867,
+   "tau_bottle": 877.9190724564696
+  },
+  "sigma_dex": {
+   "tau": 0.00010844906601020851,
+   "tau_beam": 0.00010844906601472603,
+   "tau_bottle": 0.00010844906600569104
+  },
+  "cost": 20.051986899470307,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "neutron_dark_decay",
+  "doc": {
+   "nodes": {
+    "tau": {
+     "guess": 880.0,
+     "unit": "s",
+     "scale": "log"
+    },
+    "Br_p": {
+     "guess": 1.0,
+     "measured": [
+      1.0,
+      0.0217
+     ],
+     "scale": "log"
+    },
+    "tau_beam": {
+     "guess": 880.0,
+     "measured": [
+      887.7,
+      0.00108
+     ],
+     "unit": "s",
+     "scale": "log"
+    },
+    "tau_bottle": {
+     "guess": 880.0,
+     "measured": [
+      877.82,
+      0.000109
+     ],
+     "unit": "s",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "beam sees decays with a proton",
+     "type": "log",
+     "terms": {
+      "tau_beam": 1,
+      "tau": -1,
+      "Br_p": 1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-09
+    },
+    {
+     "name": "bottle sees every decay",
+     "type": "log",
+     "terms": {
+      "tau_bottle": 1,
+      "tau": -1
+     },
+     "rhs": 0.0,
+     "sigma": 1e-09
+    }
+   ]
+  },
+  "values": {
+   "tau": 877.8202472706326,
+   "Br_p": 0.9888977391535791,
+   "tau_beam": 887.6754516821724,
+   "tau_bottle": 877.8202472706326
+  },
+  "sigma_dex": {
+   "tau": 0.00010899862834162808,
+   "Br_p": 0.001084130994940636,
+   "tau_beam": 0.0010786649271430024,
+   "tau_bottle": 0.0001089986283370411
+  },
+  "cost": 0.05004969858574641,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "koide",
+  "doc": {
+   "nodes": {
+    "Q": {
+     "guess": 0.5,
+     "expected": 0.6666666666666666,
+     "scale": "log"
+    },
+    "me": {
+     "guess": 0.5,
+     "measured": [
+      0.51099895,
+      1.3e-10
+     ],
+     "unit": "MeV",
+     "scale": "log"
+    },
+    "mmu": {
+     "guess": 100.0,
+     "measured": [
+      105.6583755,
+      9.55e-09
+     ],
+     "unit": "MeV",
+     "scale": "log"
+    },
+    "mtau": {
+     "guess": 1800.0,
+     "measured": [
+      1776.93,
+      2.2e-05
+     ],
+     "unit": "MeV",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "Koide",
+     "type": "fn",
+     "expr": "Q * (sqrt(me) + sqrt(mmu) + sqrt(mtau))**2 - (me + mmu + mtau)",
+     "sigma": 1e-09
+    }
+   ]
+  },
+  "values": {
+   "Q": 0.6666644634145,
+   "me": 0.51099895,
+   "mmu": 105.65837549999998,
+   "mtau": 1776.9300000000005
+  },
+  "sigma_dex": {
+   "Q": 3.3104635311230843e-06,
+   "me": 1.3e-10,
+   "mmu": 9.55e-09,
+   "mtau": 2.1999999999999996e-05
+  },
+  "cost": 0.0,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "koide_tau",
+  "doc": {
+   "nodes": {
+    "Q": {
+     "guess": 0.6,
+     "measured": [
+      0.6666666666666666,
+      1e-12
+     ],
+     "scale": "log"
+    },
+    "me": {
+     "guess": 0.5,
+     "measured": [
+      0.51099895,
+      1.3e-10
+     ],
+     "unit": "MeV",
+     "scale": "log"
+    },
+    "mmu": {
+     "guess": 100.0,
+     "measured": [
+      105.6583755,
+      9.55e-09
+     ],
+     "unit": "MeV",
+     "scale": "log"
+    },
+    "mtau": {
+     "guess": 1800.0,
+     "expected": 1776.93,
+     "tolerance": 0.000152,
+     "unit": "MeV",
+     "scale": "log"
+    }
+   },
+   "relations": [
+    {
+     "name": "Koide",
+     "type": "fn",
+     "expr": "Q * (sqrt(me) + sqrt(mmu) + sqrt(mtau))**2 - (me + mmu + mtau)",
+     "sigma": 1e-09
+    }
+   ]
+  },
+  "values": {
+   "Q": 0.6666666666666666,
+   "me": 0.51099895,
+   "mmu": 105.65837549999998,
+   "mtau": 1776.96902708301
+  },
+  "sigma_dex": {
+   "Q": 9.999999999999998e-13,
+   "me": 1.3000000000000002e-10,
+   "mmu": 9.549999999999998e-09,
+   "mtau": 8.713616207043907e-09
+  },
+  "cost": 4.652890945610779e-07,
+  "converged": true,
+  "undetermined": []
+ },
+ {
+  "id": "undetermined",
+  "doc": {
+   "nodes": {
+    "a": {
+     "guess": 2.0,
+     "scale": "log",
+     "measured": [
+      3.0,
+      0.001
+     ]
+    },
+    "b": {
+     "guess": 5.0,
+     "scale": "log"
+    },
+    "k": {
+     "guess": 7.0,
+     "scale": "log",
+     "fixed": true
+    }
+   },
+   "relations": [
+    {
+     "name": "a k",
+     "type": "log",
+     "terms": {
+      "a": 1,
+      "k": -1
+     },
+     "rhs": 0.1,
+     "sigma": 0.001
+    }
+   ]
+  },
+  "values": {
+   "a": 5.141734497976097,
+   "b": 5.000000000000001,
+   "k": 7.0
+  },
+  "sigma_dex": {
+   "a": 0.0007071067811863708,
+   "b": 1000.0,
+   "k": 0.0
+  },
+  "cost": 109501.13578733144,
+  "converged": true,
+  "undetermined": [
+   "b"
+  ]
+ }
+]

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /tests/
+
+Sitemap: https://simulation.anthony-charretier.fr/sitemap.xml

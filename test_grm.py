@@ -1060,3 +1060,94 @@ class TestHiddenNode:
             base = GlobalRelationalNetwork(nodes, rels).solve(meas)
             ok, _ = h.judge(base, h.emerge(meas, base), meas)
             assert not ok, seed
+
+
+class TestWeb:
+    """web/: grm.js against the Python GRM, and the universe network (run with Node when it is installed)."""
+
+    @staticmethod
+    def _node(script):
+        import shutil
+        import subprocess
+        if shutil.which("node") is None:
+            pytest.skip("Node.js is not installed")
+        here = os.path.dirname(os.path.abspath(__file__))
+        return subprocess.run(["node", os.path.join(here, "web", "tests", script)], capture_output=True, text=True,
+                              timeout=300)
+
+    def test_grm_js_matches_python(self):
+        out = self._node("test_grm_js.mjs")
+        assert out.returncode == 0, out.stdout + out.stderr
+
+    def test_universe_network(self):
+        out = self._node("test_universe.mjs")
+        assert out.returncode == 0, out.stdout + out.stderr
+
+
+class TestMissingNodes:
+    """grm_explorer.find_missing_nodes and grm_bank: nodes emerge where a network is in tension, never elsewhere."""
+
+    def test_tensions_get_one_node_and_known_networks_none(self):
+        from grm_explorer import find_missing_nodes, preset_document
+        from grm_presets import by_id
+        for pid, ratio in (("hubble_tension", 73.04 / 67.4), ("neutron_lifetime", 887.7 / 877.82)):
+            steps = find_missing_nodes(preset_document(by_id(pid)))
+            assert len(steps) == 1 and steps[0]["consistent_after"], pid
+            v = steps[0]["value"]
+            assert min(abs(v - ratio), abs(v - 1 / ratio)) < 1e-6 * ratio, (pid, v)
+            assert len(steps[0]["alternatives"]) == 3           # the data cannot tell where the factor sits
+        for pid in ("rydberg", "kepler", "koide", "hubble_sound_horizon"):
+            assert find_missing_nodes(preset_document(by_id(pid))) == [], pid
+
+    def test_bank_recognises_a_known_number_and_counts_chance(self):
+        import grm_bank
+        found, chance, n = grm_bank.matches(7.2973525693e-3, 1e-9)
+        assert found and found[0][0] == "alpha" and found[0][2] < 1e-3 and chance < 1e-3
+        _, wide_chance, _ = grm_bank.matches(1.08, 0.01)
+        assert wide_chance > 1                                  # a vague number matches something by chance
+
+
+class TestBirge:
+    def test_scale_factor_of_the_neutron_puzzle(self):
+        from grm_explorer import preset_document, solve_document
+        from grm_presets import by_id
+        r = solve_document(preset_document(by_id("neutron_lifetime")))
+        assert abs(r["birge"] - math.sqrt(r["result"]["cost"])) < 1e-12 and r["birge"] > 4
+        assert solve_document(preset_document(by_id("rydberg")))["birge"] is None     # no redundancy
+
+
+class TestExplorerExport:
+    def test_guessed_node_flag_and_exports(self):
+        import csv
+        import io
+        import json as _json
+        from grm_explorer import find_missing_nodes, preset_document, results_csv, results_json, solve_document
+        from grm_presets import by_id
+        doc = find_missing_nodes(preset_document(by_id("neutron_lifetime")))[0]["document"]
+        assert doc["nodes"]["X1"]["guessed"] is True
+        report = solve_document(doc)
+        rows = list(csv.DictReader(io.StringIO(results_csv(doc, report))))
+        assert {r["node"] for r in rows} >= {"tau", "X1"}
+        assert next(r for r in rows if r["node"] == "X1")["guessed"] == "True"
+        data = _json.loads(results_json(doc, report))
+        assert data["consistent"] and any(n["guessed"] for n in data["nodes"])
+
+
+class TestRemoveNode:
+    def test_a_guessed_node_can_be_removed_and_guessed_again(self):
+        from grm_explorer import find_missing_nodes, preset_document, remove_node, solve_document
+        from grm_presets import by_id
+        base = preset_document(by_id("hubble_tension"))
+        doc = find_missing_nodes(base)[0]["document"]
+        undone = remove_node(doc, "X1")
+        assert "X1" not in undone["nodes"]
+        assert all("X1" not in (r.get("terms") or {}) for r in undone["relations"])
+        assert solve_document(undone)["consistent"] is False         # the tension is back
+        again = find_missing_nodes(undone)
+        assert len(again) == 1 and again[0]["consistent_after"]
+        # the same for a node guessed in a measurement: the measurement returns to its node
+        from grm_explorer import _with_factor
+        m = _with_factor(base, ("measurement", "H0_ladder"), "X1")
+        back = remove_node(m, "X1")
+        assert back["nodes"]["H0_ladder"]["measured"][0] == 73.04 and "H0_ladder_read" not in back["nodes"]
+        assert len(back["relations"]) == len(base["relations"])

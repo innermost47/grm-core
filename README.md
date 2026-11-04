@@ -9,9 +9,10 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
+| `web/` | **The Relational Universe** ([live](https://simulation.anthony-charretier.fr)): from the Big Bang to the end of time in the browser (3D, music), every number held by one GRM network (`grm.js`, the JavaScript port) |
 | `grm_hidden_node.py` | **A node nobody mentioned**: the network sees that something is missing, makes the missing node emerge (where it acts, how large it is), and refuses to invent one when nothing is missing |
-| `grm_explorer.py` | The explorer: write a network with forms or JSON, solve it, see at once if it is valid; presets of known and open problems (`grm_presets.py`) |
-| `test_grm.py` | A hardcore test battery: 95 tests, plus a validation protocol for full models |
+| `grm_explorer.py` | The explorer: write a network with forms or JSON, solve it, see at once if it is valid; presets of known and open problems (`grm_presets.py`); missing nodes that emerge where the network is in tension, looked up in a bank of known numbers (`grm_bank.py`) |
+| `test_grm.py` | A hardcore test battery: 102 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
@@ -109,6 +110,27 @@ out = net.solve(measured_dict={"m": 2.0, "H0": (70.0, 0.01)})   # value, or (val
 
 ---
 
+## The Relational Universe (`web/`)
+
+> **Live: [simulation.anthony-charretier.fr](https://simulation.anthony-charretier.fr)**, nothing to install, phones included.
+
+```bash
+cd web && python -m http.server 8000      # then open http://localhost:8000 (phones included)
+```
+
+From the Big Bang to the end of time, in 3D and with music, and every number held by one GRM network: the atom, the
+expansion (Friedmann, Planck 2018 values), the first nuclei and the moment light is freed (Saha), the first acoustic
+peak of the microwave sky, the stars and the Sun's life, the evaporation of black holes, the air of the Earth, and the
+music itself (a flute in the Lydian mode cut in our air, a chord made of the sound of the young universe). Change a
+constant of nature: everything answers, the pitch of the flute included. Push it too far (too much matter, a burning
+sky) and the universe closes: the expansion stops, the light warms up again and everything falls into a Big Crunch.
+Both endings are played to the end, every step a node of the network: black dwarfs, evaporating galaxies, decaying
+protons and the last flashes of the black holes on one side; galaxies colliding, stars cooked by the sky, atoms then
+nuclei broken and the final point on the other. `grm.js` is the JavaScript port of `grm.py`,
+checked against it (`web/tests`). Details, sources and limits: [web/README.md](web/README.md).
+
+---
+
 ## A node nobody mentioned (`grm_hidden_node.py`)
 
 ```bash
@@ -163,7 +185,17 @@ live while typing.
     proton, Koide's Q = 2/3 predicting the tau mass). **These presets do not solve the problems**: they show how
     large a hypothesis would have to be for the data to agree, not whether it is true.
 
-Files: Open / Save JSON. The logic (`normalize`, `build_network`, `solve_document`) works without a display.
+- **Missing nodes?** When a network is in tension, a node nobody measured is tried at every place it could act (a
+  factor in a log relation, or a systematic factor in one measurement). The placement that removes the most tension is
+  kept if it is worth one more node (BIC), then again while tension remains (at most 3 nodes). The other placements
+  that explain the data as well are listed (the data cannot tell them apart), and the value is looked up in a bank of
+  known numbers (`grm_bank.py`: CODATA 2018, IAU, Planck 2018, PDG, mathematical constants, and simple forms of them),
+  with **how many candidates would match by chance** at that precision. On the neutron puzzle, the factor 0.98887 lies
+  1.55 sigma from 1 - alpha, and about 0.6 candidates would fall that close by chance: suggestive at most. On the
+  Hubble tension, almost four would: a match means nothing. Perspectives to consider, never proofs.
+
+Files: Open / Save JSON. The logic (`normalize`, `build_network`, `solve_document`, `find_missing_nodes`) works without
+a display.
 
 ---
 
@@ -186,7 +218,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 95 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 102 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 

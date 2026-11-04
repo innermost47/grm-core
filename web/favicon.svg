@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The Relational Universe: a glowing core held by elastics to three nodes -->
+  <defs>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff6dc"/>
+      <stop offset="0.35" stop-color="#ffc46b"/>
+      <stop offset="1" stop-color="#ff7a3d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#05060f"/>
+  <g fill="none" stroke="#8ea8ff" stroke-width="2.2" stroke-linecap="round" opacity="0.85">
+    <path d="M32 32 Q 24 18 14 15"/>
+    <path d="M32 32 Q 46 24 51 13"/>
+    <path d="M32 32 Q 38 46 30 53"/>
+    <path d="M14 15 Q 32 6 51 13" opacity="0.45"/>
+  </g>
+  <circle cx="32" cy="32" r="15" fill="url(#core)"/>
+  <circle cx="32" cy="32" r="4.5" fill="#fffaf0"/>
+  <g fill="#c9d6ff">
+    <circle cx="14" cy="15" r="4"/>
+    <circle cx="51" cy="13" r="3.3"/>
+    <circle cx="30" cy="53" r="3.7"/>
+  </g>
+</svg>
