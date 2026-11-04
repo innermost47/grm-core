@@ -9,11 +9,12 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
-| `test_grm.py` | A hardcore test battery: 81 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 85 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
+| `grm_matter.py` | **GRM Matter**: from the quantum constants and Z alone to ionization energies, then the density and stiffness of simple metals |
 | `grm_water.py` | **GRM Water**: a basin of liquid to play with (drops, finger, rain, paddle); every wave swings and dies as a GRM network says |
 | `grm_brain.py` | **GRM Brain**: a brain that learns while it discovers a maze, with a memory of tensions; watch its network form |
 | `grm_scales.py` | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension |
@@ -123,7 +124,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 81 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 85 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
@@ -402,6 +403,41 @@ Results on 40 held-out sentences, written separately and never used to build the
 Off-topic sentences: 4 of 6 give `unknown`. The two others share a word with the table by chance (`acte`, then `plante` and `besoin`)
 and get an answer: the table is small, and a single shared word is enough. A larger table, or a minimum amount of
 evidence, would be the next step.
+
+## GRM Matter (`grm_matter.py`)
+```bash
+python grm_matter.py              # atoms, then metals at first and second order (about 1 minute)
+```
+Optional: `pip install numba` compiles the step-by-step integration of the atom (about 50 times faster; without
+it the same code runs in plain Python, slowly).
+Can the density and the stiffness of a material be predicted from the quantum world alone? What goes in: the
+fundamental constants (CODATA 2018) and, for each element, its number of protons Z and its atomic mass. No
+material data. The measured values are only read afterwards, to compare.
+
+1. **Constants network**: Bohr radius and Hartree energy from m_e, e, hbar, eps0 (CODATA values recovered).
+2. **The atom**: orbitals filled by the Madelung rule, Schrodinger's equation solved self-consistently in the field
+   of the nucleus and of all the electrons (local density approximation, Perdew-Zunger). Neon: -128.217 Ha, the
+   NIST LDA reference is -128.233 (0.013 %). Ionization energies of 24 elements, H to Ba: median error 4 %
+   (Na 0.0 %, K +0.4 %, Rb -0.3 %, Cs -2.4 %).
+3. **The metal**: valence electrons as a uniform gas among ions with an empty core (Ashcroft). The core radius
+   comes from the atom: an inverse GRM network finds the radius for which the valence electron of the ion is bound
+   as the atom calculation says, and carries the uncertainty of that calculation (about 4 %) through to the
+   density and the bulk modulus. Equilibrium where dE/dr_s = 0, bulk modulus from the curvature there.
+
+| | first order (gas + ions) | second order (+ band-structure energy, bcc or fcc) |
+|---|---|---|
+| median error, density (11 metals) | 23 % | 14 % |
+| median error, bulk modulus (10 metals) | 20 % | 50 % |
+| K, Rb, Cs | density within 1-8 %, stiffness within 1-8 % | density 14-26 % too high |
+| Mg, Ca, Ba, Al | density 21-43 % too low | density within 0-12 % |
+| Li, Be | 50-55 % too light | 42-49 % too light |
+
+Reading: the simplest picture already gets the heavy alkali metals right from Z alone. The lattice term fixes the
+density of the divalent metals and aluminium, but overshoots the alkali metals and spoils the stiffness. Li and Be
+fail in both (their cores are a single 1s shell: the empty-core picture is known to be poor for them). The
+lattice chosen by the lower energy is bcc for all except Be and Al (fcc); in reality Mg and Be are hcp (not tried),
+Ca and Sr fcc. The error bars come only from the atom's uncertainty: where the measurement falls outside them,
+the missing piece is in the physics, not in the numbers.
 
 ## GRM Water (`grm_water.py`)
 ```bash

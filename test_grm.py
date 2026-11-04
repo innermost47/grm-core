@@ -917,3 +917,34 @@ class TestWaterWaves:
             b.step(0.03)
         eta, _, _ = b.surface()
         assert np.allclose(eta, eta[::-1, :], atol=1e-9) and np.allclose(eta, eta.T, atol=1e-9)
+
+
+class TestMatter:
+    """GRM Matter: from the quantum constants to atoms and simple metals."""
+
+    def test_constants_network_gives_codata(self):
+        import grm_matter as m
+        c = m.constants_network()["values"]
+        assert abs(c["a0"] / 5.29177210903e-11 - 1) < 3e-10        # CODATA 2018 Bohr radius
+        assert abs(c["Ha"] / 4.3597447222071e-18 - 1) < 3e-10      # CODATA 2018 Hartree energy
+
+    def test_lda_neon_matches_nist_reference(self):
+        # NIST atomic reference data (LDA, VWN): E_tot(Ne) = -128.233481 Ha; here Perdew-Zunger, within 0.05 %
+        import grm_matter as m
+        E = m.solve_atom(10)["E"]
+        assert abs(E / -128.233481 - 1) < 5e-4
+
+    def test_ionization_energies_of_alkali_metals(self):
+        import grm_matter as m
+        ha_ev = 27.211386
+        for Z, sym in ((11, "Na"), (19, "K")):
+            ie = m.ionization_energy(Z) * ha_ev
+            assert abs(ie / m.MEASURED_IE[sym] - 1) < 0.03
+
+    def test_heavy_alkali_metals_from_first_principles(self):
+        import grm_matter as m
+        c = m.constants_network()
+        for sym in ("K", "Rb"):
+            p = m.predict_metal(sym, c)
+            assert abs(p["density"] / m.MEASURED_DENSITY[sym] - 1) < 0.15
+            assert abs(p["bulk_GPa"] / m.MEASURED_BULK[sym] - 1) < 0.15
