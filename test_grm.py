@@ -1229,3 +1229,24 @@ class TestWorld:
         r2_trade, _ = w.r2_changes(trade, gdp, years)
         r2_income, _ = w.r2_changes(income, gdp, years)
         assert r2_trade > 0.3 and r2_income < 0.15
+
+
+class TestCarbon:
+    """grm_carbon.py: the global CO2 budget as a network of zeros."""
+
+    def test_budget_and_imbalance(self):
+        import grm_carbon as cb
+        d = cb.load()
+        r = d[2024]
+        imb = r["fossil"] + r["land_use_change"] - r["atmospheric_growth"] - r["ocean_sink"] - r["land_sink"] - r["cement_carbonation"]
+        assert abs(imb - r["budget_imbalance"]) < 1e-3 and imb < -1.5
+
+    def test_estimates_against_the_rest(self):
+        import grm_carbon as cb
+        d = cb.load()
+        tens, full = cb.tensions(d[2024], 2024)
+        names = {t[0]: t[3] for t in tens}
+        assert names["atmospheric growth, NOAA stations"] > 1.5 and names["atmospheric growth, inverse models"] < -1.0
+        # the network closes the budget exactly once every estimate is weighed
+        v = full["values"]
+        assert abs(sum(cb.SIGNS[t] * v[t] for t in cb.TERMS)) < 1e-4

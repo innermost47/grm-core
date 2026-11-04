@@ -16,8 +16,9 @@ This repository contains:
 | `grm_tao.py` | **From the 0 the 1, from the 1 the 2...**: are the particle masses harmonics born in cascade from two seeds? Three readings of "relation" (spiral, intermodulation, trinity), each judged against random spectra |
 | `grm_loop.py` | **A loop without a seed**: three waves, the full and the void in balance for ever. Predicts the tau from the electron and the muon, and makes a dated bet on the neutrino masses ([predictions/](predictions/)) |
 | `grm_world.py` | **The world economy as a network of zeros**: the current accounts of all the countries should add up to zero and do not; where the missing node sits (trade, not income), what carries it, and a small dated bet against the IMF |
+| `grm_carbon.py` | **The carbon of the Earth as a network of zeros**: where the global CO2 budget does not close, and which estimates are least consistent with the others (Global Carbon Budget 2025) |
 | `grm_explorer.py` | The explorer: write a network with forms or JSON, solve it, see at once if it is valid; presets of known and open problems (`grm_presets.py`); missing nodes that emerge where the network is in tension, looked up in a bank of known numbers (`grm_bank.py`) |
-| `test_grm.py` | A hardcore test battery: 111 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 113 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
@@ -252,6 +253,33 @@ projections do not close either.
 
 ---
 
+## The carbon of the Earth as a network of zeros (`grm_carbon.py`)
+
+```bash
+python grm_carbon.py                 # the broken zero, every estimate against the rest, the two oceans, 2024 (1 second)
+```
+
+Carbon is neither created nor destroyed: what humanity emits must equal what the atmosphere, the ocean, the land and
+cement take up. The Global Carbon Budget 2025 (data in `data/`) publishes each term, its uncertainty and the gap. No
+causes are looked for: only where the gap sits and which estimates are blurred.
+
+- **The zero that is not zero.** Year by year the gap stays within the stated uncertainties (Birge ratio 0.87; one year
+  beyond 2 sigma, 1991), but its mean is not zero: +0.54 ± 0.09 GtC/yr over 1959-2024, positive in seven decades out of
+  eight (about 2 Gt of CO2 a year the budget does not see). The Global Carbon Budget calls the overall imbalance
+  "near-zero"; the network says small, persistent, and not zero.
+- **Every estimate against all the others.** A GRM network per year, the conservation law exact, every independent
+  estimate a measurement, each hidden in turn: the ocean models sit below what the rest implies (-0.81 sigma on average),
+  the fCO2 data products above (+0.66). The budget closes better with the data products (mean gap +0.30, rms 0.85) than
+  with the models (+0.65, rms 1.01).
+- **Where the yearly swings sit.** The gap swings against the atmospheric growth (correlation -0.87 after removing slow
+  trends): the year-to-year jumps measured in the air are not followed by the estimated sinks.
+- **2024.** The record atmospheric growth (7.9 GtC, NOAA) and the largest negative gap (-1.7 GtC/yr). The two estimates
+  of the atmospheric growth disagree with each other: the stations are 2.1 sigma above what the rest implies, the inverse
+  models 1.8 sigma below. The Global Carbon Budget 2025 itself writes that "the total sink or G_ATM is strongly
+  overestimated in 2024".
+
+---
+
 ## The explorer (`grm_explorer.py`)
 
 ```bash
@@ -310,7 +338,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 111 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 113 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
