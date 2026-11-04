@@ -148,6 +148,34 @@ def simple_fraction_chance(value, window, top=2 * math.pi / 3, qmax=12):
     return len(fr), near, expected
 
 
+# ------------------------------------------------------------------ what the neutrino masses imply (PDG 2024 angles)
+S12, S13 = (0.307, 0.013), (0.0219, 0.0007)                 # sin^2 theta_12, sin^2 theta_13, normal ordering
+
+
+def neutrino_observables(m, s12=S12[0], s13=S13[0], steps=361):
+    """From the three masses (eV): the mass seen in beta decay, m_beta = sqrt(sum |U_ei|^2 m_i^2), and the range of
+    the effective mass of neutrinoless double beta decay, m_bb = |sum U_ei^2 m_i| over the two unknown Majorana phases."""
+    w = [(1 - s12) * (1 - s13), s12 * (1 - s13), s13]
+    m_beta = math.sqrt(sum(wi * mi * mi for wi, mi in zip(w, m)))
+    t = [wi * mi for wi, mi in zip(w, m)]
+    lo, hi = float("inf"), 0.0
+    for a in range(steps):
+        for b in range(steps):
+            pa, pb = 2 * math.pi * a / (steps - 1), 2 * math.pi * b / (steps - 1)
+            re = t[0] + t[1] * math.cos(pa) + t[2] * math.cos(pb)
+            im = t[1] * math.sin(pa) + t[2] * math.sin(pb)
+            v = math.hypot(re, im)
+            lo, hi = min(lo, v), max(hi, v)
+    return m_beta, lo, hi
+
+
+def observables_envelope(m):
+    """The same with the angles moved by their 1-sigma uncertainties: the widest range."""
+    out = [neutrino_observables(m, s12, s13, steps=121)
+           for s12 in (S12[0] - S12[1], S12[0], S12[0] + S12[1]) for s13 in (S13[0] - S13[1], S13[0], S13[0] + S13[1])]
+    return (min(o[0] for o in out), max(o[0] for o in out)), min(o[1] for o in out), max(o[2] for o in out)
+
+
 # ------------------------------------------------------------------ the run
 def run(out=print):
     out("A loop without a seed: three waves, the full and the void in balance, for ever.\n")
@@ -213,6 +241,18 @@ def run(out=print):
                 f"sum = {total * 1000:.2f} +- {sigma * 1000:.2f} meV  -> {verdict}")
             bets.append((order, signs, total, mm, verdict, sigma))
     out("   (all amplitudes in phase, + + +: the loop does not close for the neutrinos; one wave must be in opposition)")
+
+    out("\n4. WHAT FOLLOWS FROM THESE MASSES (normal order; mixing angles PDG 2024)")
+    normal = [b for b in bets if b[0] == "normal"]
+    if normal:
+        mm = normal[0][3]
+        m_beta, lo, hi = neutrino_observables(mm)
+        (mb_lo, mb_hi), lo_env, hi_env = observables_envelope(mm)
+        out(f"   tau mass (the loop, from e and mu): see 1 above")
+        out(f"   mass seen in beta decay: m_beta = {m_beta * 1000:.2f} meV (angles +-1 sigma: {mb_lo * 1000:.2f} .. {mb_hi * 1000:.2f})")
+        out(f"   neutrinoless double beta decay: m_bb between {lo * 1000:.2f} and {hi * 1000:.2f} meV "
+            f"(angles +-1 sigma: {lo_env * 1000:.2f} .. {hi_env * 1000:.2f}), over the two unknown Majorana phases")
+        out(f"   sum seen by cosmology: {normal[0][2] * 1000:.2f} meV")
     return {"q": q, "ratio": math.sqrt(void2 / full2), "delta": d, "sd_delta": sd, "bets": bets}
 
 

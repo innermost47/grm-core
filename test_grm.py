@@ -1200,3 +1200,9 @@ class TestLoop:
         assert normal and 0.059 < sum(normal[0][0]) < 0.060
         inverted = loop.neutrinos(loop.DM32_INVERTED, (1, 1, -1))
         assert inverted and sum(inverted[0][0]) > loop.DESI_SUM_LIMIT
+
+    def test_neutrino_observables(self):
+        import grm_loop as loop
+        m = [0.000365, 0.008685, 0.050303]
+        m_beta, lo, hi = loop.neutrino_observables(m, steps=91)
+        assert 0.0086 < m_beta < 0.0091 and 0.0011 < lo < 0.0014 and 0.0038 < hi < 0.0041
