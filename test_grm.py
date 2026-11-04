@@ -1034,3 +1034,29 @@ class TestExplorer:
         assert report["valid"] is False and not report["checks"][0]["ok"]
         with pytest.raises(ValueError):
             solve_document({"nodes": {"x": {"guess": 1}}, "relations": [{"name": "r", "terms": {"z": 1}}]})
+
+
+class TestHiddenNode:
+    """grm_hidden_node.py: a node nobody mentioned emerges where it acts, and is not invented when absent."""
+
+    def test_the_coin_emerges_in_the_right_weighings(self):
+        import grm_hidden_node as h
+        alone, together = h.weigh(5, coin=True)
+        meas = h.measured(alone, together)
+        nodes, rels = h.told_network()
+        base = GlobalRelationalNetwork(nodes, rels).solve(meas)
+        assert base["cost"] > 100                       # the network sees that something is missing
+        ok, info = h.judge(base, h.emerge(meas, base), meas)
+        assert ok and set(info["inside"]) == h.COIN_IN
+        final = h.settled(meas, info["inside"])
+        assert abs(final["values"]["H"] - h.COIN) < 3 * final["uncertainty"]["H"]
+
+    def test_no_coin_is_invented(self):
+        import grm_hidden_node as h
+        for seed in (5, 102, 2):
+            alone, together = h.weigh(seed, coin=False)
+            meas = h.measured(alone, together)
+            nodes, rels = h.told_network()
+            base = GlobalRelationalNetwork(nodes, rels).solve(meas)
+            ok, _ = h.judge(base, h.emerge(meas, base), meas)
+            assert not ok, seed

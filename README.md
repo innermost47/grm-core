@@ -9,8 +9,9 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
+| `grm_hidden_node.py` | **A node nobody mentioned**: the network sees that something is missing, makes the missing node emerge (where it acts, how large it is), and refuses to invent one when nothing is missing |
 | `grm_explorer.py` | The explorer: write a network with forms or JSON, solve it, see at once if it is valid; presets of known and open problems (`grm_presets.py`) |
-| `test_grm.py` | A hardcore test battery: 93 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 95 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
@@ -22,7 +23,7 @@ This repository contains:
 | `grm_scales.py` | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension |
 | `grm_voice.py` | **GRM Voice**: a voice made of relations. Lungs, vocal folds, airflow, vocal tract, velum, nose and lips are GRM networks; it says "Bonjour Anthony. Je suis le réseau." |
 | `grm_pong.py` | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks |
-| `grm_guitar.py` | **GRM Guitar**: a guitar simulated as one object: strings, bridge, top, air, palm, fingers and the player's arm are all GRM networks |
+| `grm_guitar.py` | **GRM Guitar**: a guitar simulated as one object: strings, bridge, top, air, palm, fingers and the player's arm are all GRM networks. VST3 plugin (work in progress): [grm-guitar-vst](https://github.com/innermost47/grm-guitar-vst) |
 
 The cosmology and particle-physics model this engine was built for is presented at [grm.anthony-charretier.fr](https://grm.anthony-charretier.fr), with its own repository: [innermost47/GRM](https://github.com/innermost47/GRM).
 
@@ -108,6 +109,35 @@ out = net.solve(measured_dict={"m": 2.0, "H0": (70.0, 0.01)})   # value, or (val
 
 ---
 
+## A node nobody mentioned (`grm_hidden_node.py`)
+
+```bash
+python grm_hidden_node.py            # one draw, with the hidden node and without (control)
+python grm_hidden_node.py --sweep    # 30 draws of the noise each way (about 2 minutes)
+```
+
+The Neptune question on a kitchen scale. Five objects are weighed alone, then in ten groups (0.5 g each). Nobody told
+the network that a coin (18 g) was stuck under the tray during four of the weighings.
+
+1. **As told**, the network sees that something is missing: chi2 = 2574 for 10 degrees of freedom.
+2. **One node more, H, that nobody measured**, and for each weighing a share in (0, 1): how much of H was there.
+   Nothing says where H is or how heavy. A yes-or-no relation s (1 - s) = 0, loose then tightened, asks each weighing
+   to choose. The start comes from the tensions of step 1: a weighing heavier than its objects probably held H.
+3. **A judge**: H exists only if the tension it removes is worth the nodes it adds (Bayesian information criterion),
+   its mass is determined, its shares are clear-cut, and nothing is left unexplained.
+
+| 30 draws of the noise | result |
+|---|---|
+| with the coin | found 28 / 30, in the right four weighings, H = 18.11 g on average (spread 0.32 g) |
+| without the coin (control) | a coin invented 0 / 30 times |
+
+The two misses are "not found", never a wrong answer. Starting the shares at 0.5 instead of from the tensions left
+the network stuck (3 weighings of 4, wrong mass) in 22 draws of 30: the tension says that a node is missing, and
+where it hides. Limit: the kind of node was known here (a mass that adds); a node of unknown form (a force that
+depends on distance, as Neptune for Uranus) is the next test.
+
+---
+
 ## The explorer (`grm_explorer.py`)
 
 ```bash
@@ -156,7 +186,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 93 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 95 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
@@ -171,6 +201,10 @@ The protocol checks the consistency of the network with today's measurements. It
 ---
 
 ## GRM Guitar (`grm_guitar.py`)
+
+> **The VST3 / standalone plugin: [github.com/innermost47/grm-guitar-vst](https://github.com/innermost47/grm-guitar-vst)**
+> The same networks ported to C++ (JUCE), with a guitar roll that writes notes string by string. Work in progress:
+> it builds and plays (tested in Bitwig on Windows), and the palm mute still does not sound like a real one.
 
 ```bash
 pip install numpy sounddevice        # sounddevice is optional: without it, WAV export still works

@@ -18,7 +18,6 @@ Run (needs tkinter for the guitar module; no window is shown):
 Rooms: Small room, Living room, Studio, Church. Walls: Painted brick, Plaster, Wood panels, Glass, Curtains, Carpet.
 The further the listener beyond the room's critical distance (room network), the more reverberation.
 """
-
 import argparse
 import math
 import os
@@ -35,23 +34,18 @@ sys.path.insert(0, os.path.dirname(HERE))
 import grm_guitar as g  # noqa: E402
 
 SCORE = os.path.join(HERE, "bach_suite1_bwv1007.musicxml")
-OUT = os.path.join(
-    os.path.dirname(HERE), "docs", "audio", "bach_prelude_two_grm_guitars.wav"
-)
-TRANSPOSE = 7  # G major -> D major
-TEMPO = 66.0  # quarter notes per minute
-OPEN_MIDI = [40, 45, 50, 55, 59, 64]  # E2 A2 D3 G3 B3 E4, string index 0 = low E
+OUT = os.path.join(os.path.dirname(HERE), "docs", "audio", "bach_prelude_two_grm_guitars.wav")
+TRANSPOSE = 7                  # G major -> D major
+TEMPO = 66.0                   # quarter notes per minute
+OPEN_MIDI = [40, 45, 50, 55, 59, 64]     # E2 A2 D3 G3 B3 E4, string index 0 = low E
 STEP = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 SR = g.SAMPLE_RATE
-DRY_CACHE = os.path.join(
-    HERE, ".bach_two_guitars_dry.npz"
-)  # the two guitars before the room
+DRY_CACHE = os.path.join(HERE, ".bach_two_guitars_dry.npz")   # the two guitars before the room
 
 
 # ============================================================
 # THE SCORE
 # ============================================================
-
 
 def read_prelude(path=SCORE, last_bar=42):
     """(bar, beat in the bar, length in beats, midi) of every note of the Prelude."""
@@ -70,19 +64,8 @@ def read_prelude(path=SCORE, last_bar=42):
                 chord = el.find("chord") is not None
                 p = el.find("pitch")
                 if p is not None:
-                    midi = (
-                        12 * (int(p.findtext("octave")) + 1)
-                        + STEP[p.findtext("step")]
-                        + int(p.findtext("alter") or 0)
-                    )
-                    notes.append(
-                        (
-                            bar,
-                            (pos if not chord else last_pos) / div,
-                            d / div,
-                            midi + TRANSPOSE,
-                        )
-                    )
+                    midi = 12 * (int(p.findtext("octave")) + 1) + STEP[p.findtext("step")] + int(p.findtext("alter") or 0)
+                    notes.append((bar, (pos if not chord else last_pos) / div, d / div, midi + TRANSPOSE))
                 if not chord:
                     last_pos = pos
                     pos += d
@@ -97,16 +80,12 @@ def read_prelude(path=SCORE, last_bar=42):
 # ON THE FRETBOARD
 # ============================================================
 
-
 def fingering(midis, max_fret=14):
     """String and fret for each note of a line: dynamic programming that keeps the hand where it is (small
-    position changes), prefers the middle of the neck, and lets two consecutive notes share a string rarely.
-    """
+    position changes), prefers the middle of the neck, and lets two consecutive notes share a string rarely."""
     options = []
     for m in midis:
-        opts = [
-            (s, m - OPEN_MIDI[s]) for s in range(6) if 0 <= m - OPEN_MIDI[s] <= max_fret
-        ]
+        opts = [(s, m - OPEN_MIDI[s]) for s in range(6) if 0 <= m - OPEN_MIDI[s] <= max_fret]
         options.append(opts or [(0, max(0, m - OPEN_MIDI[0]))])
     cost = [{o: 0.02 * o[1] for o in options[0]}]
     back = [{}]
@@ -117,14 +96,8 @@ def fingering(midis, max_fret=14):
             for p, c in cost[-1].items():
                 pos_o = o[1] if o[1] > 0 else None
                 pos_p = p[1] if p[1] > 0 else None
-                jump = (
-                    abs(pos_o - pos_p)
-                    if (pos_o is not None and pos_p is not None)
-                    else 0
-                )
-                same = (
-                    1.5 if o[0] == p[0] else 0.0
-                )  # the previous note would be cut short
+                jump = abs(pos_o - pos_p) if (pos_o is not None and pos_p is not None) else 0
+                same = 1.5 if o[0] == p[0] else 0.0          # the previous note would be cut short
                 c2 = c + 0.6 * max(0, jump - 3) + 0.08 * jump + same + 0.02 * o[1]
                 if best is None or c2 < best:
                     best, arg = c2, p
@@ -147,11 +120,9 @@ def bar_chord(bar_notes):
         weight[m % 12] = weight.get(m % 12, 0) + d
     total = sum(weight.values())
     bass = min(m for _, _, _, m in bar_notes) % 12
-    main = [
-        p for p in sorted(weight, key=weight.get, reverse=True) if weight[p] > total / 8
-    ][:4]
+    main = [p for p in sorted(weight, key=weight.get, reverse=True) if weight[p] > total / 8][:4]
     pcs = set(main) | {bass}
-    if len(pcs) < 3:  # a bare pedal: complete the triad inside the key
+    if len(pcs) < 3:                                       # a bare pedal: complete the triad inside the key
         third = (bass + 4) % 12 if (bass + 4) % 12 in D_MAJOR else (bass + 3) % 12
         pcs |= {third, (bass + 7) % 12}
     return bass, pcs
@@ -170,7 +141,6 @@ def voicing(bass, pcs, max_span=3, max_fret=9):
     sounding (to be strummed), as many of the chord's notes as possible, a compact hand low on the neck.
     Every combination is tried."""
     from itertools import product
-
     best = None
     for low in range(0, 3):
         options = []
@@ -187,13 +157,8 @@ def voicing(bass, pcs, max_span=3, max_fret=9):
             if span > max_span:
                 continue
             got = {(OPEN_MIDI[low + k] + f) % 12 for k, f in enumerate(combo)}
-            score = (
-                3 * len(got & pcs)
-                + 0.8 * len(combo)
-                - 0.6 * span
-                - 0.3 * (max(fretted) if fretted else 0)
-                + 0.3 * combo.count(0)
-            )
+            score = (3 * len(got & pcs) + 0.8 * len(combo) - 0.6 * span
+                     - 0.3 * (max(fretted) if fretted else 0) + 0.3 * combo.count(0))
             if best is None or score > best[0]:
                 best = (score, [None] * low + list(combo))
     return best[1] if best else [None, None, 0, 2, 3, 2]
@@ -203,10 +168,8 @@ def voicing(bass, pcs, max_span=3, max_fret=9):
 # THE PERFORMANCE
 # ============================================================
 
-
 def make_app():
     import tkinter as tk
-
     root = tk.Tk()
     root.withdraw()
     g.messagebox.showerror = lambda *a: print("ERROR", a)
@@ -227,15 +190,14 @@ def build_tempo():
     for bar in range(1, 44):
         stretch = 1.0
         if bar in (4, 12, 21, 30):
-            stretch = 1.04  # a small breath at the end of a phrase
+            stretch = 1.04                                  # a small breath at the end of a phrase
         if bar >= 40:
-            stretch = 1.0 + 0.12 * (bar - 39)  # ritardando
+            stretch = 1.0 + 0.12 * (bar - 39)               # ritardando
         starts.append(starts[-1] + 4 * q * stretch)
 
     def at(bar, beat):
         b0, b1 = starts[bar - 1], starts[bar]
         return b0 + (b1 - b0) * beat / 4.0
-
     return at, starts
 
 
@@ -251,9 +213,7 @@ def lead_part(app, notes, at):
     for bar, ks in by_bar.items():
         grid = [(at(bar, notes[k][1]), j % 8) for j, k in enumerate(ks)]
         step = max(1e-3, (at(bar, 4) - at(bar, 0)) / 16)
-        strokes = app.strokes(
-            grid, step
-        )  # the player network: timing, force, pluck point
+        strokes = app.strokes(grid, step)                  # the player network: timing, force, pluck point
         for j, k in enumerate(ks):
             _, beat, dur, midi = notes[k]
             s, f = places[k]
@@ -261,9 +221,7 @@ def lead_part(app, notes, at):
             start = max(0.0, st["t"])
             accent = 1.15 if beat == 0 else 1.0
             ring = 2.5 if dur >= 1 else 1.6
-            nt = app.note(
-                s, f, start, ring, False, 0.75 * accent * st["force"], st["p"], st
-            )
+            nt = app.note(s, f, start, ring, False, 0.75 * accent * st["force"], st["p"], st)
             if s in last_on_string:
                 prev = last_on_string[s]
                 prev["length"] = max(0.03, min(prev["length"], start - prev["start"]))
@@ -273,13 +231,8 @@ def lead_part(app, notes, at):
 
 
 SECTIONS = [  # (first bar, last bar, how the right guitar plays)
-    (1, 4, "rest"),
-    (5, 12, "pinch"),
-    (13, 21, "strum"),
-    (22, 30, "palm"),
-    (31, 38, "strum_wide"),
-    (39, 41, "big"),
-    (42, 42, "final"),
+    (1, 4, "rest"), (5, 12, "pinch"), (13, 21, "strum"), (22, 30, "palm"), (31, 38, "strum_wide"),
+    (39, 41, "big"), (42, 42, "final"),
 ]
 
 
@@ -314,59 +267,27 @@ def rhythm_part(app, notes, at):
         # the left hand changes shape just before the bar (finger noises on the wound strings)
         if held and new != held:
             lead = min(0.18, 0.3 * (at(bar, 1) - t_bar))
-            squeaks += app.change_hand(
-                held,
-                new,
-                t_bar - lead,
-                lead,
-                out,
-                last,
-                rng,
-                (
-                    {"palm_x": g.PALM_X, "palm_N": g.PALM_FORCE}
-                    if style == "palm"
-                    else None
-                ),
-            )
+            squeaks += app.change_hand(held, new, t_bar - lead, lead, out, last, rng,
+                                       {"palm_x": g.PALM_X, "palm_N": g.PALM_FORCE} if style == "palm" else None)
         held = new
         if style == "bass":
             app.technique.set("Fingers")
             st = app.strokes([(t_bar, 0)], 0.25)[0]
             s = strings[0]
-            nt = app.note(
-                s,
-                frets[s],
-                max(0.0, st["t"]),
-                3.5,
-                False,
-                0.55 * st["force"],
-                st["p"],
-                st,
-            )
+            nt = app.note(s, frets[s], max(0.0, st["t"]), 3.5, False, 0.55 * st["force"], st["p"], st)
             if s in last:
-                last[s]["length"] = max(
-                    0.02, min(last[s]["length"], nt["start"] - last[s]["start"])
-                )
+                last[s]["length"] = max(0.02, min(last[s]["length"], nt["start"] - last[s]["start"]))
             out.append(nt)
             last[s] = nt
             continue
-        if style == "pinch":  # bass on 1, the chord's top notes on 3 (fingers)
+        if style == "pinch":                                # bass on 1, the chord's top notes on 3 (fingers)
             app.technique.set("Fingers")
             grid = [(at(bar, 0), 0), (at(bar, 2), 4)]
             st = app.strokes(grid, 0.25)
             groups = [[strings[0]], strings[-3:]]
             for stroke, group in zip(st, groups):
                 for s in group:
-                    nt = app.note(
-                        s,
-                        frets[s],
-                        max(0.0, stroke["t"]),
-                        3.0,
-                        False,
-                        0.5 * stroke["force"],
-                        stroke["p"],
-                        stroke,
-                    )
+                    nt = app.note(s, frets[s], max(0.0, stroke["t"]), 3.0, False, 0.5 * stroke["force"], stroke["p"], stroke)
                     out.append(nt)
                     last[s] = nt
             continue
@@ -376,38 +297,16 @@ def rhythm_part(app, notes, at):
         elif style == "palm":
             pattern = [(b * 0.5, False) for b in range(8)]
         elif style == "strum_wide":
-            pattern = [
-                (0, False),
-                (1, False),
-                (1.5, True),
-                (2.5, True),
-                (3, False),
-                (3.5, True),
-            ]
+            pattern = [(0, False), (1, False), (1.5, True), (2.5, True), (3, False), (3.5, True)]
         elif style == "big":
-            pattern = [
-                (0, False),
-                (1, False),
-                (2, False),
-                (2.5, True),
-                (3, False),
-                (3.5, True),
-            ]
-        else:  # final: one wide stroke, let ring
+            pattern = [(0, False), (1, False), (2, False), (2.5, True), (3, False), (3.5, True)]
+        else:                                               # final: one wide stroke, let ring
             pattern = [(0, False)]
         grid = [(at(bar, beat), int(beat * 2) % 8) for beat, _ in pattern]
         st = app.strokes(grid, (at(bar, 4) - t_bar) / 8)
-        level = {
-            "strum": 0.45,
-            "palm": 0.55,
-            "strum_wide": 0.6,
-            "big": 0.8,
-            "final": 0.9,
-        }[style]
+        level = {"strum": 0.45, "palm": 0.55, "strum_wide": 0.6, "big": 0.8, "final": 0.9}[style]
         muted = style == "palm"
-        order_all = (
-            strings if not muted else strings[:3]
-        )  # palm-muted eighths on the low strings
+        order_all = strings if not muted else strings[:3]   # palm-muted eighths on the low strings
         for (beat, up), stroke in zip(pattern, st):
             order = sorted(order_all, reverse=up)
             ring = 6.0 if style == "final" else 1.6
@@ -416,26 +315,11 @@ def rhythm_part(app, notes, at):
                 if s in last:
                     prev = last[s]
                     prev["length"] = max(0.02, min(prev["length"], t - prev["start"]))
-                nt = app.note(
-                    s,
-                    frets[s],
-                    t,
-                    ring,
-                    muted,
-                    level * stroke["force"] * share,
-                    stroke["p"],
-                    stroke,
-                )
+                nt = app.note(s, frets[s], t, ring, muted, level * stroke["force"] * share, stroke["p"], stroke)
                 out.append(nt)
                 last[s] = nt
         if muted:
-            spans.append(
-                (
-                    t_bar,
-                    at(bar, 4),
-                    [app.palm_model(s, held.get(s, 0)) for s in range(6)],
-                )
-            )
+            spans.append((t_bar, at(bar, 4), [app.palm_model(s, held.get(s, 0)) for s in range(6)]))
     return out, squeaks, spans
 
 
@@ -443,22 +327,18 @@ def final_chord(app, at):
     """The lead closes on the score's last chord (G, D, B in D major: D, A, F#), rolled with the fingers."""
     app.technique.set("Fingers")
     t = at(42, 0)
-    chord = [(2, 0), (3, 2), (4, 3), (5, 2)]  # D A D F# (open D shape)
-    return [
-        app.note(s, f, t + 0.045 * k, 6.0, False, 0.8, 0.2)
-        for k, (s, f) in enumerate(chord)
-    ]
+    chord = [(2, 0), (3, 2), (4, 3), (5, 2)]                # D A D F# (open D shape)
+    return [app.note(s, f, t + 0.045 * k, 6.0, False, 0.8, 0.2) for k, (s, f) in enumerate(chord)]
 
 
 # ============================================================
 # MIX
 # ============================================================
 
-
 def convolve(x, h):
     L = len(x) + len(h) - 1
     n = 1 << (L - 1).bit_length()
-    return np.fft.irfft(np.fft.rfft(x, n) * np.fft.rfft(h, n), n)[: len(x)]
+    return np.fft.irfft(np.fft.rfft(x, n) * np.fft.rfft(h, n), n)[:len(x)]
 
 
 def render_guitars():
@@ -484,27 +364,17 @@ def render_guitars():
     app.body_size.set(1.15)
     app.top_mm.set(3.0)
     right = app.render(rhythm, total, squeaks, spans)
-    print(
-        f"right guitar: {len(rhythm)} notes, {len(squeaks)} finger noises ({time.perf_counter() - t0:.0f} s)"
-    )
+    print(f"right guitar: {len(rhythm)} notes, {len(squeaks)} finger noises ({time.perf_counter() - t0:.0f} s)")
     root.destroy()
     return left.astype(float), right.astype(float)
 
 
 def main():
-    ap = argparse.ArgumentParser(
-        description="Bach, Prelude BWV 1007, for two GRM guitars"
-    )
+    ap = argparse.ArgumentParser(description="Bach, Prelude BWV 1007, for two GRM guitars")
     ap.add_argument("--room", default="Studio", choices=list(g.ROOMS))
     ap.add_argument("--walls", default="Wood panels", choices=list(g.MATERIALS))
-    ap.add_argument(
-        "--distance", type=float, default=0.8, help="listener to the guitars, m"
-    )
-    ap.add_argument(
-        "--remix",
-        action="store_true",
-        help="reuse the guitars rendered last time, only the room again",
-    )
+    ap.add_argument("--distance", type=float, default=0.8, help="listener to the guitars, m")
+    ap.add_argument("--remix", action="store_true", help="reuse the guitars rendered last time, only the room again")
     ap.add_argument("--out", default=OUT)
     args = ap.parse_args()
     t0 = time.perf_counter()
@@ -520,19 +390,10 @@ def main():
     size = g.ROOMS[args.room]
     room = g.room_network(size, args.walls)
     near, far = args.distance, args.distance * 1.15
-    print(
-        f"{args.room}, {args.walls}: RT60 {room['RT3']:.2f} s at 1 kHz, critical distance {room['rc']:.2f} m; "
-        f"listener at {near:.2f} m: reverberant / direct energy about {(near / room['rc']) ** 2:.1f}"
-    )
-    irs = {
-        k: g.room_impulse(room, size, dist, seed=sd)
-        for k, (dist, sd) in {
-            "LL": (near, 3),
-            "LR": (far, 11),
-            "RL": (far, 17),
-            "RR": (near, 23),
-        }.items()
-    }
+    print(f"{args.room}, {args.walls}: RT60 {room['RT3']:.2f} s at 1 kHz, critical distance {room['rc']:.2f} m; "
+          f"listener at {near:.2f} m: reverberant / direct energy about {(near / room['rc']) ** 2:.1f}")
+    irs = {k: g.room_impulse(room, size, dist, seed=sd) for k, (dist, sd) in
+           {"LL": (near, 3), "LR": (far, 11), "RL": (far, 17), "RR": (near, 23)}.items()}
     n = max(len(left), len(right))
     left = np.pad(left, (0, n - len(left)))
     right = np.pad(right, (0, n - len(right)))
@@ -549,9 +410,7 @@ def main():
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes((stereo * 32767).astype("<i2").tobytes())
-    print(
-        f"written {args.out} ({len(stereo) / SR:.0f} s, {time.perf_counter() - t0:.0f} s of computing)"
-    )
+    print(f"written {args.out} ({len(stereo) / SR:.0f} s, {time.perf_counter() - t0:.0f} s of computing)")
 
 
 if __name__ == "__main__":

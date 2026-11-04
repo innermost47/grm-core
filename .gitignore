@@ -6,5 +6,5 @@ __pycache__/
 !docs/audio/*.wav
 *.tsp
 *.tsp.gz
-.venv/
 *.npz
+.venv/
