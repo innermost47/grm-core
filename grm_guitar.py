@@ -30,6 +30,8 @@ from tkinter import filedialog, messagebox, ttk
 
 import numpy as np
 
+LG10 = math.log10
+
 from grm import GlobalRelationalNetwork
 
 try:
@@ -191,11 +193,13 @@ def pluck_amplitudes(count, pluck):
 #   added decay rate of mode n:  sigma_n = s0 * sin^2(n pi q)
 # Near the bridge, sin(n pi q) is small for the low modes and grows with n: the fundamental survives a
 # little, the highs die within milliseconds, and a light string is muted more than a heavy one.
-# The flesh is not only a damper: it has a mass and a spring. Its impedance Z_h = r + i w m_h + k_h / (i w)
-# stands between the string and the bridge, so a wave going to the bridge only passes in part:
-#   transmission     T(w) = 2 Zs / (2 Zs + Z_h)           (Zs = sqrt(T mu), the string's own impedance)
-# The mass of the flesh blocks the high frequencies (i w m_h grows with w): the bridge never receives the
-# bright part of the pick's attack, and what moves the top is the low thump.
+# The flesh is not only a damper: it has a mass and a spring, and each mode feels them where it moves:
+#   mode n, modal mass m_n = mu L_eff / 2, share s_n = sin^2(n pi q) of its motion under the palm
+#   decay      sigma_n = r s_n / (2 m_n)                                        (the damper)
+#   frequency  w_n'^2 = (w_n^2 m_n + k_h s_n) / (m_n + m_h s_n)               (the spring and the mass)
+# The higher a mode, the more it moves under the palm: the high modes are slowed, detuned, and damped faster
+# than they vibrate (overdamped): they never ring. The low modes, whose motion near the bridge is tiny, keep
+# their pitch: the chug keeps its note.
 PALM_X = 0.015        # m, edge of the hand from the bridge (hypothesis)
 PALM_FORCE = 1.0      # N, pressure of the hand on one string (hypothesis)
 R_SKIN = 3.0          # N s/m per N of pressure, damping of the skin (hypothesis: no measured value found)
@@ -212,8 +216,9 @@ def palm_network(mu, L, fret, x_hand=PALM_X, force=PALM_FORCE):
         {"name": "loss scale", "terms": {"s0": 1, "r": -1, "mu": 1, "Leff": 1}, "rhs": 0.0, "sigma": 1e-9},
         {"name": "position", "terms": {"q": 1, "x": -1, "Leff": 1}, "rhs": 0.0, "sigma": 1e-9},
     ]
+    # the harder the palm presses, the more flesh rests on the string: its mass grows with the pressure
     measured = {"mu": (mu, 0.004), "L": (L, 3e-4), "x": (x_hand, 0.05), "N": (force, 0.05),
-                "mh": (PALM_MASS, 0.1), "kh": (K_FLESH, 0.1)}     # the flesh: same pulp as a fingertip
+                "mh": (PALM_MASS * force / PALM_FORCE, 0.1), "kh": (K_FLESH, 0.1)}     # the flesh: same pulp as a fingertip
     return GlobalRelationalNetwork(nodes, rel).solve(measured_dict=measured)
 
 
@@ -223,11 +228,14 @@ def palm_sigma(freqs_n, palm):
     return palm["s0"] * np.sin(n * math.pi * palm["q"]) ** 2
 
 
-def palm_transmission(freqs, palm, Zs):
-    """|T| = |2 Zs / (2 Zs + r + i w m_h + k_h / (i w))|: share of the wave that gets past the palm."""
-    w = 2 * math.pi * np.asarray(freqs, dtype=float)
-    zh = palm["r"] + 1j * w * palm["mh"] + palm["kh"] / (1j * w)
-    return np.abs(2 * Zs / (2 * Zs + zh))
+def palm_frequencies(freqs_n, palm):
+    """Mode frequencies under the palm: raised by the flesh's spring, lowered by its mass, where each mode moves."""
+    f = np.asarray(freqs_n, dtype=float)
+    n = np.arange(1, len(f) + 1, dtype=float)
+    share = np.sin(n * math.pi * palm["q"]) ** 2
+    m_n = palm["mu"] * palm["Leff"] / 2
+    w = 2 * math.pi * f
+    return np.sqrt((w * w * m_n + palm["kh"] * share) / (m_n + palm["mh"] * share)) / (2 * math.pi)
 
 
 # ============================================================
@@ -258,7 +266,7 @@ def synthesize_string(f1, B, duration, pluck, damping, brightness, sample_rate=S
         sigma = sigma + extra_sigma(freqs)
     if palm is not None:
         sigma = sigma + palm_sigma(freqs, palm)
-        amps = amps * palm_transmission(freqs, palm, Zs)
+        freqs = palm_frequencies(freqs, palm)
     count = int(duration * sample_rate)
     t = np.arange(count) / sample_rate
     signal = np.zeros(count)
@@ -536,7 +544,7 @@ def strum_contacts(order, stroke, up):
 # Higher top modes follow the ratios of the clamped-disc eigenvalues.
 # Radiation: a top of radius a moving the air radiates well only above f_rad = c_air / (2 pi a) (ka = 1);
 # below, the radiated pressure falls in proportion to f / f_rad.
-# Bridge: the top seen from the strings. Plate rigidity D = E h^3 / (12 (1 - nu^2)); far from its modes the
+# Bridge: the top seen from the strings. Plate rigidity D = k_brace E h^3 / (12 (1 - nu^2)); far from its modes the
 # top behaves like an infinite plate of point impedance Zp = 8 sqrt(D rho h); near a mode, like a mass
 # M_m on a spring. Top mass M_top = rho h pi a^2, modal mass M = BETA M_top. The strings do not push on
 # the plate directly but on the bridge glued to it, a mass m_b: Y_plate = 1 / (Zp + i w m_b), so above
@@ -545,9 +553,10 @@ def strum_contacts(order, stroke, up):
 GAMMA_AIR, R_GAS, M_AIR, T_AIR = 1.4, 8.314462618, 0.028965, 293.15
 NU_WOOD = 0.3
 BETA_MODAL = 0.5    # share of the top mass that moves in its first modes (hypothesis)
+BRACING = 4.0       # the braces under the top make it stiffer than bare spruce, seen from the bridge (hypothesis)
 BRIDGE_VOLUME = 3.2e-5   # m^3, a rosewood bridge of about 150 x 30 x 7 mm (typical)
 RHO_BRIDGE = 850.0       # kg/m^3, rosewood (typical)
-BRIDGE_SHARE = 0.1       # share of the bridge mass the saddle carries (hypothesis, set by ear: 0.3 sounded dull)
+BRIDGE_SHARE = 0.2       # share of the bridge mass the saddle carries (hypothesis, set by ear: corner near 2.3 kHz)
 PLATE_RATIOS = [21.26 / 10.21, 34.88 / 10.21, 39.77 / 10.21, 51.04 / 10.21, 60.82 / 10.21]
 BODY_DEFAULT = {"V": 0.016, "r": 0.05, "t": 0.0028, "a": 0.17, "h": 0.0028, "E": 1.0e10, "rho": 430.0}
 
@@ -581,7 +590,7 @@ def body_network(size=1.0, top_mm=2.8, coupling=0.35):
          "f": lambda v: math.log10(v["f_lo"]) - math.log10(coupled(v["fH"], v["fT"], k, -1)), "sigma": 1e-9},
         {"name": "air / top, high", "type": "fn", "nodes": ["f_hi", "fH", "fT"],
          "f": lambda v: math.log10(v["f_hi"]) - math.log10(coupled(v["fH"], v["fT"], k, +1)), "sigma": 1e-9},
-        {"name": "plate rigidity", "terms": {"D": 1, "E": -1, "h": -3}, "rhs": -math.log10(12 * (1 - NU_WOOD ** 2)), "sigma": 1e-9},
+        {"name": "plate rigidity", "terms": {"D": 1, "E": -1, "h": -3}, "rhs": math.log10(BRACING / (12 * (1 - NU_WOOD ** 2))), "sigma": 1e-9},
         {"name": "plate impedance", "terms": {"Zp": 1, "D": -0.5, "rho": -0.5, "h": -0.5}, "rhs": math.log10(8.0), "sigma": 1e-9},
         {"name": "top mass", "terms": {"Mtop": 1, "rho": -1, "h": -1, "a": -2}, "rhs": math.log10(math.pi), "sigma": 1e-9},
         {"name": "modal mass", "terms": {"Mm": 1, "Mtop": -1}, "rhs": math.log10(BETA_MODAL), "sigma": 1e-9},
@@ -731,6 +740,9 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
             # while the palm rests on the strings (palm-muted playing), a free string is under it too
             pieces = []
             for a_, b_, nt in free:
+                a_, b_ = max(a_, 0.0), min(b_, total)
+                if b_ <= a_:
+                    continue
                 cuts = sorted({a_, b_} | {t for pa, pb, _ in palm_spans for t in (pa, pb) if a_ < t < b_})
                 for u, w_ in zip(cuts, cuts[1:]):
                     under = next((pl[i] for pa, pb, pl in palm_spans if pa <= u and w_ <= pb), None)
@@ -753,8 +765,6 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
                     return (nt["c"] / nt["Leff"]) * nt["Zs"] * np.abs(bridge_admittance(fn, modes, bv))
                 spec_i = sympathetic_response(drive, f_grid, Y, nt["f1"], nt["B"], nt["T"], nt["Leff"],
                                               sigma_fn, coupling_fn)
-                if palm is not None:              # what the muted string sends back also passes the palm
-                    spec_i = spec_i * palm_transmission(np.maximum(f_grid, 1.0), palm, nt["Zs"])
                 resp = np.fft.irfft(spec_i, nfft)[:count]
                 mask = np.zeros(count)
                 for a_, b_ in spans:
@@ -768,6 +778,125 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
     out = apply_body(mix, body_amount, modes, bv)
     peak = np.max(np.abs(out)) if len(out) else 0.0
     return (out / peak if peak > 0 else out).astype(np.float32)
+
+
+# ============================================================
+# GRM NETWORK OF THE ROOM: the sound meets the walls
+# ============================================================
+# The guitar plays in a room of size L x W x H. Every wall takes a share alpha of the sound that hits it (by
+# octave band, measured coefficients) and sends the rest back. The room is a network:
+#   volume            V = L W H                     surface   S = 2 (L W + L H + W H)
+#   absorption        A_b = sum (S_i alpha_i,b)     mean      alpha_b = A_b / S
+#   reverberation     RT_b = 0.161 V / (-S ln(1 - alpha_b))   (Eyring: the time for the sound to fall 60 dB)
+#   critical distance r_c = 0.057 sqrt(V / RT_1k)  (where the room is as loud as the guitar itself)
+#   mixing            the reverberant energy at a distance r is (r / r_c)^2 times the direct one
+#   Schroeder         f_s = 2000 sqrt(RT / V)       (below it, the room's own modes are heard one by one)
+# The sound that reaches the ear: the direct sound, the first reflections (image sources: each wall a mirror,
+# each bounce taking its share), then a diffuse tail that decays band by band at the rate RT_b sets.
+ROOM_BANDS = [125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0]
+MATERIALS = {   # absorption coefficients by octave band (sengpielaudio, table of absorption coefficients)
+    "Painted brick": [0.01, 0.01, 0.02, 0.02, 0.02, 0.03],
+    "Plaster": [0.013, 0.015, 0.02, 0.03, 0.04, 0.05],
+    "Wood panels": [0.28, 0.22, 0.17, 0.09, 0.10, 0.11],
+    "Glass": [0.35, 0.25, 0.18, 0.12, 0.07, 0.04],
+    "Curtains": [0.14, 0.35, 0.55, 0.72, 0.70, 0.65],
+    "Carpet": [0.02, 0.06, 0.14, 0.37, 0.60, 0.65],
+}
+ROOMS = {"Small room": (3.5, 3.0, 2.5), "Living room": (6.0, 4.5, 2.6), "Studio": (9.0, 7.0, 3.5),
+         "Church": (30.0, 15.0, 14.0)}
+C_ROOM = 343.0
+
+
+def room_network(size, material, floor="Wood panels"):
+    """The room as relations: its reverberation time in each band, its critical distance, its Schroeder
+    frequency. Walls and ceiling of `material`, floor of `floor`."""
+    L, W, H = size
+    walls = MATERIALS[material]
+    fl = MATERIALS[floor]
+    nodes = {n: {"guess": g} for n, g in {"L": L, "W": W, "H": H, "V": 60.0, "S": 90.0, "rc": 1.0, "fs": 200.0}.items()}
+    rels = [
+        {"name": "volume", "terms": {"V": 1, "L": -1, "W": -1, "H": -1}, "rhs": 0.0, "sigma": 1e-9},
+        {"name": "surface", "type": "fn", "nodes": ["S", "L", "W", "H"], "sigma": 1e-9,
+         "f": lambda v: LG10(v["S"]) - LG10(2 * (v["L"] * v["W"] + v["L"] * v["H"] + v["W"] * v["H"]))},
+    ]
+    for b, f in enumerate(ROOM_BANDS):
+        nodes[f"RT{b}"] = {"guess": 1.0}
+        floor_share = (L * W) / (2 * (L * W + L * H + W * H))
+        alpha = floor_share * fl[b] + (1 - floor_share) * walls[b]
+        rels.append({"name": f"Eyring {int(f)} Hz", "type": "fn", "nodes": [f"RT{b}", "V", "S"], "sigma": 1e-9,
+                     "f": lambda v, b=b, a=alpha: LG10(v[f"RT{b}"]) - LG10(0.161 * v["V"] / (-v["S"] * math.log(1 - a)))})
+    rels.append({"name": "critical distance", "terms": {"rc": 1, "V": -0.5, "RT3": 0.5}, "rhs": LG10(0.057), "sigma": 1e-9})
+    rels.append({"name": "Schroeder", "terms": {"fs": 1, "RT3": -0.5, "V": 0.5}, "rhs": LG10(2000.0), "sigma": 1e-9})
+    out = GlobalRelationalNetwork(nodes, rels).solve({"L": (L, 0.005), "W": (W, 0.005), "H": (H, 0.005)})
+    v = out["values"]
+    v["alpha"] = [(L * W / (2 * (L * W + L * H + W * H))) * fl[b] + (1 - L * W / (2 * (L * W + L * H + W * H))) * walls[b]
+                  for b in range(len(ROOM_BANDS))]
+    return v
+
+
+def room_impulse(room, size, distance, sample_rate=SAMPLE_RATE, seed=3):
+    """Impulse response from the guitar to the ear: direct sound, image sources up to the second order, and
+    a diffuse tail decaying band by band. Its energies follow the critical distance of the room network."""
+    L, W, H = size
+    src = np.array([0.35 * L, 0.5 * W, 1.0])
+    lis = src + np.array([min(distance, 0.55 * L), 0.0, 0.2])
+    rt = [room[f"RT{b}"] for b in range(len(ROOM_BANDS))]
+    length = int(min(max(rt) * 1.2, 6.0) * sample_rate) + 1
+    h = np.zeros(length)
+    r_direct = float(np.linalg.norm(lis - src))
+    reflect = math.sqrt(1 - room["alpha"][3])          # pressure kept at each bounce (1 kHz band)
+    early_energy = 0.0
+    for nx in range(-2, 3):
+        for ny in range(-2, 3):
+            for nz in range(-2, 3):
+                order = abs(nx) + abs(ny) + abs(nz)
+                if order > 2:
+                    continue
+                img = np.array([nx * L + (src[0] if nx % 2 == 0 else L - src[0]),
+                                ny * W + (src[1] if ny % 2 == 0 else W - src[1]),
+                                nz * H + (src[2] if nz % 2 == 0 else H - src[2])])
+                r = float(np.linalg.norm(img - lis))
+                k = int(r / C_ROOM * sample_rate)
+                if k < length:
+                    a = (reflect ** order) * r_direct / r      # relative to the direct sound
+                    h[k] += a
+                    if order:
+                        early_energy += a * a
+    # the diffuse tail: its energy relative to the direct sound is (r / r_c)^2 (room network)
+    rev_energy = max((r_direct / room["rc"]) ** 2 - early_energy, 0.0)
+    t0 = 2 * (4 * room["V"] / room["S"]) / C_ROOM        # after about two mean free paths
+    t = np.arange(length) / sample_rate
+    rng = np.random.default_rng(seed)
+    nfft = 1 << (length - 1).bit_length()
+    f = np.fft.rfftfreq(nfft, 1.0 / sample_rate)
+    tail = np.zeros(length)
+    edges = []
+    for b, fc in enumerate(ROOM_BANDS):
+        lo, hi = fc / math.sqrt(2), fc * math.sqrt(2)
+        edges.append((20.0 if b == 0 else lo, sample_rate / 2 if b == len(ROOM_BANDS) - 1 else hi))
+    total_bw = sum(hi - lo for lo, hi in edges)
+    for b, fc in enumerate(ROOM_BANDS):
+        band = np.fft.rfft(rng.standard_normal(nfft))
+        lo, hi = edges[b]
+        band[(f < lo) | (f >= hi)] = 0.0
+        noise = np.fft.irfft(band, nfft)[:length]
+        env = np.exp(-6.91 * np.maximum(t - t0, 0.0) / rt[b]) * (t >= t0 * 0.6)
+        piece = noise * env
+        # a diffuse field is white: each band carries energy in proportion to its width, and to how long it
+        # lingers (steady-state reverberant energy grows with RT)
+        share = (hi - lo) / total_bw * rt[b] / rt[3]
+        piece *= math.sqrt(share / (np.sum(piece ** 2) + 1e-30))
+        tail += piece
+    h += math.sqrt(rev_energy) * tail
+    return h
+
+
+def apply_room(audio, room, size, distance):
+    h = room_impulse(room, size, distance)
+    n = len(audio) + len(h) - 1
+    nfft = 1 << (n - 1).bit_length()
+    out = np.fft.irfft(np.fft.rfft(audio, nfft) * np.fft.rfft(h, nfft), nfft)[:n]
+    return out
 
 
 def write_wav(path, audio):
@@ -794,7 +923,7 @@ class GRMGuitarApp:
     def __init__(self, root):
         self.root = root
         self.root.title("GRM Guitar — six strings computed by the Global Relational Model")
-        self.root.geometry("1240x1000")
+        self.root.geometry("1240x1060")
         self.root.minsize(1060, 820)
 
         self.models = [None] * 6
@@ -814,6 +943,11 @@ class GRMGuitarApp:
         self.human = tk.BooleanVar(value=True)
         self.sympathy = tk.BooleanVar(value=True)
         self.body_amount = tk.DoubleVar(value=0.85)
+        self.palm_intensity = tk.DoubleVar(value=0.6)
+        self.room_on = tk.BooleanVar(value=True)
+        self.room_size = tk.StringVar(value="Living room")
+        self.room_material = tk.StringVar(value="Wood panels")
+        self.room_distance = tk.DoubleVar(value=1.0)
         self.body_size = tk.DoubleVar(value=1.0)
         self.palm = tk.BooleanVar(value=False)
         self.loop = tk.BooleanVar(value=True)
@@ -920,6 +1054,8 @@ class GRMGuitarApp:
             ("Arm swing (cm)", self.swing_cm, 4.0, 20.0, 0.5),
             ("Body", self.body_amount, 0.0, 1.0, 0.05),
             ("Body size", self.body_size, 0.7, 1.4, 0.05),
+            ("Palm pressure", self.palm_intensity, 0.1, 2.0, 0.05),
+            ("Listener (m)", self.room_distance, 0.3, 8.0, 0.1),
             ("Top (mm)", self.top_mm, 2.0, 4.0, 0.1),
             ("Air / top", self.coupling, 0.0, 0.8, 0.05),
             ("Sliding finger (N)", self.finger_force, 0.1, 2.0, 0.05),
@@ -957,6 +1093,14 @@ class GRMGuitarApp:
         ttk.Checkbutton(options, text="Finger noise", variable=self.squeak_on).pack(side="left", padx=12)
         ttk.Checkbutton(options, text="Human feel", variable=self.human).pack(side="left", padx=12)
         ttk.Checkbutton(options, text="Sympathetic strings", variable=self.sympathy).pack(side="left", padx=12)
+        room = ttk.Frame(controls)
+        room.pack(fill="x", pady=(6, 0))
+        ttk.Checkbutton(room, text="Room", variable=self.room_on).pack(side="left", padx=(3, 8))
+        ttk.Combobox(room, textvariable=self.room_size, values=list(ROOMS), state="readonly", width=12).pack(side="left", padx=4)
+        ttk.Label(room, text="walls:").pack(side="left", padx=(8, 2))
+        ttk.Combobox(room, textvariable=self.room_material, values=list(MATERIALS), state="readonly", width=14).pack(side="left", padx=4)
+        self.room_label = ttk.Label(room, text="")
+        self.room_label.pack(side="left", padx=10)
 
         # visuals
         bottom = ttk.Frame(main)
@@ -1090,6 +1234,7 @@ class GRMGuitarApp:
 
     def palm_model(self, i, fret, x=PALM_X, force=PALM_FORCE):
         L, mu, _ = self.read_inputs(i)
+        force = force * float(self.palm_intensity.get())    # how hard the player chooses to mute
         x, force = round(x * 2000) / 2000, 10 ** (round(math.log10(force) * 50) / 50)   # 0.5 mm, 0.02 dex
         key = ("palm", i, fret, L, mu, x, force)
         if key not in self._model_cache:
@@ -1223,8 +1368,8 @@ class GRMGuitarApp:
             if arpeggio:
                 strokes = self.strokes([(t0 + 0.13 * k, k) for k in range(len(indices))], 0.13)
                 for k, i in enumerate(indices):
-                    nt = self.note(i, frets[i], strokes[k]["t"], dur, self.palm.get(), strokes[k]["force"], strokes[k]["p"],
-                                   strokes[k])
+                    nt = self.note(i, frets[i], max(0.0, strokes[k]["t"]), dur, self.palm.get(), strokes[k]["force"],
+                                   strokes[k]["p"], strokes[k])
                     notes.append(nt)
             else:
                 stroke = self.strokes([(t0, 0)], 0.25)[0]
@@ -1253,6 +1398,14 @@ class GRMGuitarApp:
         """Render the whole guitar, then play once or (loop_len in s) in a seamless loop taken from
         loop_from: what rings across the loop point is already in the rendered passes."""
         audio = self.render(notes, total, squeaks, palm_spans)
+        if self.room_on.get():
+            size = ROOMS[self.room_size.get()]
+            room = room_network(size, self.room_material.get())
+            audio = apply_room(audio.astype(float), room, size, float(self.room_distance.get()))
+            self.room_label.config(text=f"reverberation {room['RT3']:.2f} s at 1 kHz ({room['RT0']:.2f} s at 125 Hz), "
+                                        f"critical distance {room['rc']:.2f} m")
+        else:
+            self.room_label.config(text="")
         if loop_len:
             a = int(round(loop_from * SAMPLE_RATE))
             audio = audio[a:a + int(round(loop_len * SAMPLE_RATE))]

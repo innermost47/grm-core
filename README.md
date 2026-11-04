@@ -190,10 +190,11 @@ The fundamental survives a little, the highs die within milliseconds, a light st
 one: the muted sound comes out of the contact, not out of a filter. A mode damped faster than it vibrates
 (sigma > w) no longer rings at all: it creeps back to rest (overdamped), so the muted highs leave no crackle.
 Where the palm rests and how hard it presses change from stroke to stroke (player network), harder on the accents.
-The flesh also has a mass and a spring: its impedance `Z_h = r + i w m_h + k_h / (i w)` stands between the string and
-the bridge, and only `T = 2 Zs / (2 Zs + Z_h)` of each wave gets past it (about -11 dB at 100 Hz, -23 dB at 1 kHz,
--33 dB at 3 kHz on the low E): the bridge never receives the bright part of the pick's attack. While the palm rests,
-it mutes every string under it, including what the fingers do between chords and the strings that answer in sympathy.
+The flesh also has a mass and a spring, and each mode feels them where it moves (its share sin^2(n pi q) under
+the palm): the spring raises it, the mass lowers it, `w_n'^2 = (w_n^2 m_n + k_h s_n) / (m_n + m_h s_n)`. The note keeps
+its pitch, the high modes are detuned and damped faster than they vibrate. While the palm rests, it mutes every
+string under it, including what the fingers do between chords and the strings that answer in sympathy. Its pressure
+is a slider ("Palm pressure"); the more it presses, the more flesh rests on the strings.
 
 **Body and bridge**: the air in the box meets the wooden top, the top meets the strings
 ```
@@ -241,6 +242,19 @@ force lasting `crown / v`, a low woody thud. All of it reaches the ear only thro
 Check against the measurement: the paper reports the first longitudinal mode of an open 6th string near 1400 Hz;
 the network gives 1400 Hz for a steel core of 36 % of the equivalent diameter (1750 Hz with the default 45 %).
 
+**The room**: the sound meets the walls (optional, four sizes from a small room to a church, six wall materials)
+```
+volume, surface       V = L W H,  S = 2 (L W + L H + W H)
+absorption            alpha_b by octave band (125 Hz to 4 kHz), walls and ceiling of one material, floor of wood
+reverberation         RT_b = 0.161 V / (-S ln(1 - alpha_b))        Eyring
+critical distance     r_c = 0.057 sqrt(V / RT)                     the room as loud as the guitar itself
+mixing                reverberant energy = (r / r_c)^2 x direct    at the listener's distance r
+Schroeder frequency   f_s = 2000 sqrt(RT / V)
+```
+The ear receives the direct sound, the first reflections (image sources, each wall a mirror, each bounce taking its
+share), then a diffuse tail decaying band by band. How much room is heard is not a setting: it follows from the size,
+the walls and the distance. Absorption coefficients: sengpielaudio's table.
+
 ### Synthesis
 Modal synthesis of the force of each string on the bridge (in newtons), with the exact Fourier amplitudes of a
 string plucked at a point. Each partial decays by its internal losses, the bridge loss and, under the palm, the skin.
@@ -264,7 +278,7 @@ Body dimensions and wood values are typical figures, not measurements of a given
   per newton (no measured value was found), 3 g of flesh per string, flesh spring as the fingertip;
 - fret wire crown 2 mm, knock of 0.3 of the finger's pressing force;
 - string height: 0.5 mm at the nut, 2.2 mm at the 12th fret; finger lift 3 ms, landing 1 ms;
-- top: half of its mass moves in its first modes; rosewood bridge of 32 cm3, of which the saddle carries 10 % (set by ear: 30 % sounded dull);
+- top: half of its mass moves in its first modes; its braces make it 4 times stiffer than bare spruce, seen from the bridge; rosewood bridge of 32 cm3, of which the saddle carries 20 % (set by ear);
 - player: timing intent 15 ms (Repp and Su 2013: 10 to 20 ms for musicians), arm continuity 15 ms, swing 10 cm,
   pick 3 mm deep, wrist arc of 25 cm, accents on beats 1 and 3, upstroke 0.8 of the force.
 
