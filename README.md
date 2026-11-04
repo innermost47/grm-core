@@ -825,3 +825,14 @@ Concept, method and direction: **Anthony Charretier**. Code written in collabora
 
 ## License
 [GNU Affero General Public License v3.0 or later](LICENSE) (AGPL-3.0-or-later).
+
+---
+
+## Cite
+
+Each GitHub release of this repository is archived on [Zenodo](https://zenodo.org), with a permanent DOI and its date
+(metadata in `.zenodo.json` and `CITATION.cff`). The dated prediction on the neutrino masses is in
+[predictions/](predictions/): it was written before the measurements that will decide it.
+
+<!-- after the first release, replace XXXXXXX with the concept DOI Zenodo gives (it always points to the latest version):
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX) -->

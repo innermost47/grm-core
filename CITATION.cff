@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software or refer to its dated prediction, please cite it as below."
+title: "GRM: a Global Relational Model (grm-core)"
+type: software
+authors:
+  - family-names: Charretier
+    given-names: Anthony
+license: AGPL-3.0-or-later
+repository-code: "https://github.com/innermost47/grm-core"
+url: "https://simulation.anthony-charretier.fr"
+keywords:
+  - relational model
+  - constraint network
+  - Koide formula
+  - neutrino masses
+  - dated prediction
