@@ -5,6 +5,7 @@ type: software
 authors:
   - family-names: Charretier
     given-names: Anthony
+doi: "10.5281/zenodo.23964101"
 license: AGPL-3.0-or-later
 repository-code: "https://github.com/innermost47/grm-core"
 url: "https://simulation.anthony-charretier.fr"
