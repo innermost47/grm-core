@@ -12,8 +12,9 @@ This repository contains:
 | `web/` | **The Relational Universe** ([live](https://simulation.anthony-charretier.fr)): from the Big Bang to the end of time in the browser (3D, music), every number held by one GRM network (`grm.js`, the JavaScript port) |
 | `grm_hidden_node.py` | **A node nobody mentioned**: the network sees that something is missing, makes the missing node emerge (where it acts, how large it is), and refuses to invent one when nothing is missing |
 | `grm_tao.py` | **From the 0 the 1, from the 1 the 2...**: are the particle masses harmonics born in cascade from two seeds? Three readings of "relation" (spiral, intermodulation, trinity), each judged against random spectra |
+| `grm_loop.py` | **A loop without a seed**: three waves, the full and the void in balance for ever. Predicts the tau from the electron and the muon, and makes a dated bet on the neutrino masses ([predictions/](predictions/)) |
 | `grm_explorer.py` | The explorer: write a network with forms or JSON, solve it, see at once if it is valid; presets of known and open problems (`grm_presets.py`); missing nodes that emerge where the network is in tension, looked up in a bank of known numbers (`grm_bank.py`) |
-| `test_grm.py` | A hardcore test battery: 105 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 108 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
@@ -190,6 +191,30 @@ and a dated bet on a mass not yet measured well (the neutrinos).
 
 ---
 
+## A loop without a seed (`grm_loop.py`)
+
+```bash
+python grm_loop.py                   # what the loop fixes, what it leaves free, and the bet on the neutrinos
+```
+
+Nothing starts from a first seed: for an absolute to exist, it must be a loop. Three waves are born from the void in
+opposition to the full, for ever. Their amplitudes r = √m split into the **full** (the part shared by all three) and the
+**void** (deviations that sum to zero); the loop is that neither wins: |void| = |full|. No seed, no scale, no number.
+
+- **What it fixes.** |void| = |full| is exactly Koide's Q = 2/3 (the amplitudes at 45° from (1, 1, 1), as Foot noticed in
+  1994). For the charged leptons the ratio is 0.999997. The GRM network shows that the loop fixes one ratio only (given
+  one mass, the others stay undetermined) and that, given two masses, it predicts the third: the tau at 1776.97 MeV from
+  the electron and the muon (measured 1776.93 ± 0.09), and the same in every direction (0.4 sigma each).
+- **What it leaves free.** The phase of the three waves on their circle: measured 0.2222248 ± 0.0000062 rad, where
+  2/9 = 0.2222222 (0.4 sigma). A simple fraction that close would happen by chance about once in 900, but 2/9 was
+  noticed after looking (Brannen, 2006). Unexplained.
+- **A bet.** The neutrinos: only the differences of their squared masses are measured. The loop closes only with one wave
+  in opposition, and only in the normal order (the inverted solution sums to 103 meV, refused by cosmology). It gives
+  m = 0.365, 8.685, 50.30 meV, **sum 59.35 ± 0.30 meV**, the lightest almost massless. Written, dated, before the
+  measurements that will decide it: [predictions/2026-11-04-loop-neutrinos.md](predictions/2026-11-04-loop-neutrinos.md).
+
+---
+
 ## The explorer (`grm_explorer.py`)
 
 ```bash
@@ -248,7 +273,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 105 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 108 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 

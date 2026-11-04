@@ -1178,3 +1178,25 @@ class TestTao:
         g = tao.grm_spiral(assign, sigma_theory=rms)
         assert abs(math.log10(g["values"]["seed_a"]) - la) < 0.05 and abs(math.log10(g["values"]["seed_b"]) - lb) < 0.05
         assert g["reduced_chi2"] < 3
+
+
+class TestLoop:
+    """grm_loop.py: three waves, the full and the void in balance, no seed."""
+
+    def test_loop_predicts_the_tau(self):
+        import grm_loop as loop
+        preds = [v for v, s in loop.predict_third(["e", "mu"], "tau") if 1000 < v < 3000]
+        assert preds and abs(preds[0] - 1776.93) < 0.5
+
+    def test_full_and_void_balance_is_koide(self):
+        import grm_loop as loop
+        full2, void2 = loop.full_and_void([1.0, 2.0, 5.0])
+        q = loop.koide_q([1.0, 4.0, 25.0])
+        assert abs(q - (1 + void2 / full2) / 3) < 1e-12
+
+    def test_neutrino_bet(self):
+        import grm_loop as loop
+        normal = loop.neutrinos(loop.DM32_NORMAL, (1, -1, -1))
+        assert normal and 0.059 < sum(normal[0][0]) < 0.060
+        inverted = loop.neutrinos(loop.DM32_INVERTED, (1, 1, -1))
+        assert inverted and sum(inverted[0][0]) > loop.DESI_SUM_LIMIT
