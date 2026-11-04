@@ -411,6 +411,26 @@ class TestGuitar:
         assert 0 not in [i for i, _, _ in up]                            # an upstroke misses the low E
 
 
+class TestBrain:
+    def test_it_learns_the_way_while_living(self):
+        import grm_brain as gbr
+        life = gbr.run_headless(6, seed=3)
+        assert len(life.trips) == 6
+        assert life.trips[-1] <= 1.3 * life.maze.shortest()       # it ends up taking (almost) the shortest way
+        assert life.trips[-1] < life.trips[0]
+
+    def test_it_relearns_when_the_maze_changes(self):
+        import grm_brain as gbr
+        life = gbr.run_headless(10, seed=2, change_after=5)
+        assert len(life.trips) == 10
+        assert life.trips[-1] <= 1.3 * life.maze.shortest()       # the new maze is learned too
+
+    def test_the_brain_never_reads_the_maze(self):
+        import grm_brain as gbr
+        brain = gbr.Brain()
+        assert not any(isinstance(v, gbr.Maze) for v in vars(brain).values())
+
+
 class TestScales:
     def test_small_predicts_the_large(self):
         import grm_scales as sc

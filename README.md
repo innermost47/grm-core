@@ -14,6 +14,7 @@ This repository contains:
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
+| `grm_brain.py` | **GRM Brain**: a brain that learns while it discovers a maze, with a memory of tensions; watch its network form |
 | `grm_scales.py` | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension |
 | `grm_voice.py` | **GRM Voice**: a voice made of relations. Lungs, vocal folds, airflow, vocal tract, velum, nose and lips are GRM networks; it says "Bonjour Anthony. Je suis le réseau." |
 | `grm_pong.py` | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks |
@@ -375,6 +376,45 @@ Results on 40 held-out sentences, written separately and never used to build the
 Off-topic sentences: 4 of 6 give `unknown`. The two others share a word with the table by chance (`acte`, then `plante` and `besoin`)
 and get an answer: the table is small, and a single shared word is enough. A larger table, or a minimum amount of
 evidence, would be the next step.
+
+## GRM Brain (`grm_brain.py`)
+
+```bash
+python grm_brain.py                                   # the window: the world on the left, the brain on the right
+python grm_brain.py --headless 10 --change-after 5    # without a window: steps per trip, the maze changed after trip 5
+```
+
+![GRM Brain](docs/grm_brain.png)
+
+The brain and the maze are two separate things. The brain is never shown the maze: not its size, its walls, or
+where the exit is. It only knows its own moves (from which it builds its own idea of where it is, as animals do),
+feels a wall by bumping into it, feels the exit when it is there, and can smell it faintly (optional). Nothing is
+learned before: everything is learned while it lives.
+
+**Memory: a matrix of triplets (A, tension, B).** From place A, this move led to B, or into a wall, with the tension
+it left, the sensation of the memory:
+- a prediction that comes true lowers the tension (the relation becomes sure);
+- a surprise (a wall where it went before) raises it; a wall has two sides, so the way back is shut too;
+- a bump leaves a painful tension, remembered longer than a calm one;
+- time brings every tension back towards neutral: a forgotten wall is tried again, a changed maze is learned again.
+
+**Desire: a GRM network.** One node per known place, tied to its neighbours like springs: a sure relation is a stiff
+spring, a doubtful one a soft spring. The exit, once found, is pinned at 0; every untried move leads to the unknown,
+pinned at a height set by curiosity; every place leans weakly towards "far". The core finds the equilibrium after
+every step: a landscape that only goes down towards what attracts, with no hollow to get stuck in. The brain follows
+the slope, and avoids what hurt.
+
+The window shows the world (with the brain's trail) and the brain itself: its places where it believes they are,
+coloured by desire (blue: where it wants to go), its relations coloured by tension (green sure, red painful), its
+doubt as a halo, and the steps of each trip against the shortest possible. "Change the maze" closes a passage on the
+way it uses and opens another one elsewhere.
+
+In tests on several mazes: the first trips explore (70 to 440 steps), then it takes the shortest way or close to it.
+When the maze changes, one long trip follows (the surprise, the bumps, the exploring), then it settles again on a way
+close to the new shortest one, sometimes the shortest itself.
+
+Hypotheses: the learning, surprise, pain and forgetting rates, the stiffness of a sure relation, curiosity. The
+brain knows its own moves exactly (no slipping), which makes "where am I" easy; noisy moves would be the next test.
 
 ## GRM Scales (`grm_scales.py`)
 
