@@ -1,0 +1,174 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,booktabs,geometry,hyperref}
+\geometry{margin=2.4cm}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue}
+
+\title{A seedless loop reading of Koide's relation,\\ and dated predictions for the neutrino masses}
+\author{Anthony Charretier\\ \small Independent researcher\\ \small \url{https://github.com/innermost47/grm-core}}
+\date{4 November 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Koide's relation $Q=\sum m/(\sum\sqrt m)^2=2/3$ holds for the charged leptons to a few parts in $10^{6}$ and has no
+accepted explanation. We read it as a balance with no seed and no scale: the amplitudes $r_n=\sqrt{m_n}$ split into a
+shared part (the ``full'') and deviations that sum to zero (the ``void''), and the relation is exactly
+$|\text{void}|=|\text{full}|$. Written as a network of relations and solved by weighted least squares, this single
+condition reproduces each charged lepton mass from the other two (0.4\,$\sigma$), and fixes the phase of the three
+amplitudes to $0.222222047$, which differs from $2/9$ by $1.75\times10^{-7}$. Applied without change to the neutrinos,
+with only the measured mass-squared differences as input, the loop closes only if one amplitude is in opposition and
+only in the normal ordering. It gives $m_{1,2,3}=0.365,\ 8.685,\ 50.30$\,meV and $\Sigma m_\nu=59.35\pm0.30$\,meV, hence
+$m_\beta=8.84$\,meV and $1.1\le m_{\beta\beta}\le4.1$\,meV. These values were archived with a timestamp before the
+measurements that can refute them. A second, more speculative bet on the phase of the neutrino amplitudes is given
+together with its first check against JUNO.
+\end{abstract}
+
+\section{Koide's relation as a balance}
+Koide's relation~\cite{koide} concerns three masses. For three positive masses define $r_n=\sqrt{m_n}$ and split the vector $\mathbf r$ into its component along
+$(1,1,1)$ and the remainder,
+\begin{equation}
+  F=3\bar r^{\,2},\qquad V=\sum_n (r_n-\bar r)^2,\qquad \bar r=\tfrac13\sum_n r_n .
+\end{equation}
+The deviations $r_n-\bar r$ sum to zero. Since $\sum m_n=F+V$ and $(\sum r_n)^2=3F$,
+\begin{equation}
+  Q=\frac{\sum m_n}{(\sum r_n)^2}=\frac13\left(1+\frac VF\right),
+\end{equation}
+so $Q=2/3$ is exactly $V=F$: the shared part and the part that cancels out carry the same weight. Equivalently
+$\mathbf r$ makes an angle of $45^\circ$ with $(1,1,1)$, as noted by Foot~\cite{foot}. In the parametrization
+$r_n=\mu\,\bigl(1+k\sqrt2\cos(\delta+2\pi n/3)\bigr)$ one has $Q=(1+k^2)/3$, so the balance is $k=1$ and leaves the
+phase $\delta$ free~\cite{brannen,zenczykowski}.
+
+The reading we propose is a loop with no seed: no mass is a starting point, no scale enters, and the only condition is
+that neither part prevails. The condition fixes one ratio among three masses, not all of them.
+
+\section{Charged leptons}
+With the PDG~2024 masses~\cite{pdg}, $Q=0.6666645$ and $|Q-2/3|=2.2\times10^{-6}$, compatible with zero
+($0.4\,\sigma$, the uncertainty coming almost entirely from $m_\tau$). We solved the loop as a network of relations
+(nodes $m_n$ and $r_n$, relations $m_n=r_n^2$ and $V=F$) with the GRM solver~\cite{grm}. Given one mass, the other
+two remain undetermined, as they should. Given two, the third follows:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+predicted & from & loop \quad (measured) \\
+\midrule
+$m_\tau$ & $m_e,\ m_\mu$ & $1776.969$\,MeV \quad ($1776.93\pm0.09$) \\
+$m_\mu$ & $m_e,\ m_\tau$ & $105.656\pm0.006$\,MeV \quad ($105.6583755$) \\
+$m_e$ & $m_\mu,\ m_\tau$ & $0.51087\pm0.00030$\,MeV \quad ($0.51099895$) \\
+\bottomrule
+\end{tabular}
+\end{center}
+Each prediction lies $0.4\,\sigma$ from the measurement. This is Koide's known success; we report it as the check
+that the network reproduces it.
+
+\paragraph{The phase.} Imposing $Q=2/3$ exactly and using only $m_e$ and $m_\mu$, the phase is
+$\delta=0.222222047$ (cf. Brannen~\cite{brannen}), against $2/9=0.222222222$: a difference of $1.75\times10^{-7}$
+(8 parts in $10^7$). The two statements $Q=2/3$ and $\delta=2/9$ therefore cannot both be exact for these masses; they
+would predict $m_\tau=1776.969$ and $1776.967$\,MeV, indistinguishable today. Among the 95 fractions $p/q$ with
+$q\le12$ in $[0,2\pi/3)$, the expected number within $1.75\times10^{-7}$ of a given value is $1.6\times10^{-5}$.
+The value $2/9$ was, however, noticed after looking at these masses, and this estimate does not correct for it.
+
+\section{Neutrinos}
+Only the mass-squared differences are measured. With the PDG~2024 values~\cite{pdg}
+($\Delta m^2_{21}=7.53\times10^{-5}$\,eV$^2$, $\Delta m^2_{32}=2.455\times10^{-3}$\,eV$^2$ in the normal ordering,
+$-2.529\times10^{-3}$ in the inverted one) the three relations
+\begin{equation}
+  r_2^4-r_1^4=\Delta m^2_{21},\qquad r_3^4-r_2^4=\Delta m^2_{32},\qquad V=F
+\end{equation}
+were solved from many starting points and for every choice of signs of the amplitudes. With all amplitudes of the same
+sign the loop does not close. It closes with one amplitude in opposition to the other two, as proposed for the
+neutrinos by Brannen~\cite{brannen}:
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+ordering & $m_1$ (meV) & $m_2$ (meV) & $m_3$ (meV) & $\Sigma m_\nu$ (meV) \\
+\midrule
+normal & $0.365$ & $8.685$ & $50.30$ & $59.35\pm0.30$ \\
+inverted & $49.62$ & $50.38$ & $2.94$ & $102.9\pm0.6$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+The uncertainty follows from the measured differences. The inverted solution exceeds the DESI~2024 bound
+$\Sigma m_\nu<72$\,meV (95\,\%, with CMB, $\Lambda$CDM)~\cite{desi}, so the loop predicts the normal ordering, with an
+almost massless lightest neutrino. With the mixing angles of PDG~2024 ($\sin^2\theta_{12}=0.307\pm0.013$,
+$\sin^2\theta_{13}=0.0219\pm0.0007$), the effective masses are
+\begin{equation}
+  m_\beta=\Bigl(\sum_i|U_{ei}|^2m_i^2\Bigr)^{1/2}=8.84\ \text{meV},\qquad
+  1.1\ \text{meV}\le m_{\beta\beta}\le4.1\ \text{meV},
+\end{equation}
+the range of $m_{\beta\beta}$ covering the two unknown Majorana phases and the uncertainties of the angles.
+
+\section{A more speculative bet: the phase on a Cantor cascade}
+The terms removed by the Cantor construction, $1/3,\,2/9,\,4/27,\dots$, form a geometric sequence of ratio $2/3$ (the
+value of $Q$) whose sum is $1$, and the charged-lepton phase is close to its second term. We fixed in advance a set of
+16 candidate phases for the neutrinos (the terms $t_n$, their partial sums, and $2/9+t_n$, $n\le6$). With $Q=2/3$, the
+measured ratio $\Delta m^2_{21}/\Delta m^2_{32}=0.0307\pm0.0008$ allows a phase in $[0.4754,0.4825]$ (or its mirror
+image); one candidate falls inside, $1/3+4/27=13/27$. With 16 candidates such a hit happens by chance about once in
+ten, so this is not significant by itself. Taken exactly, it fixes the ratio to $0.031230$ and, with the measured
+$\Delta m^2_{32}$,
+\begin{equation}
+  \Delta m^2_{21}=(7.667\pm0.087)\times10^{-5}\ \text{eV}^2 .
+\end{equation}
+After this value was written, we compared it with the first JUNO measurement~\cite{juno},
+$(7.50\pm0.12)\times10^{-5}$\,eV$^2$: a difference of $1.1$ combined $\sigma$. JUNO's coming data will decide.
+
+\section{An earlier, rival prediction}
+The same author published on 30 October 2026, from a larger network of relations~\cite{grmsite}, $m_1=1.55$\,meV and
+$\Sigma m_\nu=60.7$\,meV (normal ordering), with $m_1$ fixed by a different relation (the geometric mean of the Planck
+energy and the energy of the final horizon temperature). The two rules cannot hold together: in the network they are in
+tension by more than $40\,\sigma$. They agree on the normal ordering and on a sum close to the minimum allowed by
+oscillations; the mass of the lightest neutrino will tell them apart.
+
+\section{How these predictions can fail}
+\begin{center}\small
+\begin{tabular}{lll}
+\toprule
+quantity & loop & refuted if \\
+\midrule
+mass ordering & normal & inverted ordering established \\
+$\Sigma m_\nu$ & $59.35\pm0.30$\,meV & settles clearly away (${<}55$ or ${>}80$\,meV) \\
+$m_1$ & $0.365$\,meV & measured well above $0.4$\,meV \\
+$m_\beta$ & $8.84$\,meV & a signal above ${\sim}15$\,meV (today ${<}450$\,meV~\cite{katrin}) \\
+$m_{\beta\beta}$ & $1.1$--$4.1$\,meV & a signal clearly above $4.1$\,meV \\
+$m_\tau$ & $1776.969$\,MeV & a measurement settles ${>}3\,\sigma$ away \\
+$\Delta m^2_{21}$ (Cantor) & $7.667\pm0.087\times10^{-5}$ & ratio outside $0.03123\pm0.0002$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+The absence of a $0\nu\beta\beta$ signal would not support the loop, since the neutrino may not be its own antiparticle.
+
+\section{Discussion}
+Mathematically, the loop is Koide's relation; its geometric form is Foot's, and its application to neutrinos with one
+amplitude in opposition is Brannen's idea. What this note adds is a reading (a balance with no seed and no scale), a
+derivation of the neutrino masses from the measured differences alone with no adjusted phase, an explicit statement of
+the tension between exact $Q=2/3$ and exact $\delta=2/9$, and predictions archived with a timestamp before the data
+that can refute them. The quark masses do not follow the relation ($Q\approx0.85$ and $0.73$ for up- and down-type,
+with scheme-dependent masses), and we make no claim about them. Code, tests and the dated files are available
+at~\cite{grm}.
+
+\paragraph{Acknowledgements.} The computations, the code and the drafting of this note were done with the assistance of
+an AI system (Claude, Anthropic). The ideas of the loop and of the balance between full and void are the author's.
+
+\begin{thebibliography}{9}
+\bibitem{koide} Y.~Koide, \emph{A fermion-boson composite model of quarks and leptons}, Phys. Lett. B \textbf{120}
+  (1983) 161; \emph{New view of quark and lepton mass hierarchy}, Phys. Rev. D \textbf{28} (1983) 252.
+\bibitem{foot} R.~Foot, \emph{A note on Koide's lepton mass relation}, arXiv:hep-ph/9402242 (1994).
+\bibitem{brannen} C.~Brannen, \emph{Koide's mass formula for neutrinos}, APS Northwest Section meeting (2006),
+  \url{https://meetings-archive.aps.org/nws/2006/b3/14}.
+\bibitem{zenczykowski} P.~\.Zenczykowski, \emph{Koide's $Z_3$-symmetric parametrization, quark masses and mixings},
+  arXiv:1301.4143 (2013).
+\bibitem{pdg} Particle Data Group, Review of Particle Physics (2024), summary tables.
+\bibitem{desi} DESI Collaboration, \emph{DESI 2024 VI: Cosmological constraints from the measurements of baryon
+  acoustic oscillations}, arXiv:2404.03002 (2024).
+\bibitem{juno} JUNO Collaboration, \emph{First measurement of reactor neutrino oscillations at JUNO},
+  arXiv:2511.14593 (2025).
+\bibitem{katrin} KATRIN Collaboration, \emph{Direct neutrino-mass measurement based on 259 days of KATRIN data},
+  Science (2025).
+\bibitem{grm} A.~Charretier, \emph{GRM: a Global Relational Model (grm-core)}, Zenodo,
+  doi:\href{https://doi.org/10.5281/zenodo.23964101}{10.5281/zenodo.23964101} (2026).
+\bibitem{grmsite} A.~Charretier, \emph{Global Relational Model}, \url{https://grm.anthony-charretier.fr} (dated
+  predictions of 30 October 2026).
+\end{thebibliography}
+\end{document}

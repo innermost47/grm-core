@@ -1206,3 +1206,26 @@ class TestLoop:
         m = [0.000365, 0.008685, 0.050303]
         m_beta, lo, hi = loop.neutrino_observables(m, steps=91)
         assert 0.0086 < m_beta < 0.0091 and 0.0011 < lo < 0.0014 and 0.0038 < hi < 0.0041
+
+
+class TestWorld:
+    """grm_world.py: the world current accounts as a network of zeros."""
+
+    def test_the_zero_is_not_zero(self):
+        import grm_world as w
+        s = w.load()
+        total, trade, income, exports = w.world_parts(s, list(range(1997, 2025)))
+        assert total[2024] > 300 and trade[2024] > 900 and income[2024] < -400
+        assert abs(total[2024] - (trade[2024] + income[2024])) < 1e-6
+
+    def test_hidden_node_and_carriers(self):
+        import grm_world as w
+        s = w.load()
+        years = list(range(1997, 2025))
+        total, trade, income, exports = w.world_parts(s, years)
+        lam, s_lam, birge, _ = w.grm_hidden_trade_node(trade, exports, years)
+        assert 0.02 < lam < 0.033 and birge > 1
+        gdp = w.world_gdp(s, years)
+        r2_trade, _ = w.r2_changes(trade, gdp, years)
+        r2_income, _ = w.r2_changes(income, gdp, years)
+        assert r2_trade > 0.3 and r2_income < 0.15
