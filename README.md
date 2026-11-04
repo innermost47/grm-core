@@ -214,6 +214,10 @@ opposition to the full, for ever. Their amplitudes r = √m split into the **ful
   in opposition, and only in the normal order (the inverted solution sums to 103 meV, refused by cosmology). It gives
   m = 0.365, 8.685, 50.30 meV, **sum 59.35 ± 0.30 meV**, the lightest almost massless. Written, dated, before the
   measurements that will decide it: [predictions/2026-11-04-loop-neutrinos.md](predictions/2026-11-04-loop-neutrinos.md).
+- **A second bet, on the Cantor cascade** (1/3, 2/9, 4/27…: ratio 2/3, the loop itself; the leptons' phase is its second
+  term): the neutrino phase 13/27 = 1/3 + 4/27 gives Δm²₂₁ = (7.667 ± 0.087) × 10⁻⁵ eV². On its own this is a 1-in-10
+  hit, not significant. First check after writing it: JUNO's first measurement, (7.50 ± 0.12) × 10⁻⁵ eV², 1.1 sigma
+  away; to be decided by JUNO's next data ([predictions/2026-11-04-cantor-phase.md](predictions/2026-11-04-cantor-phase.md)).
 
 ---
 
