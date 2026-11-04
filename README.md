@@ -6,27 +6,27 @@
 
 This repository contains:
 
-| File | What it is |
-|---|---|
-| `grm.py` | The relational solver: one file, NumPy optional |
-| `web/` | **The Relational Universe** ([live](https://simulation.anthony-charretier.fr)): from the Big Bang to the end of time in the browser (3D, music), every number held by one GRM network (`grm.js`, the JavaScript port) |
-| `grm_hidden_node.py` | **A node nobody mentioned**: the network sees that something is missing, makes the missing node emerge (where it acts, how large it is), and refuses to invent one when nothing is missing |
-| `grm_tao.py` | **From the 0 the 1, from the 1 the 2...**: are the particle masses harmonics born in cascade from two seeds? Three readings of "relation" (spiral, intermodulation, trinity), each judged against random spectra |
-| `grm_loop.py` | **A loop without a seed**: three waves, the full and the void in balance for ever. Predicts the tau from the electron and the muon, and makes a dated bet on the neutrino masses ([predictions/](predictions/)) |
-| `grm_explorer.py` | The explorer: write a network with forms or JSON, solve it, see at once if it is valid; presets of known and open problems (`grm_presets.py`); missing nodes that emerge where the network is in tension, looked up in a bank of known numbers (`grm_bank.py`) |
-| `test_grm.py` | A hardcore test battery: 108 tests, plus a validation protocol for full models |
-| `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
-| `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
-| `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
-| `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
-| `grm_matter.py` | **GRM Matter**: from the quantum constants and Z alone to ionization energies, then the density and stiffness of simple metals |
-| `grm_rain.py` | **GRM Rain**: the sound of every drop falling on water (drag, impact, trapped bubble), used by GRM Water |
-| `grm_water.py` | **GRM Water**: a basin of liquid to play with (drops, finger, rain, paddle); every wave swings and dies as a GRM network says |
-| `grm_brain.py` | **GRM Brain**: a brain that learns while it discovers a maze, with a memory of tensions; watch its network form |
-| `grm_scales.py` | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension |
-| `grm_voice.py` | **GRM Voice**: a voice made of relations. Lungs, vocal folds, airflow, vocal tract, velum, nose and lips are GRM networks; it says "Bonjour Anthony. Je suis le réseau." |
-| `grm_pong.py` | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks |
-| `grm_guitar.py` | **GRM Guitar**: a guitar simulated as one object: strings, bridge, top, air, palm, fingers and the player's arm are all GRM networks. VST3 plugin (work in progress): [grm-guitar-vst](https://github.com/innermost47/grm-guitar-vst) |
+| File                 | What it is                                                                                                                                                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grm.py`             | The relational solver: one file, NumPy optional                                                                                                                                                                                                                |
+| `web/`               | **The Relational Universe** ([live](https://simulation.anthony-charretier.fr)): from the Big Bang to the end of time in the browser (3D, music), every number held by one GRM network (`grm.js`, the JavaScript port)                                          |
+| `grm_hidden_node.py` | **A node nobody mentioned**: the network sees that something is missing, makes the missing node emerge (where it acts, how large it is), and refuses to invent one when nothing is missing                                                                     |
+| `grm_tao.py`         | **From the 0 the 1, from the 1 the 2...**: are the particle masses harmonics born in cascade from two seeds? Three readings of "relation" (spiral, intermodulation, trinity), each judged against random spectra                                               |
+| `grm_loop.py`        | **A loop without a seed**: three waves, the full and the void in balance for ever. Predicts the tau from the electron and the muon, and makes a dated bet on the neutrino masses ([predictions/](predictions/))                                                |
+| `grm_explorer.py`    | The explorer: write a network with forms or JSON, solve it, see at once if it is valid; presets of known and open problems (`grm_presets.py`); missing nodes that emerge where the network is in tension, looked up in a bank of known numbers (`grm_bank.py`) |
+| `test_grm.py`        | A hardcore test battery: 108 tests, plus a validation protocol for full models                                                                                                                                                                                 |
+| `grm_model.py`       | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model                                                                                                                                                     |
+| `grm_sat.py`         | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline                                                                                                                                                                       |
+| `grm_tsp.py`         | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length                                                                                                                                                             |
+| `grm_text.py`        | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence                                                                                                                        |
+| `grm_matter.py`      | **GRM Matter**: from the quantum constants and Z alone to ionization energies, then the density and stiffness of simple metals                                                                                                                                 |
+| `grm_rain.py`        | **GRM Rain**: the sound of every drop falling on water (drag, impact, trapped bubble), used by GRM Water                                                                                                                                                       |
+| `grm_water.py`       | **GRM Water**: a basin of liquid to play with (drops, finger, rain, paddle); every wave swings and dies as a GRM network says                                                                                                                                  |
+| `grm_brain.py`       | **GRM Brain**: a brain that learns while it discovers a maze, with a memory of tensions; watch its network form                                                                                                                                                |
+| `grm_scales.py`      | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension                                                                                                                    |
+| `grm_voice.py`       | **GRM Voice**: a voice made of relations. Lungs, vocal folds, airflow, vocal tract, velum, nose and lips are GRM networks; it says "Bonjour Anthony. Je suis le réseau."                                                                                       |
+| `grm_pong.py`        | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks                                                                                                                                                               |
+| `grm_guitar.py`      | **GRM Guitar**: a guitar simulated as one object: strings, bridge, top, air, palm, fingers and the player's arm are all GRM networks. VST3 plugin (work in progress): [grm-guitar-vst](https://github.com/innermost47/grm-guitar-vst)                          |
 
 The cosmology and particle-physics model this engine was built for is presented at [grm.anthony-charretier.fr](https://grm.anthony-charretier.fr), with its own repository: [innermost47/GRM](https://github.com/innermost47/GRM).
 
@@ -35,15 +35,15 @@ The cosmology and particle-physics model this engine was built for is presented 
 ### Listen to the guitar model
 Every sound below was rendered by `grm_guitar.py`, from the GRM networks only (no samples):
 
-| Sound | What you hear |
-|---|---|
-| [strum_pick.wav](docs/audio/strum_pick.wav) | a G chord strummed down with a 0.71 mm pick |
-| [strum_fingers.wav](docs/audio/strum_fingers.wav) | the same chord strummed with the fingers: softer release, rounder sound |
-| [folk_loop_pick.wav](docs/audio/folk_loop_pick.wav) | C – Am – Em – G, folk strumming pattern played three times by the player network (no two strokes alike), with the fingers lifting, landing and rubbing between chords |
-| [folk_loop_no_finger_noise.wav](docs/audio/folk_loop_no_finger_noise.wav) | the same loop without finger noise, to compare |
-| [travis_fingers.wav](docs/audio/travis_fingers.wav) | C – Am, Travis picking (alternating bass) with the fingers |
+| Sound                                                                           | What you hear                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [strum_pick.wav](docs/audio/strum_pick.wav)                                     | a G chord strummed down with a 0.71 mm pick                                                                                                                                                                                                               |
+| [strum_fingers.wav](docs/audio/strum_fingers.wav)                               | the same chord strummed with the fingers: softer release, rounder sound                                                                                                                                                                                   |
+| [folk_loop_pick.wav](docs/audio/folk_loop_pick.wav)                             | C – Am – Em – G, folk strumming pattern played three times by the player network (no two strokes alike), with the fingers lifting, landing and rubbing between chords                                                                                     |
+| [folk_loop_no_finger_noise.wav](docs/audio/folk_loop_no_finger_noise.wav)       | the same loop without finger noise, to compare                                                                                                                                                                                                            |
+| [travis_fingers.wav](docs/audio/travis_fingers.wav)                             | C – Am, Travis picking (alternating bass) with the fingers                                                                                                                                                                                                |
 | [bach_prelude_two_grm_guitars.wav](docs/audio/bach_prelude_two_grm_guitars.wav) | Bach, Prelude of the Cello Suite No. 1 (BWV 1007), two GRM guitars in a church: Bach's line note for note on the left, the harmony of each bar on the right (bass and chord, strums, palm-muted eighths, wide strums). `python demos/bach_two_guitars.py` |
-| [palm_muted_rock.wav](docs/audio/palm_muted_rock.wav) | a power-chord riff at 120 BPM, muted by the palm network (skin on the strings near the bridge) |
+| [palm_muted_rock.wav](docs/audio/palm_muted_rock.wav)                           | a power-chord riff at 120 BPM, muted by the palm network (skin on the strings near the bridge)                                                                                                                                                            |
 
 ---
 
@@ -72,11 +72,11 @@ nodes = {
 ```
 
 ### Relations
-| Type | Form | Example |
-|---|---|---|
+| Type                 | Form                             | Example                                                          |
+| -------------------- | -------------------------------- | ---------------------------------------------------------------- |
 | log-linear (default) | `sum(coeff * log10(node)) = rhs` | `E = m c^2` -> `{"terms": {"E": 1, "m": -1, "c": -2}, "rhs": 0}` |
-| `sum` | `sum(coeff * value^p) = K` | `Omega_b + Omega_c + Omega_L = 1` |
-| `fn` | `f(values) = 0`, any equation | Koide, cosmological ages |
+| `sum`                | `sum(coeff * value^p) = K`       | `Omega_b + Omega_c + Omega_L = 1`                                |
+| `fn`                 | `f(values) = 0`, any equation    | Koide, cosmological ages                                         |
 
 Each relation has a `sigma` (its tolerance, in dex for log-linear relations). A `rhs` may itself be a function of the current values.
 
@@ -91,13 +91,13 @@ out = net.solve(measured_dict={"m": 2.0, "H0": (70.0, 0.01)})   # value, or (val
 ```
 
 ### Results
-| Key | Meaning |
-|---|---|
-| `values` | best estimate of every node |
-| `sigma_dex`, `uncertainty` | 1-sigma uncertainty (dex, and relative; absolute for signed nodes) |
-| `undetermined` | nodes nothing determines: their value is only the starting point, not a prediction |
-| `relation_pulls` | residual of every relation in sigma |
-| `covariance`, `cost`, `reduced_chi2`, `converged`, `iterations` | the rest of the fit |
+| Key                                                             | Meaning                                                                            |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `values`                                                        | best estimate of every node                                                        |
+| `sigma_dex`, `uncertainty`                                      | 1-sigma uncertainty (dex, and relative; absolute for signed nodes)                 |
+| `undetermined`                                                  | nodes nothing determines: their value is only the starting point, not a prediction |
+| `relation_pulls`                                                | residual of every relation in sigma                                                |
+| `covariance`, `cost`, `reduced_chi2`, `converged`, `iterations` | the rest of the fit                                                                |
 
 `leave_one_out(measured)` hides each measurement in turn and predicts it from the rest.
 
@@ -150,10 +150,10 @@ the network that a coin (18 g) was stuck under the tray during four of the weigh
 3. **A judge**: H exists only if the tension it removes is worth the nodes it adds (Bayesian information criterion),
    its mass is determined, its shares are clear-cut, and nothing is left unexplained.
 
-| 30 draws of the noise | result |
-|---|---|
-| with the coin | found 28 / 30, in the right four weighings, H = 18.11 g on average (spread 0.32 g) |
-| without the coin (control) | a coin invented 0 / 30 times |
+| 30 draws of the noise      | result                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| with the coin              | found 28 / 30, in the right four weighings, H = 18.11 g on average (spread 0.32 g) |
+| without the coin (control) | a coin invented 0 / 30 times                                                       |
 
 The two misses are "not found", never a wrong answer. Starting the shares at 0.5 instead of from the tensions left
 the network stuck (3 weighings of 4, wrong mass) in 22 draws of 30: the tension says that a node is missing, and
@@ -464,22 +464,22 @@ is rounded, and every clause is checked. A classical WalkSAT runs on the same fo
 
 First results (random formulas, this machine):
 
-| alpha | N | GRM: formulas fully satisfied | WalkSAT |
-|---|---|---|---|
-| 3.11 | 20 to 200 (3 each) | 12 / 12 | 12 / 12 |
-| 3.11 | 500, 1000 (2 each) | 4 / 4 (6 s and 36 s per formula) | 4 / 4 (under 0.1 s) |
-| 4.2 | 50 / 100 / 200 (5 each, 3 restarts) | 3 / 0 / 1 | 3 / 3 / 4 |
+| alpha | N                                   | GRM: formulas fully satisfied    | WalkSAT             |
+| ----- | ----------------------------------- | -------------------------------- | ------------------- |
+| 3.11  | 20 to 200 (3 each)                  | 12 / 12                          | 12 / 12             |
+| 3.11  | 500, 1000 (2 each)                  | 4 / 4 (6 s and 36 s per formula) | 4 / 4 (under 0.1 s) |
+| 4.2   | 50 / 100 / 200 (5 each, 3 restarts) | 3 / 0 / 1                        | 3 / 3 / 4           |
 
 **GRM+** (`--compare`) adds two tensions between successive solves, using `set_sigma` from the core: a binarity
 relation v (1 - v) = 0 per variable, loose at first then tightened round after round (continuous against discrete),
 and a reweighting of every clause still false. On satisfiable formulas only (checked by MiniSat), alpha = 4.2,
 WalkSAT limited to 20 000 flips:
 
-| N | GRM | GRM+ | WalkSAT | GRM+ then WalkSAT |
-|---|---|---|---|---|
-| 50 (6 formulas) | 5 / 6 | 6 / 6 | 6 / 6 | 6 / 6 |
-| 100 (8 formulas) | 4 / 8 | 7 / 8 | 8 / 8 | 8 / 8 |
-| 200 (8 formulas) | 1 / 8 | 1 / 8 | 2 / 8 | 1 / 8 |
+| N                | GRM   | GRM+  | WalkSAT | GRM+ then WalkSAT |
+| ---------------- | ----- | ----- | ------- | ----------------- |
+| 50 (6 formulas)  | 5 / 6 | 6 / 6 | 6 / 6   | 6 / 6             |
+| 100 (8 formulas) | 4 / 8 | 7 / 8 | 8 / 8   | 8 / 8             |
+| 200 (8 formulas) | 1 / 8 | 1 / 8 | 2 / 8   | 1 / 8             |
 
 GRM+ clearly improves on plain GRM up to N = 100, but does not beat WalkSAT, and both struggle at N = 200 with this
 flip budget. Work in progress.
@@ -514,9 +514,9 @@ Two GRM methods, no algorithm borrowed from elsewhere:
 
 Results on lin318 (318 cities, optimum 42 029), same machine:
 
-| Version | Method 1 | Method 2 | Time |
-|---|---|---|---|
-| first try: plain circle, strict refinement | 85 326 (+103 %) | 44 730 (+6.43 %) | 66 s + 23 s |
+| Version                                                             | Method 1           | Method 2             | Time           |
+| ------------------------------------------------------------------- | ------------------ | -------------------- | -------------- |
+| first try: plain circle, strict refinement                          | 85 326 (+103 %)    | 44 730 (+6.43 %)     | 66 s + 23 s    |
 | **current: circle by levels, refinement with pieces and breathing** | **74 500 (+77 %)** | **43 136 (+2.63 %)** | **5 s + 46 s** |
 
 For reference, a simulated annealing run with 2-opt moves (3 million moves, not part of this repository) reached
@@ -546,12 +546,12 @@ words that pulled the decision. The tight balance is handled by the core's conti
 
 Results on 40 held-out sentences, written separately and never used to build the relations:
 
-| Answer | Count |
-|---|---|
-| right | 32 |
-| unsure, right one among the two | 5 |
-| unsure, right one missing | 3 |
-| confidently wrong | 0 |
+| Answer                          | Count |
+| ------------------------------- | ----- |
+| right                           | 32    |
+| unsure, right one among the two | 5     |
+| unsure, right one missing       | 3     |
+| confidently wrong               | 0     |
 
 Off-topic sentences: 4 of 6 give `unknown`. The two others share a word with the table by chance (`acte`, then `plante` and `besoin`)
 and get an answer: the table is small, and a single shared word is enough. A larger table, or a minimum amount of
@@ -577,13 +577,13 @@ material data. The measured values are only read afterwards, to compare.
    as the atom calculation says, and carries the uncertainty of that calculation (about 4 %) through to the
    density and the bulk modulus. Equilibrium where dE/dr_s = 0, bulk modulus from the curvature there.
 
-| | first order (gas + ions) | second order (+ band-structure energy, bcc or fcc) |
-|---|---|---|
-| median error, density (11 metals) | 23 % | 14 % |
-| median error, bulk modulus (10 metals) | 20 % | 50 % |
-| K, Rb, Cs | density within 1-8 %, stiffness within 1-8 % | density 14-26 % too high |
-| Mg, Ca, Ba, Al | density 21-43 % too low | density within 0-12 % |
-| Li, Be | 50-55 % too light | 42-49 % too light |
+|                                        | first order (gas + ions)                     | second order (+ band-structure energy, bcc or fcc) |
+| -------------------------------------- | -------------------------------------------- | -------------------------------------------------- |
+| median error, density (11 metals)      | 23 %                                         | 14 %                                               |
+| median error, bulk modulus (10 metals) | 20 %                                         | 50 %                                               |
+| K, Rb, Cs                              | density within 1-8 %, stiffness within 1-8 % | density 14-26 % too high                           |
+| Mg, Ca, Ba, Al                         | density 21-43 % too low                      | density within 0-12 %                              |
+| Li, Be                                 | 50-55 % too light                            | 42-49 % too light                                  |
 
 Reading: the simplest picture already gets the heavy alkali metals right from Z alone. The lattice term fixes the
 density of the divalent metals and aluminium, but overshoots the alkali metals and spoils the stiffness. Li and Be
@@ -694,16 +694,16 @@ python grm_scales.py
 Every scale of the classical world written as a pair in tension that gives a third thing, with established physics
 (Carr & Rees 1979, Weisskopf 1975, Press & Lightman 1983, Lineweaver & Norman 2010):
 
-| relation | pair in tension | what is born |
-|---|---|---|
-| a0 = hbar / (m_e c alpha) | electric pull x quantum agitation | the atom |
-| rho = A m_p / (eta a0)^3 | size of atoms x mass of nuclei | the density of rock |
-| R = a0 (alpha / alpha_G)^1/2 | gravity x electrons that refuse to be squeezed | the largest planet |
-| M = m_p (alpha / alpha_G)^3/2 | gravity x atomic matter | its mass |
-| M = m_p alpha_G^-3/2 | gravity x pressure of hot matter | a star |
-| M_Ch = 3.1 (hbar c / G)^3/2 / (2 m_p)^2 | gravity x relativistic electrons | the heaviest white dwarf |
-| R = 1.5 (sigma_y / G rho^2)^1/2 | gravity x strength of rock | the size from which a body is round |
-| h = S / (rho g) | gravity x strength of the crust | the tallest mountain, on each planet |
+| relation                                | pair in tension                                | what is born                         |
+| --------------------------------------- | ---------------------------------------------- | ------------------------------------ |
+| a0 = hbar / (m_e c alpha)               | electric pull x quantum agitation              | the atom                             |
+| rho = A m_p / (eta a0)^3                | size of atoms x mass of nuclei                 | the density of rock                  |
+| R = a0 (alpha / alpha_G)^1/2            | gravity x electrons that refuse to be squeezed | the largest planet                   |
+| M = m_p (alpha / alpha_G)^3/2           | gravity x atomic matter                        | its mass                             |
+| M = m_p alpha_G^-3/2                    | gravity x pressure of hot matter               | a star                               |
+| M_Ch = 3.1 (hbar c / G)^3/2 / (2 m_p)^2 | gravity x relativistic electrons               | the heaviest white dwarf             |
+| R = 1.5 (sigma_y / G rho^2)^1/2         | gravity x strength of rock                     | the size from which a body is round  |
+| h = S / (rho g)                         | gravity x strength of the crust                | the tallest mountain, on each planet |
 
 Scaling laws carry a tolerance of 0.15 dex (they hold to a factor of a few). The same network is run both ways:
 
@@ -761,9 +761,9 @@ hiss          p = K 1/2 rho v^2 (1 - (Re_c / Re)^2)  turbulence of the jet (Stev
 measured formants as measurements (male averages, Wikipedia "Formant"); its relations are the tract's own
 resonance relations. The network finds the mouth shape whose resonances match, within the limits of a human mouth:
 
-| vowel | i | e | ɛ | a | ɑ | ɔ | o | u | y | ø | œ |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| F1 found / measured | 271 / 240 | 390 / 390 | 589 / 610 | 729 / 850 | 729 / 750 | 488 / 500 | 357 / 360 | 251 / 250 | 250 / 235 | 370 / 370 | 578 / 585 |
+| vowel               | i           | e           | ɛ           | a           | ɑ         | ɔ         | o         | u         | y           | ø           | œ           |
+| ------------------- | ----------- | ----------- | ----------- | ----------- | --------- | --------- | --------- | --------- | ----------- | ----------- | ----------- |
+| F1 found / measured | 271 / 240   | 390 / 390   | 589 / 610   | 729 / 850   | 729 / 750 | 488 / 500 | 357 / 360 | 251 / 250 | 250 / 235   | 370 / 370   | 578 / 585   |
 | F2 found / measured | 2221 / 2400 | 2174 / 2300 | 1798 / 1900 | 1493 / 1610 | 970 / 940 | 755 / 700 | 656 / 640 | 602 / 595 | 1964 / 2100 | 1895 / 1900 | 1690 / 1710 |
 
 Where the match is not exact ([i], [a]), the measured formants ask for a mouth the bounds do not allow.
@@ -834,5 +834,4 @@ Each GitHub release of this repository is archived on [Zenodo](https://zenodo.or
 (metadata in `.zenodo.json` and `CITATION.cff`). The dated prediction on the neutrino masses is in
 [predictions/](predictions/): it was written before the measurements that will decide it.
 
-<!-- after the first release, replace XXXXXXX with the concept DOI Zenodo gives (it always points to the latest version):
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX) -->
+[![DOI](https://zenodo.org/badge/1444785351.svg)](https://doi.org/10.5281/zenodo.23964101)
