@@ -986,3 +986,51 @@ class TestRain:
         hi_heavy, lo_heavy = shares(25.0)
         assert hi_light > lo_light                       # drizzle: the 13-25 kHz bubbles dominate
         assert lo_heavy > hi_heavy                       # heavy rain: the large drops' low bubbles take over
+
+
+class TestExplorer:
+    """grm_explorer.py: JSON -> network -> report, and its presets (grm_presets.py)."""
+
+    def test_known_presets_reproduce_their_expected_values(self):
+        from grm_explorer import preset_document, solve_document
+        from grm_presets import PRESETS
+        for p in PRESETS:
+            if p["category"] != "known":
+                continue
+            report = solve_document(preset_document(p))
+            assert report["valid"] is True, (p["id"], report["checks"])
+            assert report["result"]["converged"], p["id"]
+
+    def test_open_presets_show_the_tension_and_the_hypotheses_absorb_it(self):
+        from grm_explorer import preset_document, solve_document
+        from grm_presets import by_id
+        for data_only in ("hubble_tension", "neutron_lifetime"):
+            report = solve_document(preset_document(by_id(data_only)))
+            assert report["consistent"] is False, data_only
+            assert abs(report["pulls"][0][1]) > 4.0
+        h = solve_document(preset_document(by_id("hubble_sound_horizon")))
+        assert h["consistent"] and 0.90 < h["result"]["values"]["r_ratio"] < 0.95
+        n = solve_document(preset_document(by_id("neutron_dark_decay")))
+        assert n["consistent"] and 0.985 < n["result"]["values"]["Br_p"] < 0.992
+        k = solve_document(preset_document(by_id("koide_tau")))
+        assert abs(k["result"]["values"]["mtau"] - 1776.969) < 0.01
+
+    def test_expressions_are_safe(self):
+        from grm_explorer import compile_expression
+        f, used = compile_expression("x - 5 * (1 - exp(-x))", {"x", "y"})
+        assert used == ["x"] and abs(f({"x": 4.965114231744276})) < 1e-12
+        for bad in ("__import__('os')", "x.real", "open('f')", "[x]", "y if x else 1", "'a'"):
+            with pytest.raises((ValueError, SyntaxError)):
+                compile_expression(bad, {"x", "y"})
+
+    def test_checks_and_old_json(self):
+        from grm_explorer import solve_document
+        doc = {"nodes": {"x": {"guess": 1, "scale": "linear", "measured": [3.0, 1e-6]},
+                         "y": {"guess": 1, "expected": 9.0, "tolerance": 1e-6}},
+               "relations": [{"name": "square", "type": "fn", "expr": "y - x**2", "sigma": 1e-9}]}
+        assert solve_document(doc)["valid"] is True
+        doc["nodes"]["y"]["expected"] = 10.0
+        report = solve_document(doc)
+        assert report["valid"] is False and not report["checks"][0]["ok"]
+        with pytest.raises(ValueError):
+            solve_document({"nodes": {"x": {"guess": 1}}, "relations": [{"name": "r", "terms": {"z": 1}}]})

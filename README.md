@@ -9,7 +9,8 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
-| `test_grm.py` | A hardcore test battery: 89 tests, plus a validation protocol for full models |
+| `grm_explorer.py` | The explorer: write a network with forms or JSON, solve it, see at once if it is valid; presets of known and open problems (`grm_presets.py`) |
+| `test_grm.py` | A hardcore test battery: 93 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
@@ -37,6 +38,7 @@ Every sound below was rendered by `grm_guitar.py`, from the GRM networks only (n
 | [folk_loop_pick.wav](docs/audio/folk_loop_pick.wav) | C – Am – Em – G, folk strumming pattern played three times by the player network (no two strokes alike), with the fingers lifting, landing and rubbing between chords |
 | [folk_loop_no_finger_noise.wav](docs/audio/folk_loop_no_finger_noise.wav) | the same loop without finger noise, to compare |
 | [travis_fingers.wav](docs/audio/travis_fingers.wav) | C – Am, Travis picking (alternating bass) with the fingers |
+| [bach_prelude_two_grm_guitars.wav](docs/audio/bach_prelude_two_grm_guitars.wav) | Bach, Prelude of the Cello Suite No. 1 (BWV 1007), two GRM guitars in a church: Bach's line note for note on the left, the harmony of each bar on the right (bass and chord, strums, palm-muted eighths, wide strums). `python demos/bach_two_guitars.py` |
 | [palm_muted_rock.wav](docs/audio/palm_muted_rock.wav) | a power-chord riff at 120 BPM, muted by the palm network (skin on the strings near the bridge) |
 
 ---
@@ -106,6 +108,35 @@ out = net.solve(measured_dict={"m": 2.0, "H0": (70.0, 0.01)})   # value, or (val
 
 ---
 
+## The explorer (`grm_explorer.py`)
+
+```bash
+python grm_explorer.py
+```
+
+Write a network with the forms or as JSON: both stay in sync, edit either side. Solve with F5, or let it solve
+live while typing.
+- **Validity at a glance**: give any node an *expected* value (and, optionally, a relative tolerance). After the
+  solve each check turns green or red, and the banner says VALID or NOT VALID. Without a tolerance, a check passes
+  within 3 sigma of the solved uncertainty.
+- **Consistency**: chi2 per degree of freedom (a TENSION banner when the data and the relations disagree beyond
+  chance), the pull of every relation and measurement, the nodes the network does not determine, and *Leave one
+  out* (each measurement predicted from all the others).
+- **Relations**: `log` (products and powers), `sum` (with powers) and `fn`, an expression of the nodes that must be
+  zero, e.g. `x - 5 * (1 - exp(-x))`. Expressions only allow numbers, node names, arithmetic and math functions.
+- **Presets** (`grm_presets.py`):
+  - *Known answers*: Rydberg constant, Bohr radius, mass of the Sun from the Earth's orbit, speed of sound, solar
+    luminosity, g from a pendulum, Pythagoras (sum relation), Wien's constant (fn relation).
+  - *Open problems*, labelled as such: the Hubble tension, the neutron lifetime puzzle, Koide's relation. Each comes
+    as the data alone (the network measures the tension: about 5 sigma for H0, 4.5 sigma for the neutron), and some
+    with the node of a hypothesis proposed in the literature (a smaller sound horizon, a neutron decay without a
+    proton, Koide's Q = 2/3 predicting the tau mass). **These presets do not solve the problems**: they show how
+    large a hypothesis would have to be for the data to agree, not whether it is true.
+
+Files: Open / Save JSON. The logic (`normalize`, `build_network`, `solve_document`) works without a display.
+
+---
+
 ## The tests (`test_grm.py`)
 
 ```bash
@@ -125,7 +156,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 89 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 93 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
