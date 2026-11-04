@@ -9,7 +9,7 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
-| `test_grm.py` | A hardcore test battery: 64 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 76 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
@@ -122,7 +122,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 64 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 76 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
@@ -179,22 +179,27 @@ The network finds what the arm actually does, a compromise between each intent a
 about 9 ms of timing spread (musicians: 10 to 20 ms), louder first beats, strums of 40 to 60 ms, a hand that
 wanders along the strings. No two strokes are the same, and no two passes of a loop either.
 
-**Palm**: the side of the hand meets the strings near the bridge
+**Palm**: the edge of the hand lies on a strip of the strings near the bridge
 ```
-skin damping      r = R_skin * N                         pressure of the hand
-loss scale        s0 = r / (mu * L_eff)
-position          q = x / L_eff                          x: distance from the bridge
-mode n            sigma_n = s0 * sin^2(n pi q)           added decay rate
+skin damping      r = R_skin * N                           pressure of the hand
+contact width     w = w0 * (N / N0)^(1/3)                  Hertz contact: soft bodies pressed together
+per metre         r' = r / w
+inside the strip  kappa^2 = (mu w^2 - i w r') / T          complex wavenumber
+mode n            y(fret) = 0 for a wave leaving the saddle (transfer matrices: free part, strip, free part)
+                  -> one GRM network per mode: unknowns F_n and S_n (frequency, decay rate)
 ```
-The fundamental survives a little, the highs die within milliseconds, a light string is muted more than a heavy
-one: the muted sound comes out of the contact, not out of a filter. A mode damped faster than it vibrates
-(sigma > w) no longer rings at all: it creeps back to rest (overdamped), so the muted highs leave no crackle.
-Where the palm rests and how hard it presses change from stroke to stroke (player network), harder on the accents.
-The flesh also has a mass and a spring, and each mode feels them where it moves (its share sin^2(n pi q) under
-the palm): the spring raises it, the mass lowers it, `w_n'^2 = (w_n^2 m_n + k_h s_n) / (m_n + m_h s_n)`. The note keeps
-its pitch, the high modes are detuned and damped faster than they vibrate. While the palm rests, it mutes every
-string under it, including what the fingers do between chords and the strings that answer in sympathy. Its pressure
-is a slider ("Palm pressure"); the more it presses, the more flesh rests on the strings.
+The palm is not a small perturbation: its resistance is larger than the string's own impedance `Z_s = sqrt(T mu)`
+(0.7 kg/s for the low E, 0.17 for the high E). So each mode is solved exactly, followed from the free string while
+the skin's resistance grows. What comes out, with no rule written for it: the long waves are partly reflected by the
+strip (the string is cut a little shorter, the note goes a few cents sharp, and loses a share of its energy at each
+round trip), the short waves enter the strip and die inside it, a light string is cut harder than a heavy one, and
+moving the hand away from the bridge mutes more than pressing harder. That last point is what Ottaviani et al.
+measured on players ("Towards a dynamic model of the palm mute guitar technique", ICMC-SMC 2014: "the distance of
+the hand from the bridge is more important than the applied force"). The same paper found that the pressure drops
+while the pick goes through the strings and comes back after: a struck note starts under half the palm's damping and
+reaches it in 30 ms. Where the palm rests and how hard it presses change from stroke to stroke (player network).
+While the palm rests, it mutes every string under it, including what the fingers do between chords and the strings
+that answer in sympathy. Two sliders: "Palm pressure" and "Palm from bridge (mm)".
 
 **Body and bridge**: the air in the box meets the wooden top, the top meets the strings
 ```
@@ -263,7 +268,12 @@ body. The onset is the release itself, shaped only by the release time of the at
 
 ### Playing
 - play, strum down or up, arpeggio, palm mute, pick or fingers, steel stiffness, human feel, sympathetic strings;
-- a slow-motion view of the six strings (×100), with fingers on the frets and sliding between chords, and an oscilloscope;
+- every setting, the room and the sequencer in one window, without tabs. **A setting moved while the guitar plays is
+  heard at once**: the same playing (same player, same randomness) is rendered again in the background and takes
+  the place of the sound at the same moment, with a 40 ms crossfade (a change of room or listener only recomputes
+  the room). The notes are computed side by side on every core;
+- a slow-motion view of the six strings (×100), with fingers on the frets and sliding between chords: **click a
+  string to hear it alone**; a small oscilloscope below it;
 - **sequencer**: 16 eighth-note steps, tempo, loop (two passes that differ). Each step holds a chord, notes written
   `string:fret` (e.g. `6:3 1:3`) or a rest, and a gesture: ↓ strum down, ↑ strum up, x palm-muted strum, · let ring.
   **Arpeggio mode** offers up and down, Travis (alternating bass), bass + chord, ballad and pinch patterns;
@@ -274,8 +284,9 @@ Body dimensions and wood values are typical figures, not measurements of a given
 - share of the steel core in wound strings: 45 %, adjustable with a slider; metal fill of the winding: 80 %;
 - skin-on-steel friction: 0.3; soft edge of the finger pad: 1 mm; share of the longitudinal force reaching the top: 0.3;
 - pick plastic: 2.5 GPa, with a 5 mm wide, 4 mm free tip; fingertip pulp: about 2 N per mm;
-- palm: 15 mm from the bridge (± 3 mm from stroke to stroke), 1 N per string (± 0.12 dex), skin damping 3 N s/m
-  per newton (no measured value was found), 3 g of flesh per string, flesh spring as the fingertip;
+- palm: 30 mm from the saddle (± 3 mm from stroke to stroke), 1 N per string (± 0.12 dex), 25 mm of skin on the
+  strings, resistance 1 N s/m per newton (no measured value was found; a fingertip behaves as a damper above about
+  150 Hz, Wiertlewski and Hayward 2012), half the damping released during the stroke, back in 30 ms;
 - fret wire crown 2 mm, knock of 0.3 of the finger's pressing force;
 - string height: 0.5 mm at the nut, 2.2 mm at the 12th fret; finger lift 3 ms, landing 1 ms;
 - top: half of its mass moves in its first modes; its braces make it 4 times stiffer than bare spruce, seen from the bridge; rosewood bridge of 32 cm3, of which the saddle carries 20 % (set by ear);

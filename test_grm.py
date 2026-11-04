@@ -359,21 +359,29 @@ class TestGuitar:
 
     def test_palm_damps_highs_first_and_light_strings_most(self):
         g = import_guitar()
-        palm = g.palm_network(*self.LOW_E, 0)["values"]
-        rates = g.palm_sigma(range(10), palm)
-        assert all(b > a for a, b in zip(rates[:5], rates[1:6]))       # the first partials die faster and faster
-        s0_hi = g.palm_network(*self.HIGH_E, 0)["values"]["s0"]
-        assert s0_hi > 10 * palm["s0"]                                   # mu 16 times smaller
+        palm = g.palm_network(*self.LOW_E, 0, T=73.0)["values"]
+        rates = g.palm_sigma(range(6), palm)
+        assert all(b > a for a, b in zip(rates[:4], rates[1:5]))       # the first partials die faster and faster
+        high = g.palm_network(*self.HIGH_E, 0, T=72.0)["values"]
+        assert high["sigma"][0] > 3 * palm["sigma"][0]                  # a light string is cut harder
 
-    def test_palm_detunes_the_high_modes_not_the_note(self):
-        import numpy as np
+    def test_palm_position_matters_more_than_pressure(self):
+        # Ottaviani et al. (ICMC-SMC 2014): the distance of the hand from the bridge matters more than its force
         g = import_guitar()
-        palm = g.palm_network(*self.LOW_E, 0)["values"]
-        f = g.partial_frequencies(82.4, 0.0, 20)
-        shifted = g.palm_frequencies(f, palm)
-        change = np.abs(shifted / f - 1)
-        assert change[0] < 0.01                                          # the note keeps its pitch
-        assert change[15] > 10 * change[0]                               # the high modes feel the flesh
+        base = g.palm_network(*self.LOW_E, 0, 0.02, 1.0, 73.0)["values"]["sigma"][0]
+        moved = g.palm_network(*self.LOW_E, 0, 0.03, 1.0, 73.0)["values"]["sigma"][0]       # +50 % distance
+        pressed = g.palm_network(*self.LOW_E, 0, 0.02, 1.5, 73.0)["values"]["sigma"][0]     # +50 % force
+        assert moved > pressed > base
+
+    def test_palm_modes_are_exact_roots(self):
+        g = import_guitar()
+        v = g.palm_network(*self.LOW_E, 0, T=73.0)["values"]
+        for n in (1, 3, 5, 12):
+            w = 2 * math.pi * v["ratio"][n - 1] * n * v["f1"] + 1j * v["sigma"][n - 1]
+            y = g._palm_shape(w, v["c"], v["mu"], v["T"], v["x"], v["w"], v["Leff"], v["rp"])
+            assert abs(y) < 1e-5
+        free = g.partial_frequencies(v["f1"], 0.0, 4)
+        assert abs(g.palm_frequencies(free, v)[0] / free[0] - 1) < 0.01     # the note keeps its pitch
 
     def test_longitudinal_mode_matches_the_measured_one(self):
         # Pakarinen et al. 2007 report the first longitudinal mode of an open 6th string near 1400 Hz;

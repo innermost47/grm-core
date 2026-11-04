@@ -23,9 +23,13 @@ the same network gives the tension. The partials follow the stiff-string law
 f_n = n * f1 * sqrt(1 + B * n^2).
 """
 import math
+import os
+import queue
+import threading
 import time
 import tkinter as tk
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from tkinter import filedialog, messagebox, ttk
 
 import numpy as np
@@ -183,59 +187,143 @@ def pluck_amplitudes(count, pluck):
 
 
 # ============================================================
-# GRM NETWORK OF THE PALM: the side of the hand meets the strings near the bridge
+# GRM NETWORK OF THE PALM: the side of the hand lies on the strings near the bridge
 # ============================================================
-# The skin is a damper of strength r pressed at a distance x from the bridge. A mode n of the string
-# (modal mass mu L_eff / 2) loses energy there in proportion to its own amplitude at x:
-#   skin damping     r = R_SKIN * N                         (the harder the hand presses, the more it damps)
-#   loss scale       s0 = r / (mu * L_eff)
+# The skin does not touch the string at one point: the edge of the hand covers a strip of width w that
+# starts a distance x from the saddle. Inside the strip the flesh resists the motion of the string
+# (r' newton-seconds per metre of string, r = r' w in total), so the wave equation there is
+#   mu y_tt + r' y_t = T y_xx      ->   kappa^2 = (mu w^2 - i w r') / T        (complex wavenumber)
+# while outside it is the free string, k = w / c. The modes of the whole string (saddle - free part -
+# strip - free part - fret) are the complex frequencies where a wave leaving the saddle comes back to
+# zero at the fret: transfer matrices of the three parts, y(L) = 0. Each mode is a GRM network of two
+# unknowns, its frequency F and its decay rate S, followed from the free string while the pressure grows.
+# What this gives, without any rule for it: a strip much stiffer than the string (r >> Z_s = sqrt(T mu))
+# reflects the long waves - the string is cut a little shorter and its low modes lose a share of their
+# energy at each round trip - while waves short enough to enter the strip die inside it. The further the
+# strip from the saddle, the more the low modes move under it: the position matters more than the
+# pressure (Ottaviani et al., "Towards a dynamic model of the palm mute guitar technique", ICMC-SMC 2014,
+# found the same on real players; moving the hand towards the neck mutes harder).
+#   skin damping     r = R_SKIN * N                         (the harder the hand presses, the more it resists)
+#   contact width    w = PALM_WIDTH * (N / PALM_FORCE)^(1/3)  (Hertz: soft bodies pressed together, a ~ F^(1/3))
+#   per metre        r' = r / w
 #   position         q = x / L_eff
-#   added decay rate of mode n:  sigma_n = s0 * sin^2(n pi q)
-# Near the bridge, sin(n pi q) is small for the low modes and grows with n: the fundamental survives a
-# little, the highs die within milliseconds, and a light string is muted more than a heavy one.
-# The flesh is not only a damper: it has a mass and a spring, and each mode feels them where it moves:
-#   mode n, modal mass m_n = mu L_eff / 2, share s_n = sin^2(n pi q) of its motion under the palm
-#   decay      sigma_n = r s_n / (2 m_n)                                        (the damper)
-#   frequency  w_n'^2 = (w_n^2 m_n + k_h s_n) / (m_n + m_h s_n)               (the spring and the mass)
-# The higher a mode, the more it moves under the palm: the high modes are slowed, detuned, and damped faster
-# than they vibrate (overdamped): they never ring. The low modes, whose motion near the bridge is tiny, keep
-# their pitch: the chug keeps its note.
-PALM_X = 0.015        # m, edge of the hand from the bridge (hypothesis)
+# The hand pivots on the pick stroke: the pressure drops while the pick goes through the string and
+# comes back just after (same paper: three phases, pressure released at each attack). A struck note
+# therefore starts under PALM_DROP of the palm's damping and reaches it in PALM_RECOVER seconds.
+PALM_X = 0.03         # m, edge of the hand from the saddle (hypothesis)
+PALM_WIDTH = 0.025    # m, width of skin lying on the strings (hypothesis)
 PALM_FORCE = 1.0      # N, pressure of the hand on one string (hypothesis)
-R_SKIN = 3.0          # N s/m per N of pressure, damping of the skin (hypothesis: no measured value found)
-PALM_MASS = 0.003     # kg of flesh moving with one string (hypothesis)
+R_SKIN = 1.0          # N s/m per N of pressure, resistance of the skin strip (hypothesis: no measured value found;
+                      # a fingertip is a damper above ~150 Hz, Wiertlewski & Hayward, Rev. Sci. Instrum. 2012)
+PALM_DROP = 0.5       # share of the palm's damping released while the pick goes through (hypothesis)
+PALM_RECOVER = 0.03   # s, time for the pressure to come back after the stroke (hypothesis)
+PALM_F_MAX = 2000.0   # Hz, modes solved one by one; above, they die like the last one solved
 
 
-def palm_network(mu, L, fret, x_hand=PALM_X, force=PALM_FORCE):
+def _palm_shape(w, c, mu, T, x, width, length, rp):
+    """y at the fret of a wave leaving the saddle with slope 1 (complex angular frequency w)."""
+    k = w / c
+    kappa = np.sqrt((mu * w * w - 1j * w * rp) / T)
+    y, dy = 0.0, 1.0
+    with np.errstate(all="ignore"):
+        for kk, ll in ((k, x), (kappa, width), (k, length - x - width)):
+            cs, sn = np.cos(kk * ll), np.sin(kk * ll)
+            y, dy = y * cs + dy * sn / kk, -y * kk * sn + dy * cs
+    if not np.isfinite(y):
+        return complex(1e6, 1e6)          # far outside: the descent steps back
+    return y * k
+
+
+def palm_mode(c, mu, T, x, width, length, rp, f_guess, s_guess):
+    """GRM network of one mode under the palm: unknowns F (Hz) and S (1/s), relation y(fret) = 0."""
+    def value(v):
+        return complex(_palm_shape(2 * math.pi * v["F"] + 1j * v["S"], c, mu, T, x, width, length, rp))
+    nodes = {"F": {"guess": f_guess}, "S": {"guess": max(s_guess, 1e-3)}}
+    rels = [{"name": "real part", "type": "fn", "nodes": ["F", "S"], "f": lambda v: value(v).real, "sigma": 1e-7},
+            {"name": "imaginary part", "type": "fn", "nodes": ["F", "S"], "f": lambda v: value(v).imag, "sigma": 1e-7}]
+    out = GlobalRelationalNetwork(nodes, rels).solve(max_iterations=25, compute_uncertainty=False)
+    return out["values"]["F"], out["values"]["S"], out["cost"]
+
+
+def palm_network(mu, L, fret, x_hand=PALM_X, force=PALM_FORCE, T=73.0, steps=4, start=None):
+    """start: the values of a palm network of the same string and fret (another pressure or position):
+    each mode then starts from where it was there, instead of from the free string."""
     nodes = {n: {"guess": g} for n, g in {
-        "mu": 1e-3, "L": 0.65, "Leff": 0.6, "x": 0.015, "N": 1.0, "r": 3.0, "s0": 100.0, "q": 0.02,
-        "mh": 0.003, "kh": 2000.0}.items()}
+        "mu": 1e-3, "L": 0.65, "Leff": 0.6, "x": 0.02, "N": 1.0, "r": 3.0, "w": 0.025, "rp": 100.0,
+        "q": 0.03, "T": 70.0, "c": 100.0, "Zs": 0.5}.items()}
     rel = [
         {"name": "fret", "terms": {"Leff": 1, "L": -1}, "rhs": -fret * math.log10(2) / 12, "sigma": 1e-9},
         {"name": "skin damping", "terms": {"r": 1, "N": -1}, "rhs": math.log10(R_SKIN), "sigma": 1e-9},
-        {"name": "loss scale", "terms": {"s0": 1, "r": -1, "mu": 1, "Leff": 1}, "rhs": 0.0, "sigma": 1e-9},
+        {"name": "contact width", "terms": {"w": 1, "N": -1 / 3}, "rhs": math.log10(PALM_WIDTH / PALM_FORCE ** (1 / 3)),
+         "sigma": 0.02},
+        {"name": "per metre", "terms": {"rp": 1, "r": -1, "w": 1}, "rhs": 0.0, "sigma": 1e-9},
         {"name": "position", "terms": {"q": 1, "x": -1, "Leff": 1}, "rhs": 0.0, "sigma": 1e-9},
+        {"name": "wave speed", "terms": {"c": 2, "T": -1, "mu": 1}, "rhs": 0.0, "sigma": 1e-9},
+        {"name": "impedance", "terms": {"Zs": 2, "T": -1, "mu": -1}, "rhs": 0.0, "sigma": 1e-9},
     ]
-    # the harder the palm presses, the more flesh rests on the string: its mass grows with the pressure
-    measured = {"mu": (mu, 0.004), "L": (L, 3e-4), "x": (x_hand, 0.05), "N": (force, 0.05),
-                "mh": (PALM_MASS * force / PALM_FORCE, 0.1), "kh": (K_FLESH, 0.1)}     # the flesh: same pulp as a fingertip
-    return GlobalRelationalNetwork(nodes, rel).solve(measured_dict=measured)
+    measured = {"mu": (mu, 0.004), "L": (L, 3e-4), "x": (x_hand, 0.05), "N": (force, 0.05), "T": (T, 0.003)}
+    out = GlobalRelationalNetwork(nodes, rel).solve(measured_dict=measured)
+    v = out["values"]
+    f1 = v["c"] / (2 * v["Leff"])
+    args = (v["c"], v["mu"], v["T"], v["x"], v["w"], v["Leff"])
+
+    def follow(n, stages):
+        """mode n followed from the free string while the skin's resistance grows (None if it is lost)"""
+        F, S = n * f1, 0.0
+        for s in np.linspace(0.0, 1.0, stages + 1)[1:]:
+            try:
+                F2, S2, cost = palm_mode(*args, v["rp"] * s, F, S)
+            except (ValueError, ArithmeticError, OverflowError):
+                return None
+            if cost > 1e-6 or abs(F2 - F) > 0.3 * f1 or S2 < 0:      # jumped to another mode
+                return None
+            F, S = F2, S2
+        return F, S
+
+    ratio, sigma = [], []
+    for n in range(1, int(min(80, PALM_F_MAX / f1)) + 1):
+        found = None
+        if start is not None and n <= len(start["ratio"]):
+            g = (start["ratio"][n - 1] * n * f1, start["sigma"][n - 1])
+            try:
+                F2, S2, cost = palm_mode(*args, v["rp"], *g)
+                if cost <= 1e-6 and abs(F2 - g[0]) < 0.3 * f1 and S2 >= 0:
+                    found = F2, S2
+            except (ValueError, ArithmeticError, OverflowError):
+                pass
+        for stages in (steps, 2 * steps):
+            if found is None:
+                found = follow(n, stages)
+        ratio.append(np.nan if found is None else found[0] / (n * f1))
+        sigma.append(np.nan if found is None else found[1])
+    ratio, sigma = np.array(ratio), np.array(sigma)
+    lost = np.isnan(sigma)
+    if lost.all():
+        ratio[:], sigma[:] = 1.0, 0.0
+    elif lost.any():                     # a mode lost at a crossing: it behaves like its neighbours
+        idx = np.arange(len(sigma))
+        ratio[lost] = np.interp(idx[lost], idx[~lost], ratio[~lost])
+        sigma[lost] = np.interp(idx[lost], idx[~lost], sigma[~lost])
+    out["values"].update({"ratio": ratio, "sigma": sigma, "f1": f1})
+    return out
+
+
+def _palm_extend(arr, count, tail):
+    arr = np.asarray(arr, dtype=float)
+    if len(arr) >= count:
+        return arr[:count]
+    return np.concatenate([arr, np.full(count - len(arr), tail if tail is not None else arr[-1])])
 
 
 def palm_sigma(freqs_n, palm):
-    """Added decay rate (1/s) of modes n = 1, 2, ... under the palm."""
-    n = np.arange(1, len(freqs_n) + 1, dtype=float)
-    return palm["s0"] * np.sin(n * math.pi * palm["q"]) ** 2
+    """Added decay rate (1/s) of modes n = 1, 2, ... under the palm (from the mode networks)."""
+    return _palm_extend(palm["sigma"], len(freqs_n), None)
 
 
 def palm_frequencies(freqs_n, palm):
-    """Mode frequencies under the palm: raised by the flesh's spring, lowered by its mass, where each mode moves."""
+    """Mode frequencies under the palm: each one moved as its network found (the string is cut a little shorter)."""
     f = np.asarray(freqs_n, dtype=float)
-    n = np.arange(1, len(f) + 1, dtype=float)
-    share = np.sin(n * math.pi * palm["q"]) ** 2
-    m_n = palm["mu"] * palm["Leff"] / 2
-    w = 2 * math.pi * f
-    return np.sqrt((w * w * m_n + palm["kh"] * share) / (m_n + palm["mh"] * share)) / (2 * math.pi)
+    return f * _palm_extend(palm["ratio"], len(f), 1.0)
 
 
 # ============================================================
@@ -243,10 +331,11 @@ def palm_frequencies(freqs_n, palm):
 # ============================================================
 
 def synthesize_string(f1, B, duration, pluck, damping, brightness, sample_rate=SAMPLE_RATE,
-                      release_tau=0.0, seed=0, extra_sigma=None, palm=None, Zs=None):
+                      release_tau=0.0, seed=0, extra_sigma=None, palm=None, Zs=None, palm_attack=False):
     """Modal synthesis of the force of one plucked stiff string on the bridge.
     extra_sigma(freqs) -> added decay rates (energy given to the bridge, from the bridge network);
-    palm: values of the palm network, or None (Zs: string impedance, for the palm transmission).
+    palm: values of the palm network, or None; palm_attack: the note was struck under the palm, whose
+    pressure drops while the pick goes through and comes back in PALM_RECOVER (Zs: string impedance).
     The snap of the pick is not a force on the bridge: it is the pick's own vibration, and the energy it
     gives the string is already the pluck itself."""
     count_max = 80
@@ -264,14 +353,20 @@ def synthesize_string(f1, B, duration, pluck, damping, brightness, sample_rate=S
     sigma = (1.0 + (freqs / 1800.0) ** 2) / damping
     if extra_sigma is not None:
         sigma = sigma + extra_sigma(freqs)
+    sigma_palm = np.zeros(len(freqs))
     if palm is not None:
-        sigma = sigma + palm_sigma(freqs, palm)
+        sigma_palm = palm_sigma(freqs, palm)
+        sigma = sigma + sigma_palm
         freqs = palm_frequencies(freqs, palm)
     count = int(duration * sample_rate)
     t = np.arange(count) / sample_rate
     signal = np.zeros(count)
     peak = np.max(np.abs(amps)) if len(amps) else 1.0
-    for f, a, sg in zip(freqs, amps, sigma):  # partial by partial keeps memory low
+    # the palm's pressure released at the stroke: during the first moments the mode loses only part of what
+    # the palm takes, exp(-int sigma dt) with sigma(t) = sigma - PALM_DROP sigma_palm exp(-t / PALM_RECOVER)
+    regain = True if palm_attack and palm is not None else None
+    ringing = []                             # (complex amplitude, complex rate, decay) of the modes that ring
+    for f, a, sg, sp in zip(freqs, amps, sigma, sigma_palm):
         if abs(a) < 1e-4 * peak:
             continue                         # inaudible partial (e.g. a node at the pluck point)
         w = 2.0 * math.pi * f
@@ -279,15 +374,43 @@ def synthesize_string(f1, B, duration, pluck, damping, brightness, sample_rate=S
         # harder than that, it no longer rings at all and only creeps back to rest (overdamped)
         if sg < w:
             wd = math.sqrt(w * w - sg * sg)
-            m = min(count, int(9.2 / sg * sample_rate) + 1)   # stop once it has decayed by 80 dB
-            tt = t[:m]
-            signal[:m] += a * np.exp(-sg * tt) * (np.cos(wd * tt) + (sg / wd) * np.sin(wd * tt))
+            # cos(wd t) + (sg / wd) sin(wd t) = Re[(1 - i sg / wd) e^(i wd t)]
+            ringing.append((a * complex(1.0, -sg / wd), complex(-sg, wd), sg, sp))
         else:
             r = math.sqrt(sg * sg - w * w)
             l1, l2 = -sg + r, -sg - r                          # slow and fast return
             m = min(count, int(9.2 / max(-l1, 1e-6) * sample_rate) + 1)
             tt = t[:m]
             signal[:m] += a * (l2 * np.exp(l1 * tt) - l1 * np.exp(l2 * tt)) / (l2 - l1)
+    if ringing and count:
+        amp = np.array([r_[0] for r_ in ringing])
+        rate = np.array([r_[1] for r_ in ringing]) / sample_rate
+        sg_ = np.array([r_[2] for r_ in ringing])
+        sp_ = np.array([r_[3] for r_ in ringing])
+        m = min(count, int(9.2 / sg_.min() * sample_rate) + 1)    # until the slowest has lost 80 dB
+        if regain is not None:
+            # once the palm is back, every mode keeps what it did not lose during the stroke
+            amp = amp * np.exp(sp_ * PALM_DROP * PALM_RECOVER)
+        # all the modes at once, block by block: a block of powers z^j, then each block starts where the
+        # last one ended (z^block)
+        block = 2048
+        powers = np.exp(np.outer(rate, np.arange(block)))
+        step_ = np.exp(rate * block)
+        state = amp.astype(complex)
+        # during the stroke the palm presses less: exact envelope exp(-sg t + sp regain(t)) instead of the
+        # constant above, i.e. a factor exp(-sp PALM_DROP PALM_RECOVER e^(-t / PALM_RECOVER)) that fades to 1
+        e = min(m, int(5 * PALM_RECOVER * sample_rate)) if regain is not None else 0
+        for b0 in range(0, m, block):
+            n_ = min(block, m - b0)
+            if b0 < e:
+                seg = state[:, None] * powers[:, :n_]
+                k_ = min(n_, e - b0)
+                fade_ = np.exp(-t[b0:b0 + k_] / PALM_RECOVER)
+                seg[:, :k_] *= np.exp(np.outer(-sp_ * PALM_DROP * PALM_RECOVER, fade_))
+                signal[b0:b0 + n_] += seg.real.sum(axis=0)
+            else:
+                signal[b0:b0 + n_] += (state @ powers[:, :n_]).real
+            state = state * step_
     # the onset is the release itself: its sharpness comes only from release_tau (pick or finger)
     if count:
         signal -= signal[0] * np.exp(-np.arange(count) / max(release_tau * sample_rate, 1.0))
@@ -692,11 +815,21 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
     count = int(total * SAMPLE_RATE) + 1
     per_string = np.zeros((6, count))
     release = int(0.015 * SAMPLE_RATE)
+    losses = {}                                # one bridge network per string length, shared by its notes
     for nt in notes:
-        loss = bridge_loss(modes, bv, nt["c"], nt["Leff"], nt["Zs"])
-        s = synthesize_string(nt["f1"], nt["B"], nt["length"], nt["pluck"], damping, brightness,
-                              release_tau=nt.get("tau", 0.0), seed=int(nt["start"] * 1000) % 997,
-                              extra_sigma=loss, palm=nt.get("palm"), Zs=nt["Zs"])
+        key = (nt["c"], nt["Leff"], nt["Zs"])
+        if key not in losses:
+            losses[key] = bridge_loss(modes, bv, *key)
+
+    def one(nt):
+        return synthesize_string(nt["f1"], nt["B"], nt["length"], nt["pluck"], damping, brightness,
+                                 release_tau=nt.get("tau", 0.0), seed=int(nt["start"] * 1000) % 997,
+                                 extra_sigma=losses[(nt["c"], nt["Leff"], nt["Zs"])], palm=nt.get("palm"),
+                                 Zs=nt["Zs"], palm_attack=nt.get("kind", "strike") == "strike")
+    # the notes are independent: computed side by side on every core (numpy lets the threads run together)
+    with ThreadPoolExecutor(max_workers=max(1, os.cpu_count() or 1)) as pool:
+        sounds = list(pool.map(one, notes))
+    for nt, s in zip(notes, sounds):
         k = min(release, len(s))
         s[len(s) - k:] *= np.linspace(1.0, 0.0, k)
         start = int(nt["start"] * SAMPLE_RATE)
@@ -724,6 +857,7 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
         specs = np.fft.rfft(per_string, nfft, axis=1)
         total_spec = specs.sum(axis=0)
         fade = int(0.005 * SAMPLE_RATE)
+        jobs = []
         for i in range(6):
             # when string i is free to answer: before its first note and after each lift or landing,
             # until its next stroke (open strings nobody plays are free all along)
@@ -749,32 +883,38 @@ def render_guitar(notes, total, damping, brightness, modes, bv, squeaks=(), body
                     pieces.append((u, w_, nt, nt.get("palm") or under))
             states = {}
             for a_, b_, nt, palm in pieces:
-                key = (round(nt["f1"], 3), None if palm is None else round(palm["s0"], 1))
+                # palms that differ by less than ~25 % in what they take from the fundamental answer alike
+                key = (round(nt["f1"], 3), None if palm is None else round(math.log10(max(float(palm["sigma"][0]), 1e-3)) * 10))
                 states.setdefault(key, (nt, palm, []))[2].append((a_, b_))
-            if not states:
-                continue
-            drive = total_spec - specs[i]
-            for nt, palm, spans in states.values():
-                loss = bridge_loss(modes, bv, nt["c"], nt["Leff"], nt["Zs"])
+            if states:
+                jobs.extend((i, nt, palm, spans) for nt, palm, spans in states.values())
 
-                def sigma_fn(fn, loss=loss, palm=palm):
-                    sg = (1.0 + (fn / 1800.0) ** 2) / damping + loss(fn)
-                    return sg + (palm_sigma(fn, palm) if palm is not None else 0.0)
+        def answer(job):
+            """the response of string i, free (or under the palm) during its spans, to all the others"""
+            i, nt, palm, spans = job
+            loss = bridge_loss(modes, bv, nt["c"], nt["Leff"], nt["Zs"])
 
-                def coupling_fn(fn, nt=nt):
-                    return (nt["c"] / nt["Leff"]) * nt["Zs"] * np.abs(bridge_admittance(fn, modes, bv))
-                spec_i = sympathetic_response(drive, f_grid, Y, nt["f1"], nt["B"], nt["T"], nt["Leff"],
-                                              sigma_fn, coupling_fn)
-                resp = np.fft.irfft(spec_i, nfft)[:count]
-                mask = np.zeros(count)
-                for a_, b_ in spans:
-                    ia, ib = int(a_ * SAMPLE_RATE), min(int(b_ * SAMPLE_RATE), count)
-                    if ib > ia:
-                        mask[ia:ib] = 1.0
-                        k = min(fade, ib - ia)
-                        mask[ia:ia + k] *= np.linspace(0.0, 1.0, k)
-                        mask[ib - k:ib] *= np.linspace(1.0, 0.0, k)
-                mix += resp * mask
+            def sigma_fn(fn):
+                sg = (1.0 + (fn / 1800.0) ** 2) / damping + loss(fn)
+                return sg + (palm_sigma(fn, palm) if palm is not None else 0.0)
+
+            def coupling_fn(fn):
+                return (nt["c"] / nt["Leff"]) * nt["Zs"] * np.abs(bridge_admittance(fn, modes, bv))
+            spec_i = sympathetic_response(total_spec - specs[i], f_grid, Y, nt["f1"], nt["B"], nt["T"], nt["Leff"],
+                                          sigma_fn, coupling_fn)
+            resp = np.fft.irfft(spec_i, nfft)[:count]
+            mask = np.zeros(count)
+            for a_, b_ in spans:
+                ia, ib = int(a_ * SAMPLE_RATE), min(int(b_ * SAMPLE_RATE), count)
+                if ib > ia:
+                    mask[ia:ib] = 1.0
+                    k = min(fade, ib - ia)
+                    mask[ia:ia + k] *= np.linspace(0.0, 1.0, k)
+                    mask[ib - k:ib] *= np.linspace(1.0, 0.0, k)
+            return resp * mask
+        with ThreadPoolExecutor(max_workers=max(1, os.cpu_count() or 1)) as pool:
+            for part in pool.map(answer, jobs):
+                mix += part
     out = apply_body(mix, body_amount, modes, bv)
     peak = np.max(np.abs(out)) if len(out) else 0.0
     return (out / peak if peak > 0 else out).astype(np.float32)
@@ -909,6 +1049,108 @@ def write_wav(path, audio):
 
 
 # ============================================================
+# AUDIO ENGINE: one stream that never stops; a new sound replaces the old one where it is
+# ============================================================
+SWAP_FADE = 0.04     # s, crossfade when a sound is replaced while playing
+
+
+class AudioEngine:
+    """Plays a buffer once or in a loop through a single output stream. A new buffer can replace the one
+    playing at the same position, with a short crossfade: a parameter moved while the guitar plays is heard
+    at once, without a cut. Without a sound device the position follows the clock (animation only)."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.buf, self.pos, self.loop, self.playing = None, 0, False, False
+        self.old, self.old_pos, self.fade = None, 0, 0
+        self.gain = 1.0
+        self.stream = None
+        self.clock = None          # perf_counter() at position 0, when there is no device
+        if sd is not None:
+            try:
+                self.stream = sd.OutputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32",
+                                              callback=self._callback)
+                self.stream.start()
+            except Exception:
+                self.stream = None
+
+    @staticmethod
+    def _take(buf, pos, n, loop):
+        if buf is None or len(buf) == 0:
+            return np.zeros(n, dtype=np.float32), pos
+        if loop:
+            idx = (pos + np.arange(n)) % len(buf)
+            return buf[idx], int((pos + n) % len(buf))
+        chunk = np.zeros(n, dtype=np.float32)
+        part = buf[pos:pos + n]
+        chunk[:len(part)] = part
+        return chunk, pos + n
+
+    def _callback(self, outdata, frames, _time, _status):
+        with self.lock:
+            if not self.playing:
+                outdata[:, 0] = 0.0
+                return
+            out, self.pos = self._take(self.buf, self.pos, frames, self.loop)
+            if self.fade > 0 and self.old is not None:
+                old, self.old_pos = self._take(self.old, self.old_pos, frames, self.loop)
+                total = int(SWAP_FADE * SAMPLE_RATE)
+                w = np.clip((total - self.fade + np.arange(frames)) / total, 0.0, 1.0).astype(np.float32)
+                out = w * out + (1.0 - w) * old
+                self.fade = max(0, self.fade - frames)
+                if self.fade == 0:
+                    self.old = None
+            outdata[:, 0] = out * self.gain
+            if not self.loop and self.pos >= len(self.buf):
+                self.playing = False
+
+    def _position_samples(self):
+        if self.stream is not None:
+            return self.pos
+        if self.clock is None or self.buf is None:
+            return 0
+        pos = int((time.perf_counter() - self.clock) * SAMPLE_RATE)
+        if self.loop:
+            return pos % len(self.buf)
+        if pos >= len(self.buf):
+            self.playing = False
+        return pos
+
+    def play(self, buf, loop, keep_position=False):
+        with self.lock:
+            now = self._position_samples()
+            if keep_position and self.playing and self.buf is not None and len(buf):
+                self.old, self.old_pos = self.buf, now
+                self.fade = int(SWAP_FADE * SAMPLE_RATE)
+                pos = now % len(buf) if loop else min(now, len(buf))
+            else:
+                self.old, self.fade, pos = None, 0, 0
+            self.buf, self.loop, self.pos, self.playing = buf, loop, int(pos), True
+            self.clock = time.perf_counter() - pos / SAMPLE_RATE
+
+    def stop(self):
+        with self.lock:
+            self.playing, self.old, self.fade = False, None, 0
+
+    def position(self):
+        """Seconds into the buffer playing, or None when nothing plays."""
+        with self.lock:
+            if not self.playing or self.buf is None:
+                return None
+            pos = self._position_samples()
+            return pos / SAMPLE_RATE if self.playing else None
+
+    def close(self):
+        self.stop()
+        if self.stream is not None:
+            try:
+                self.stream.stop()
+                self.stream.close()
+            except Exception:
+                pass
+
+
+# ============================================================
 # INTERFACE
 # ============================================================
 
@@ -920,11 +1162,13 @@ STRING_COLORS = ["#d29922", "#d29922", "#d29922", "#c9d1d9", "#c9d1d9", "#c9d1d9
 
 
 class GRMGuitarApp:
+    _dry = None          # (what was rendered, the guitar alone before the room)
+
     def __init__(self, root):
         self.root = root
         self.root.title("GRM Guitar — six strings computed by the Global Relational Model")
-        self.root.geometry("1240x1060")
-        self.root.minsize(1060, 820)
+        self.root.geometry("1320x880")
+        self.root.minsize(1180, 760)
 
         self.models = [None] * 6
         self.entries, self.fret_vars = [], []
@@ -943,7 +1187,8 @@ class GRMGuitarApp:
         self.human = tk.BooleanVar(value=True)
         self.sympathy = tk.BooleanVar(value=True)
         self.body_amount = tk.DoubleVar(value=0.85)
-        self.palm_intensity = tk.DoubleVar(value=0.6)
+        self.palm_intensity = tk.DoubleVar(value=1.0)
+        self.palm_mm = tk.DoubleVar(value=PALM_X * 1000)
         self.room_on = tk.BooleanVar(value=True)
         self.room_size = tk.StringVar(value="Living room")
         self.room_material = tk.StringVar(value="Wood panels")
@@ -969,12 +1214,22 @@ class GRMGuitarApp:
         self._model_cache = {}
 
         self.audio = None
-        self.play_t0 = None
+        self.engine = AudioEngine()
         self.voices_shown = []      # notes of the last play (dicts from note())
         self.anim_job = None
+        self.seed = 0               # the player's randomness, kept when the sound is rendered again
+        self.frets_before = {}
+        self.replay = None          # how to rebuild what is playing (a function), for live changes
+        self.render_jobs = queue.Queue()
+        self.render_gen = 0
+        self.rendering = False
+        self.pending = False        # a change arrived while rendering: render once more after
+        self.live_job = None
+        self.hover_string = None
 
         self._build_ui()
         self.recalculate_all()
+        self._watch_parameters()
         self._animate()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -986,63 +1241,78 @@ class GRMGuitarApp:
         except tk.TclError:
             pass
 
-        header = ttk.Frame(self.root, padding=(12, 10, 12, 0))
+        header = ttk.Frame(self.root, padding=(12, 8, 12, 0))
         header.pack(fill="x")
-        ttk.Label(header, text="GRM GUITAR", font=("Segoe UI", 20, "bold")).pack(anchor="w")
-        ttk.Label(header, text="One object whose parts are all in relation: strings, frets, bridge, top, air, and the hands "
-                               "that play it. Every meeting of two parts is a network solved by the GRM core.",
-                  font=("Segoe UI", 9)).pack(anchor="w", pady=(2, 0))
+        ttk.Label(header, text="GRM GUITAR", font=("Segoe UI", 18, "bold")).pack(side="left")
+        ttk.Label(header, text="   One object whose parts are all in relation: strings, frets, bridge, top, air, room, and "
+                               "the hands that play it. Every meeting of two parts is a network solved by the GRM core.",
+                  font=("Segoe UI", 9)).pack(side="left", pady=(6, 0))
 
-        main = ttk.Frame(self.root, padding=10)
+        main = ttk.Frame(self.root, padding=(10, 6, 10, 6))
         main.pack(fill="both", expand=True)
 
-        # strings table
-        table = ttk.LabelFrame(main, text="Strings — inputs and network results", padding=8)
-        table.pack(fill="x")
+        # ---- top: the strings table, and beside it the strings themselves and the oscilloscope
+        top = ttk.Frame(main)
+        top.pack(fill="x")
+        table = ttk.LabelFrame(top, text="Strings — inputs and network results", padding=6)
+        table.pack(side="left", fill="y")
         heads = ["String", "Note", "Length L (m)", "Mass μ (kg/m)", "Tension T (N)", "Fret",
                  "GRM frequency", "Offset from the note", "", ""]
         for col, h in enumerate(heads):
-            ttk.Label(table, text=h, font=("Segoe UI", 9, "bold")).grid(row=0, column=col, padx=4, pady=4, sticky="w")
+            ttk.Label(table, text=h, font=("Segoe UI", 9, "bold")).grid(row=0, column=col, padx=3, pady=3, sticky="w")
         for i, spec in enumerate(STRINGS):
             r = i + 1
-            ttk.Label(table, text=f"{spec['number']} · {spec['name']}").grid(row=r, column=0, padx=4, sticky="w")
-            ttk.Label(table, text=spec["note"]).grid(row=r, column=1, padx=4)
+            ttk.Label(table, text=f"{spec['number']} · {spec['name']}").grid(row=r, column=0, padx=3, sticky="w")
+            ttk.Label(table, text=spec["note"]).grid(row=r, column=1, padx=3)
             vars_row = [tk.StringVar(value=str(spec["L"])), tk.StringVar(value=f"{spec['mu']:.10f}"),
                         tk.StringVar(value=f"{spec['T']:.2f}")]
             self.entries.append(vars_row)
-            for col, (var, width) in enumerate(zip(vars_row, [10, 14, 9]), start=2):
+            for col, (var, width) in enumerate(zip(vars_row, [7, 13, 7]), start=2):
                 e = ttk.Entry(table, textvariable=var, width=width)
-                e.grid(row=r, column=col, padx=4, pady=2)
-                e.bind("<Return>", lambda _e: self.recalculate_all())
+                e.grid(row=r, column=col, padx=3, pady=1)
+                e.bind("<Return>", lambda _e: (self.recalculate_all(), self.live_change()))
             fret = tk.IntVar(value=0)
             self.fret_vars.append(fret)
-            ttk.Spinbox(table, from_=0, to=19, textvariable=fret, width=4,
-                        command=self.recalculate_all).grid(row=r, column=5, padx=4)
-            fl = ttk.Label(table, text="—", width=18, font=("Segoe UI", 9, "bold"))
-            fl.grid(row=r, column=6, padx=4, sticky="w")
+            ttk.Spinbox(table, from_=0, to=19, textvariable=fret, width=3,
+                        command=self.recalculate_all).grid(row=r, column=5, padx=3)
+            fl = ttk.Label(table, text="—", width=16, font=("Segoe UI", 9, "bold"))
+            fl.grid(row=r, column=6, padx=3, sticky="w")
             self.freq_labels.append(fl)
-            cl = ttk.Label(table, text="—", width=18)
-            cl.grid(row=r, column=7, padx=4, sticky="w")
+            cl = ttk.Label(table, text="—", width=17)
+            cl.grid(row=r, column=7, padx=3, sticky="w")
             self.cents_labels.append(cl)
-            ttk.Button(table, text="Play", width=7, command=lambda k=i: self.play([k])).grid(row=r, column=8, padx=2)
-            ttk.Button(table, text="Tune", width=9, command=lambda k=i: self.tune([k])).grid(row=r, column=9, padx=2)
-
+            ttk.Button(table, text="Play", width=5, command=lambda k=i: self.play([k])).grid(row=r, column=8, padx=1)
+            ttk.Button(table, text="Tune", width=5, command=lambda k=i: self.tune([k])).grid(row=r, column=9, padx=1)
         bar = ttk.Frame(table)
-        bar.grid(row=7, column=0, columnspan=10, sticky="ew", pady=(8, 0))
+        bar.grid(row=7, column=0, columnspan=10, sticky="ew", pady=(6, 0))
         ttk.Button(bar, text="Recompute the six networks", command=self.recalculate_all).pack(side="left", padx=2)
         ttk.Button(bar, text="Tune the six strings", command=lambda: self.tune(range(6))).pack(side="left", padx=2)
         ttk.Label(bar, text="   Chord:").pack(side="left")
-        cb = ttk.Combobox(bar, textvariable=self.chord, values=list(CHORDS), state="readonly", width=10)
+        cb = ttk.Combobox(bar, textvariable=self.chord, values=list(CHORDS), state="readonly", width=9)
         cb.pack(side="left", padx=4)
         cb.bind("<<ComboboxSelected>>", lambda _e: self.apply_chord())
 
-        # controls
-        book = ttk.Notebook(main)
-        book.pack(fill="x", pady=8)
-        controls = ttk.Frame(book, padding=8)
-        book.add(controls, text="Playing and synthesis")
-        seq = ttk.Frame(book, padding=8)
-        book.add(seq, text="Sequencer")
+        visual = ttk.Frame(top)
+        visual.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        strings_box = ttk.LabelFrame(visual, text="The strings — click one to hear it (slowed ×100)", padding=4)
+        strings_box.pack(fill="both", expand=True)
+        self.neck = tk.Canvas(strings_box, bg=BG, height=150, highlightthickness=0, cursor="hand2")
+        self.neck.pack(fill="both", expand=True)
+        self.neck.bind("<Button-1>", self.click_string)
+        self.neck.bind("<Motion>", self.hover_neck)
+        self.neck.bind("<Leave>", lambda _e: setattr(self, "hover_string", None))
+        osc = ttk.LabelFrame(visual, text="Oscilloscope", padding=4)
+        osc.pack(fill="x", pady=(4, 0))
+        self.scope = tk.Canvas(osc, bg=BG, height=64, highlightthickness=0)
+        self.scope.pack(fill="x")
+
+        # ---- middle: playing, synthesis and sequencer side by side
+        middle = ttk.Frame(main)
+        middle.pack(fill="x", pady=(6, 0))
+        controls = ttk.LabelFrame(middle, text="Playing and synthesis — heard at once while it plays", padding=6)
+        controls.pack(side="left", fill="both", expand=True)
+        seq = ttk.LabelFrame(middle, text="Sequencer", padding=6)
+        seq.pack(side="left", fill="both", expand=True, padx=(8, 0))
         self._build_sequencer(seq)
         sliders = [
             ("Pluck point", self.pluck, 0.05, 0.5, 0.01),
@@ -1052,75 +1322,123 @@ class GRMGuitarApp:
             ("Volume", self.volume, 0.05, 1.0, 0.05),
             ("Wound core", self.core, 0.2, 1.0, 0.05),
             ("Arm swing (cm)", self.swing_cm, 4.0, 20.0, 0.5),
-            ("Body", self.body_amount, 0.0, 1.0, 0.05),
-            ("Body size", self.body_size, 0.7, 1.4, 0.05),
-            ("Palm pressure", self.palm_intensity, 0.1, 2.0, 0.05),
-            ("Listener (m)", self.room_distance, 0.3, 8.0, 0.1),
-            ("Top (mm)", self.top_mm, 2.0, 4.0, 0.1),
-            ("Air / top", self.coupling, 0.0, 0.8, 0.05),
-            ("Sliding finger (N)", self.finger_force, 0.1, 2.0, 0.05),
             ("Pluck force (N)", self.force, 0.3, 5.0, 0.1),
             ("Pick (mm)", self.pick_mm, 0.4, 1.5, 0.01),
+            ("Sliding finger (N)", self.finger_force, 0.1, 2.0, 0.05),
+            ("Palm pressure", self.palm_intensity, 0.1, 2.0, 0.05),
+            ("Palm from bridge (mm)", self.palm_mm, 5.0, 60.0, 1.0),
+            ("Body", self.body_amount, 0.0, 1.0, 0.05),
+            ("Body size", self.body_size, 0.7, 1.4, 0.05),
+            ("Top (mm)", self.top_mm, 2.0, 4.0, 0.1),
+            ("Air / top", self.coupling, 0.0, 0.8, 0.05),
+            ("Listener (m)", self.room_distance, 0.3, 8.0, 0.1),
         ]
-        row = ttk.Frame(controls)
-        row.pack(fill="x")
+        grid = ttk.Frame(controls)
+        grid.pack(fill="x")
+        per_row = 6
         for k, (label, var, lo, hi, res) in enumerate(sliders):
-            f = ttk.Frame(row)
-            f.grid(row=k // 7, column=k % 7, padx=4, sticky="ew")
-            row.columnconfigure(k % 7, weight=1)
-            ttk.Label(f, text=label).pack(anchor="w")
-            s = tk.Scale(f, variable=var, from_=lo, to=hi, resolution=res, orient="horizontal", length=120)
+            f = ttk.Frame(grid)
+            f.grid(row=k // per_row, column=k % per_row, padx=3, sticky="ew")
+            grid.columnconfigure(k % per_row, weight=1)
+            ttk.Label(f, text=label, font=("Segoe UI", 8)).pack(anchor="w")
+            s = tk.Scale(f, variable=var, from_=lo, to=hi, resolution=res, orient="horizontal", length=96,
+                         width=10, font=("Segoe UI", 7))
             s.pack(fill="x")
             if var is self.core:
                 s.configure(command=lambda _v: self.recalculate_all())
         actions = ttk.Frame(controls)
-        actions.pack(fill="x", pady=(8, 0))
-        ttk.Button(actions, text="▶ Play chord", command=lambda: self.play(self.chord_strings())).pack(side="left", padx=3)
+        actions.pack(fill="x", pady=(6, 0))
+        ttk.Button(actions, text="▶ Chord", command=lambda: self.play(self.chord_strings())).pack(side="left", padx=2)
         ttk.Button(actions, text="▼ Strum down",
-                   command=lambda: self.play(self.chord_strings(), strum=True)).pack(side="left", padx=3)
+                   command=lambda: self.play(self.chord_strings(), strum=True)).pack(side="left", padx=2)
         ttk.Button(actions, text="▲ Strum up",
-                   command=lambda: self.play(self.chord_strings(), strum=True, up=True)).pack(side="left", padx=3)
-        ttk.Button(actions, text="♫ Arpeggio", command=lambda: self.play(self.chord_strings(), arpeggio=True)).pack(side="left", padx=3)
-        ttk.Button(actions, text="■ Stop", command=self.stop).pack(side="left", padx=3)
-        ttk.Button(actions, text="Export the last sound (WAV)", command=self.export_wav).pack(side="left", padx=12)
+                   command=lambda: self.play(self.chord_strings(), strum=True, up=True)).pack(side="left", padx=2)
+        ttk.Button(actions, text="♫ Arpeggio",
+                   command=lambda: self.play(self.chord_strings(), arpeggio=True)).pack(side="left", padx=2)
+        ttk.Button(actions, text="■ Stop", command=self.stop).pack(side="left", padx=2)
+        ttk.Button(actions, text="Export WAV", command=self.export_wav).pack(side="left", padx=(10, 2))
         options = ttk.Frame(controls)
         options.pack(fill="x", pady=(6, 0))
-        ttk.Label(options, text="Attack:").pack(side="left", padx=(3, 4))
+        ttk.Label(options, text="Attack:").pack(side="left", padx=(2, 2))
         for label in ("Pick", "Fingers"):
-            ttk.Radiobutton(options, text=label, value=label, variable=self.technique).pack(side="left", padx=4)
-        ttk.Checkbutton(options, text="Steel stiffness", variable=self.stiff).pack(side="left", padx=(18, 12))
-        ttk.Checkbutton(options, text="Palm mute", variable=self.palm).pack(side="left", padx=12)
-        ttk.Checkbutton(options, text="Finger noise", variable=self.squeak_on).pack(side="left", padx=12)
-        ttk.Checkbutton(options, text="Human feel", variable=self.human).pack(side="left", padx=12)
-        ttk.Checkbutton(options, text="Sympathetic strings", variable=self.sympathy).pack(side="left", padx=12)
+            ttk.Radiobutton(options, text=label, value=label, variable=self.technique).pack(side="left", padx=2)
+        for text, var in (("Palm mute", self.palm), ("Steel stiffness", self.stiff), ("Finger noise", self.squeak_on),
+                          ("Human feel", self.human), ("Sympathetic strings", self.sympathy)):
+            ttk.Checkbutton(options, text=text, variable=var).pack(side="left", padx=(8, 0))
         room = ttk.Frame(controls)
         room.pack(fill="x", pady=(6, 0))
-        ttk.Checkbutton(room, text="Room", variable=self.room_on).pack(side="left", padx=(3, 8))
-        ttk.Combobox(room, textvariable=self.room_size, values=list(ROOMS), state="readonly", width=12).pack(side="left", padx=4)
-        ttk.Label(room, text="walls:").pack(side="left", padx=(8, 2))
-        ttk.Combobox(room, textvariable=self.room_material, values=list(MATERIALS), state="readonly", width=14).pack(side="left", padx=4)
-        self.room_label = ttk.Label(room, text="")
-        self.room_label.pack(side="left", padx=10)
+        ttk.Checkbutton(room, text="Room", variable=self.room_on).pack(side="left", padx=(2, 6))
+        ttk.Combobox(room, textvariable=self.room_size, values=list(ROOMS), state="readonly",
+                     width=11).pack(side="left", padx=2)
+        ttk.Label(room, text="walls:").pack(side="left", padx=(6, 2))
+        ttk.Combobox(room, textvariable=self.room_material, values=list(MATERIALS), state="readonly",
+                     width=13).pack(side="left", padx=2)
+        self.room_label = ttk.Label(room, text="", font=("Segoe UI", 8))
+        self.room_label.pack(side="left", padx=8)
 
-        # visuals
-        bottom = ttk.Frame(main)
-        bottom.pack(fill="both", expand=True)
-        left = ttk.LabelFrame(bottom, text="The strings moving (slowed down ×100, exaggerated amplitude)", padding=6)
-        left.pack(side="left", fill="both", expand=True, padx=(0, 5))
-        self.neck = tk.Canvas(left, bg=BG, height=260, highlightthickness=0)
-        self.neck.pack(fill="both", expand=True)
-        right = ttk.Frame(bottom)
-        right.pack(side="left", fill="both", expand=True, padx=(5, 0))
-        osc = ttk.LabelFrame(right, text="Oscilloscope", padding=6)
-        osc.pack(fill="both", expand=True)
-        self.scope = tk.Canvas(osc, bg=BG, height=120, highlightthickness=0)
-        self.scope.pack(fill="both", expand=True)
-        diag = ttk.LabelFrame(right, text="Relational diagnostics", padding=6)
+        # ---- bottom: what the networks found
+        diag = ttk.LabelFrame(main, text="Relational diagnostics", padding=4)
         diag.pack(fill="both", expand=True, pady=(6, 0))
-        self.diag = tk.Text(diag, height=8, wrap="word", font=("Consolas", 9))
+        self.diag = tk.Text(diag, height=7, wrap="word", font=("Consolas", 9))
         self.diag.pack(fill="both", expand=True)
 
-        ttk.Label(main, textvariable=self.status, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 0))
+        ttk.Label(main, textvariable=self.status, font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 0))
+
+    # ---------------------------------------------------------------- live changes
+    def _watch_parameters(self):
+        """Every parameter of the sound: when one moves while the guitar plays, the same playing (same
+        player, same randomness) is rendered again and takes the place of the sound where it is."""
+        watched = [self.pluck, self.damping, self.brightness, self.duration, self.core, self.swing_cm,
+                   self.force, self.pick_mm, self.finger_force, self.palm_intensity, self.palm_mm,
+                   self.body_amount, self.body_size, self.top_mm, self.coupling, self.room_distance,
+                   self.technique, self.palm, self.stiff, self.squeak_on, self.human, self.sympathy,
+                   self.room_on, self.room_size, self.room_material, self.bpm, self.seq_mode, self.arp_pattern]
+        watched += self.fret_vars + self.step_vars + self.dir_vars
+        for var in watched:
+            var.trace_add("write", lambda *_a: self.live_change())
+        self.volume.trace_add("write", lambda *_a: self._set_gain())   # the volume needs no new rendering
+
+    def _set_gain(self):
+        try:
+            self.engine.gain = float(self.volume.get()) / 0.7
+        except (tk.TclError, ValueError):
+            pass
+
+    def live_change(self):
+        if self.replay is None or self.engine.position() is None:
+            return
+        if self.live_job is not None:
+            self.root.after_cancel(self.live_job)
+        self.live_job = self.root.after(180, self._live_render)      # wait until the slider rests
+
+    def _live_render(self):
+        self.live_job = None
+        if self.replay is None or self.engine.position() is None:
+            return
+        if self.rendering:
+            self.pending = True
+            return
+        try:
+            self.recalculate_all(quiet=True)
+            self.replay(live=True)
+        except (tk.TclError, ValueError, ArithmeticError) as exc:
+            self.status.set(f"Could not render the change: {exc}")
+
+    def click_string(self, event):
+        i = self._string_at(event.y)
+        if i is not None:
+            self.play([i])
+
+    def hover_neck(self, event):
+        self.hover_string = self._string_at(event.y)
+
+    def _string_at(self, y):
+        h = max(self.neck.winfo_height(), 160)
+        gap = (h - 40) / 5.0
+        row = int(round((y - 20) / gap))
+        if 0 <= row <= 5 and abs(y - (20 + row * gap)) < gap / 2:
+            return 5 - row
+        return None
 
     # ---------------------------------------------------------------- GRM
     def read_inputs(self, i):
@@ -1135,7 +1453,7 @@ class GRMGuitarApp:
     def core_fraction(self, i):
         return float(self.core.get()) if STRINGS[i]["wound"] else 1.0
 
-    def recalculate_all(self):
+    def recalculate_all(self, quiet=False):
         lines = [f"{'string':<10}{'f1 (Hz)':>10}{'± cents':>9}{'c (m/s)':>10}{'B':>10}{'10th partial':>13}  converged"]
         try:
             for i, spec in enumerate(STRINGS):
@@ -1176,10 +1494,12 @@ class GRMGuitarApp:
             lines.append(f"Finger noise (GRM network), A string from fret 2 to 3 in 0.1 s: {sq['p'] * 1e3:.2f} mm winding wire, "
                          f"finger at {sq['v']:.2f} m/s -> winding at {sq['fsq']:.0f} Hz, longitudinal modes from "
                          f"{sq['fL']:.0f} Hz (c_L = {sq['cL']:.0f} m/s), {sq['P'] * 1e3:.0f} mW of friction.")
-            pm = palm_network(mu6, L6, 0)["values"]
-            lines.append(f"Palm (GRM network), low E: skin {pm['r']:.1f} N s/m at {pm['x'] * 1e3:.0f} mm from the bridge -> "
-                         f"fundamental lasts {1 / (pm['s0'] * math.sin(math.pi * pm['q']) ** 2):.2f} s more at most, "
-                         f"10th partial {1e3 / (pm['s0'] * math.sin(10 * math.pi * pm['q']) ** 2):.1f} ms.")
+            pm = self.palm_model(0, 0)
+            t60 = lambda s: 6.9 / max(s, 1e-6)
+            lines.append(f"Palm (GRM networks, one per mode), low E: skin {pm['r']:.1f} N s/m over {pm['w'] * 1e3:.0f} mm, "
+                         f"{pm['x'] * 1e3:.0f} mm from the saddle -> the palm alone stops the fundamental in "
+                         f"{t60(pm['sigma'][0]):.2f} s ({1200 * math.log2(pm['ratio'][0]):+.0f} cents), the 4th partial in "
+                         f"{t60(pm['sigma'][3]) * 1e3:.0f} ms, the 10th in {t60(pm['sigma'][9]) * 1e3:.0f} ms (60 dB).")
             sv = self.string_model(0, 0)
             loss = bridge_loss(modes, bv, sv["c"], sv["Leff"], sv["Zs"])
             lines.append(f"Bridge (GRM network): top impedance {bv['Zp']:.0f} kg/s, modal mass {bv['Mm'] * 1e3:.0f} g; "
@@ -1189,6 +1509,8 @@ class GRMGuitarApp:
             self.diag.insert("1.0", "\n".join(lines))
             self.status.set("Six GRM networks computed.")
         except Exception as exc:
+            if quiet:
+                raise
             messagebox.showerror("GRM error", str(exc))
 
     def tune(self, indices):
@@ -1232,13 +1554,23 @@ class GRMGuitarApp:
             self._model_cache[key] = pluck_network(mu, L, T, fret, pluck, force, tech, float(self.pick_mm.get()))
         return self._model_cache[key]["values"]
 
-    def palm_model(self, i, fret, x=PALM_X, force=PALM_FORCE):
-        L, mu, _ = self.read_inputs(i)
-        force = force * float(self.palm_intensity.get())    # how hard the player chooses to mute
-        x, force = round(x * 2000) / 2000, 10 ** (round(math.log10(force) * 50) / 50)   # 0.5 mm, 0.02 dex
-        key = ("palm", i, fret, L, mu, x, force)
+    def palm_model(self, i, fret, x=None, force=PALM_FORCE):
+        """Palm network of string i at a fret. x: where the player's stroke puts the hand (around PALM_X);
+        it is moved to the place chosen with the 'Palm from bridge' slider. The modes start from the network
+        of the same string at the chosen place and pressure, when it is already solved."""
+        L, mu, T = self.read_inputs(i)
+        home = float(self.palm_mm.get()) / 1000.0
+        x = home if x is None else home + (x - PALM_X)
+        level = float(self.palm_intensity.get())             # how hard the player chooses to mute
+        snap = lambda xx, ff: (max(0.002, round(xx * 333.3) / 333.3), 10 ** (round(math.log10(ff) / 0.15) * 0.15))
+        x, force = snap(x, force * level)                    # 3 mm, 0.15 dex: the player's hand is not more precise
+        key = ("palm", i, fret, L, mu, T, x, force)
         if key not in self._model_cache:
-            self._model_cache[key] = palm_network(mu, L, fret, x, force)
+            ref = ("palm", i, fret, L, mu, T) + snap(home, PALM_FORCE * level)
+            if ref not in self._model_cache:                 # the chosen place, followed from the free string
+                self._model_cache[ref] = palm_network(mu, L, fret, ref[-2], ref[-1], T)
+            if key not in self._model_cache:                 # a nearby place starts from there
+                self._model_cache[key] = palm_network(mu, L, fret, x, force, T, start=self._model_cache[ref]["values"])
         return self._model_cache[key]["values"]
 
     def action_model(self, i, fret):
@@ -1300,7 +1632,17 @@ class GRMGuitarApp:
                 "x": 1 - 2 ** (-mid / 12.0), "from": fret_from, "to": fret_to}
 
     def player_rng(self):
-        return np.random.default_rng() if self.human.get() else None
+        """The player's randomness: the same seed while one playing is rendered again after a change."""
+        return np.random.default_rng(self.seed) if self.human.get() else None
+
+    def _new_playing(self, live, replay):
+        """A new playing draws a new seed and remembers where the hand was; a live re-render goes back there."""
+        if live:
+            self.last_frets = dict(self.frets_before)
+        else:
+            self.seed = int(np.random.default_rng().integers(1 << 31))
+            self.frets_before = dict(self.last_frets)
+        self.replay = replay
 
     def strokes(self, grid, step):
         """Run the player network on a list of (time, index in the bar)."""
@@ -1348,12 +1690,15 @@ class GRMGuitarApp:
                 last[i] = nt
         return squeaks
 
-    def play(self, indices, strum=False, up=False, arpeggio=False):
+    def play(self, indices, strum=False, up=False, arpeggio=False, live=False):
+        given = list(indices)
         indices = sorted(indices, reverse=up)  # index 0 is string 6: down = from the bass
         if not indices:
             return
+        self._new_playing(live, lambda live=False: self.play(given, strum, up, arpeggio, live=live))
         try:
-            self.recalculate_all()
+            if not live:
+                self.recalculate_all()
             dur = float(self.duration.get())
             frets = {i: int(self.fret_vars[i].get()) for i in indices}
             lead = 0.14
@@ -1383,48 +1728,138 @@ class GRMGuitarApp:
             total = max(nt["start"] + nt["length"] for nt in notes) + 0.05
             spans = [(0.0, total, [self.palm_model(i, frets.get(i, 0)) for i in range(6)])] if self.palm.get() else []
             self.start_playback(notes, total, "Playing: " + " – ".join(STRINGS[i]["note"] for i in indices),
-                                squeaks=squeaks, palm_spans=spans)
+                                squeaks=squeaks, palm_spans=spans, live=live)
         except Exception as exc:
+            if live:
+                raise
             messagebox.showerror("Audio error", str(exc))
 
-    def render(self, notes, total, squeaks, palm_spans=()):
-        modes, bv = body_modes(float(self.body_size.get()), float(self.top_mm.get()), float(self.coupling.get()))
-        open_strings = [self._note(i, 0, 0.0, total, 0.0, 0.0, 0.5, kind="open") for i in range(6)]
-        return render_guitar(notes, total, float(self.damping.get()), float(self.brightness.get()), modes, bv,
-                             squeaks, float(self.body_amount.get()), bool(self.sympathy.get()), open_strings,
-                             palm_spans)
+    def sound_settings(self):
+        """Everything the rendering needs from the interface, read here: the rendering runs in a thread."""
+        return {"body": (float(self.body_size.get()), float(self.top_mm.get()), float(self.coupling.get())),
+                "damping": float(self.damping.get()), "brightness": float(self.brightness.get()),
+                "body_amount": float(self.body_amount.get()), "sympathy": bool(self.sympathy.get()),
+                "room": (self.room_size.get(), self.room_material.get(), float(self.room_distance.get()))
+                if self.room_on.get() else None}
 
-    def start_playback(self, notes, total, label, loop_len=None, squeaks=(), loop_from=0.0, palm_spans=()):
-        """Render the whole guitar, then play once or (loop_len in s) in a seamless loop taken from
-        loop_from: what rings across the loop point is already in the rendered passes."""
-        audio = self.render(notes, total, squeaks, palm_spans)
-        if self.room_on.get():
-            size = ROOMS[self.room_size.get()]
-            room = room_network(size, self.room_material.get())
-            audio = apply_room(audio.astype(float), room, size, float(self.room_distance.get()))
+    @staticmethod
+    def render_sound(settings, notes, total, squeaks, palm_spans, open_strings, loop_len=None, loop_from=0.0):
+        """The whole guitar, then the room: computation only, no interface. Returns (audio, room).
+        The guitar alone is kept: when only the room or the listener changes, only the room is computed again."""
+        def note_key(nt):
+            return (nt["i"], nt["f1"], nt["B"], nt["start"], nt["length"], nt["gain"], nt["tau"], nt["pluck"],
+                    nt.get("kind"), id(nt.get("palm")))
+        key = (settings["body"], settings["damping"], settings["brightness"], settings["body_amount"],
+               settings["sympathy"], total, tuple(note_key(nt) for nt in notes),
+               tuple((sq["i"], sq["start"], sq["dur"], sq["fsq"], sq["P"]) for sq in squeaks),
+               tuple((a, b, tuple(id(p) for p in pl)) for a, b, pl in palm_spans),
+               tuple(note_key(nt) for nt in open_strings or ()))
+        cached = GRMGuitarApp._dry
+        if cached is not None and cached[0] == key:
+            audio = cached[1]
+        else:
+            modes, bv = body_modes(*settings["body"])
+            audio = render_guitar(notes, total, settings["damping"], settings["brightness"], modes, bv, squeaks,
+                                  settings["body_amount"], settings["sympathy"], open_strings, palm_spans)
+            GRMGuitarApp._dry = (key, audio)
+        room = None
+        if settings["room"] is not None:
+            name, material, distance = settings["room"]
+            size = ROOMS[name]
+            room = room_network(size, material)
+            audio = apply_room(audio.astype(float), room, size, distance)
+        if loop_len:
+            a = int(round(loop_from * SAMPLE_RATE))
+            audio = audio[a:a + int(round(loop_len * SAMPLE_RATE))]
+        peak = np.max(np.abs(audio)) if len(audio) else 0.0
+        if peak > 0:
+            audio = audio / peak
+        return audio.astype(np.float32), room
+
+    def open_strings(self, total):
+        return [self._note(i, 0, 0.0, total, 0.0, 0.0, 0.5, kind="open") for i in range(6)]
+
+    def render(self, notes, total, squeaks, palm_spans=()):
+        """The guitar alone, without the room (used to write examples)."""
+        settings = dict(self.sound_settings(), room=None)
+        return self.render_sound(settings, notes, total, squeaks, palm_spans, self.open_strings(total))[0]
+
+    def start_playback(self, notes, total, label, loop_len=None, squeaks=(), loop_from=0.0, palm_spans=(),
+                       live=False):
+        """Render the whole guitar in a thread, then play once or (loop_len in s) in a seamless loop taken
+        from loop_from: what rings across the loop point is already in the rendered passes.
+        live: the playing already sounds; the new sound takes its place at the same moment."""
+        settings = self.sound_settings()
+        open_strings = self.open_strings(total)
+        raw_notes, raw_squeaks = list(notes), list(squeaks)
+        shift = loop_from if loop_len else 0.0            # what is shown starts at the loop point
+        shown = [dict(nt, start=nt["start"] - shift) for nt in raw_notes]
+        shown_squeaks = [dict(sq, start=sq["start"] - shift) for sq in raw_squeaks]
+        self.render_gen += 1
+        gen = self.render_gen
+        self.rendering = True
+        if not live:
+            self.status.set("Rendering the whole guitar…")
+
+        def work():
+            try:
+                result = self.render_sound(settings, raw_notes, total, raw_squeaks, palm_spans, open_strings,
+                                           loop_len, loop_from)
+                self.render_jobs.put((gen, result, None))
+            except Exception as exc:          # reported by the interface thread
+                self.render_jobs.put((gen, None, exc))
+
+        threading.Thread(target=work, daemon=True).start()
+        self.root.after(25, lambda: self._collect(gen, label, shown, shown_squeaks, loop_len, live))
+
+    def _collect(self, gen, label, notes, squeaks, loop_len, live):
+        """Wait for the rendering `gen` without blocking the window; older renderings are dropped."""
+        found = None
+        try:
+            while True:
+                item = self.render_jobs.get_nowait()
+                if item[0] == gen:
+                    found = item
+        except queue.Empty:
+            pass
+        if found is None:
+            if gen == self.render_gen:
+                self.root.after(25, lambda: self._collect(gen, label, notes, squeaks, loop_len, live))
+            return
+        self.rendering = False
+        _, result, exc = found
+        if exc is not None:
+            self.status.set(f"Audio error: {exc}")
+            if not live:
+                messagebox.showerror("Audio error", str(exc))
+            return
+        audio, room = result
+        if room is not None:
             self.room_label.config(text=f"reverberation {room['RT3']:.2f} s at 1 kHz ({room['RT0']:.2f} s at 125 Hz), "
                                         f"critical distance {room['rc']:.2f} m")
         else:
             self.room_label.config(text="")
-        if loop_len:
-            a = int(round(loop_from * SAMPLE_RATE))
-            audio = audio[a:a + int(round(loop_len * SAMPLE_RATE))]
-            notes = [dict(nt, start=nt["start"] - loop_from) for nt in notes]
-            squeaks = [dict(sq, start=sq["start"] - loop_from) for sq in squeaks]
-        peak = np.max(np.abs(audio)) if len(audio) else 0.0
-        if peak > 0:
-            audio = audio / peak
-        self.audio = (audio * float(self.volume.get())).astype(np.float32)
+        self.audio = audio * float(self.volume.get())
         self.voices_shown = notes
         self.squeaks_shown = list(squeaks)
         self.loop_len = loop_len
-        self.play_t0 = time.perf_counter()
-        if sd is not None:
-            sd.stop()
-            sd.play(self.audio, SAMPLE_RATE, blocking=False, loop=bool(loop_len))
-            self.status.set(label)
+        self._set_gain()
+        self.engine.play(audio * 0.7, bool(loop_len), keep_position=live)
+        if self.engine.stream is not None:
+            self.status.set(label + (" — updated" if live else ""))
         else:
-            self.status.set("No sound device (pip install sounddevice): animation only. The sound can still be exported as WAV.")
+            self.status.set("No sound device (pip install sounddevice): animation only. "
+                            "The sound can still be exported as WAV.")
+        if self.pending:
+            self.pending = False
+            self.live_change()
+
+    def wait_render(self, timeout=600.0):
+        """Block until the rendering under way is played (for scripts that write examples)."""
+        end = time.perf_counter() + timeout
+        while self.rendering and time.perf_counter() < end:
+            self.root.update()
+            time.sleep(0.01)
 
     # ---------------------------------------------------------------- sequencer
     STEPS = 16
@@ -1468,24 +1903,26 @@ class GRMGuitarApp:
         return [(i, by_string[i]) for i in chosen]
 
     def _build_sequencer(self, frame):
-        top = ttk.Frame(frame)
-        top.pack(fill="x")
-        ttk.Label(top, text="Tempo (BPM)").pack(side="left")
-        ttk.Spinbox(top, from_=40, to=220, textvariable=self.bpm, width=5).pack(side="left", padx=(4, 14))
-        ttk.Label(top, text="Repeats").pack(side="left")
-        ttk.Spinbox(top, from_=1, to=8, textvariable=self.repeats, width=4).pack(side="left", padx=(4, 6))
-        ttk.Checkbutton(top, text="Loop", variable=self.loop).pack(side="left", padx=(0, 14))
-        ttk.Label(top, text="Mode").pack(side="left")
-        ttk.Combobox(top, textvariable=self.seq_mode, values=["Strum", "Arpeggio"], state="readonly",
-                     width=9).pack(side="left", padx=(4, 10))
-        ttk.Label(top, text="Pattern").pack(side="left")
-        ttk.Combobox(top, textvariable=self.arp_pattern, values=list(self.ARPEGGIOS), state="readonly",
-                     width=19).pack(side="left", padx=(4, 10))
-        ttk.Label(top, text="Rhythm").pack(side="left")
+        row1 = ttk.Frame(frame)
+        row1.pack(fill="x")
+        ttk.Label(row1, text="Tempo").pack(side="left")
+        ttk.Spinbox(row1, from_=40, to=220, textvariable=self.bpm, width=4).pack(side="left", padx=(3, 10))
+        ttk.Label(row1, text="Repeats").pack(side="left")
+        ttk.Spinbox(row1, from_=1, to=8, textvariable=self.repeats, width=3).pack(side="left", padx=(3, 6))
+        ttk.Checkbutton(row1, text="Loop", variable=self.loop).pack(side="left", padx=(0, 10))
+        ttk.Label(row1, text="Mode").pack(side="left")
+        ttk.Combobox(row1, textvariable=self.seq_mode, values=["Strum", "Arpeggio"], state="readonly",
+                     width=8).pack(side="left", padx=(3, 0))
+        row2 = ttk.Frame(frame)
+        row2.pack(fill="x", pady=(4, 0))
+        ttk.Label(row2, text="Rhythm").pack(side="left")
         pattern = tk.StringVar(value="Folk ↓ ↓↑ ↑↓↑")
-        pcb = ttk.Combobox(top, textvariable=pattern, values=list(self.PATTERNS), state="readonly", width=20)
-        pcb.pack(side="left", padx=4)
+        pcb = ttk.Combobox(row2, textvariable=pattern, values=list(self.PATTERNS), state="readonly", width=17)
+        pcb.pack(side="left", padx=(3, 8))
         pcb.bind("<<ComboboxSelected>>", lambda _e: self.apply_pattern(pattern.get()))
+        ttk.Label(row2, text="Arpeggio").pack(side="left")
+        ttk.Combobox(row2, textvariable=self.arp_pattern, values=list(self.ARPEGGIOS), state="readonly",
+                     width=19).pack(side="left", padx=(3, 0))
         buttons = ttk.Frame(frame)
         buttons.pack(fill="x", pady=(6, 0))
         ttk.Button(buttons, text="▶ Play the sequence", command=self.play_sequence).pack(side="left", padx=(0, 3))
@@ -1493,27 +1930,24 @@ class GRMGuitarApp:
         ttk.Button(buttons, text="Clear", command=self.clear_sequence).pack(side="left", padx=3)
 
         grid = ttk.Frame(frame)
-        grid.pack(fill="x", pady=(8, 0))
+        grid.pack(fill="x", pady=(6, 0))
         choices = ["—"] + list(CHORDS)
         demo = ["G"] * 4 + ["D"] * 4 + ["Em"] * 4 + ["C"] * 4
         for k in range(self.STEPS):
             cell = ttk.Frame(grid)
-            cell.grid(row=k // 8, column=k % 8, padx=1, pady=3, sticky="w")
+            cell.grid(row=k // 4, column=k % 4, padx=1, pady=2, sticky="w")
             ttk.Label(cell, text=f"{k + 1}", width=2, foreground="#6e7681").pack(side="left")
             var = tk.StringVar(value=demo[k])
-            ttk.Combobox(cell, textvariable=var, values=choices, width=7).pack(side="left")
+            ttk.Combobox(cell, textvariable=var, values=choices, width=4).pack(side="left")
             d = tk.StringVar(value="↓")
             btn = ttk.Button(cell, textvariable=d, width=2, command=lambda k=k: self.cycle_dir(k))
             btn.pack(side="left", padx=(2, 0))
             self.step_vars.append(var)
             self.dir_vars.append(d)
-        ttk.Label(frame, text="Arpeggio mode: each step plays one or two strings of the chord following the pattern "
-                              "(B: bass, B2: second bass, 3-2-1: treble strings); the others keep ringing.",
-                  font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
-        ttk.Label(frame, text="Each step: a chord from the list, one or more notes written string:fret "
-                              "(e.g. 6:3 5:2), or — for a rest. Button: ↓ strum down, "
-                              "↑ strum up, x palm-muted strum, · let ring.",
-                  font=("Segoe UI", 8)).pack(anchor="w", pady=(6, 0))
+        ttk.Label(frame, text="Each step: a chord, notes as string:fret (6:3 5:2), or — for a rest.\n"
+                              "↓ down, ↑ up, x palm-muted, · let ring. Arpeggio: B bass, B2 second bass, "
+                              "3-2-1 treble strings.", font=("Segoe UI", 8), justify="left",
+                  wraplength=460).pack(anchor="w", pady=(4, 0))
         self.apply_pattern("Folk ↓ ↓↑ ↑↓↑")
 
     def cycle_dir(self, k):
@@ -1545,9 +1979,11 @@ class GRMGuitarApp:
             notes.append((6 - number, fret))
         return notes
 
-    def play_sequence(self, passes=None):
+    def play_sequence(self, passes=None, live=False):
+        self._new_playing(live, lambda live=False: self.play_sequence(passes, live=live))
         try:
-            self.recalculate_all()
+            if not live:
+                self.recalculate_all()
             step_s = 60.0 / max(int(self.bpm.get()), 1) / 2.0       # steps are eighth notes
             steps = []
             for k in range(self.STEPS):
@@ -1607,26 +2043,22 @@ class GRMGuitarApp:
                         notes.append(nt)
                         last[i] = nt
                         total = max(total, start + ring)
-            self.status.set("Rendering the whole guitar…")
-            self.root.update_idletasks()
             bar = self.STEPS * step_s
             if looping:
                 self.start_playback(notes, max(total, passes * bar), f"Looping sequence, {self.bpm.get()} BPM, "
                                     "two passes that differ (■ Stop to end it)", loop_len=2 * bar, squeaks=squeaks,
-                                    loop_from=offset + bar, palm_spans=palm_spans)
+                                    loop_from=offset + bar, palm_spans=palm_spans, live=live)
             else:
                 self.start_playback(notes, total, f"Sequence: {self.STEPS} steps × {passes}, {self.bpm.get()} BPM",
-                                    squeaks=squeaks, palm_spans=palm_spans)
+                                    squeaks=squeaks, palm_spans=palm_spans, live=live)
         except Exception as exc:
+            if live:
+                raise
             messagebox.showerror("Sequencer", str(exc))
 
     def stop(self):
-        if sd is not None:
-            try:
-                sd.stop()
-            except Exception:
-                pass
-        self.play_t0 = None
+        self.engine.stop()
+        self.replay = None
         self.status.set("Stopped.")
 
     def export_wav(self):
@@ -1642,11 +2074,7 @@ class GRMGuitarApp:
 
     # ---------------------------------------------------------------- drawing
     def _animate(self):
-        elapsed = None if self.play_t0 is None else time.perf_counter() - self.play_t0
-        if elapsed is not None and self.loop_len:
-            elapsed %= self.loop_len
-        elif elapsed is not None and self.audio is not None and elapsed > len(self.audio) / SAMPLE_RATE:
-            self.play_t0, elapsed = None, None
+        elapsed = self.engine.position()
         self.draw_neck(elapsed)
         self.draw_scope(elapsed)
         self.anim_job = self.root.after(33, self._animate)
@@ -1685,6 +2113,8 @@ class GRMGuitarApp:
             xs = x0 + L * (1 - 2 ** (-fret / 12.0))  # where the finger stops the string
             color = STRING_COLORS[i]
             width = 1 + (5 - row) * 0.35
+            if i == self.hover_string:                # the string under the mouse: click to hear it
+                color, width = "#ffffff", width + 1
             slide = None
             if elapsed is not None:
                 for sq in self.squeaks_shown:
@@ -1749,6 +2179,7 @@ class GRMGuitarApp:
 
     def close(self):
         self.stop()
+        self.engine.close()
         if self.anim_job is not None:
             self.root.after_cancel(self.anim_job)
         self.root.destroy()
