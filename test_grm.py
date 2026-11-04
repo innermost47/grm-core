@@ -1151,3 +1151,30 @@ class TestRemoveNode:
         back = remove_node(m, "X1")
         assert back["nodes"]["H0_ladder"]["measured"][0] == 73.04 and "H0_ladder_read" not in back["nodes"]
         assert len(back["relations"]) == len(base["relations"])
+
+
+class TestTao:
+    """grm_tao.py: the cascade of harmonics tested against the particle masses."""
+
+    def test_koide_leptons_and_brannen_phase(self):
+        import grm_tao as tao
+        m = [tao.MASSES[k][0] for k in ("e", "mu", "tau")]
+        assert abs(float(tao.koide_q(m)) - 2 / 3) < 1e-5
+        mu, delta = tao.brannen_delta(sorted(m))
+        assert abs(delta - 2 / 9) < 1e-3
+
+    def test_spiral_finds_a_true_cascade(self):
+        import numpy as np
+        import grm_tao as tao
+        # a spectrum made by a cascade: the fit must find it (rms ~ 0)
+        la, lb, off = 0.37, 1.21, -1.0
+        logm = np.array(sorted(off + la * i + lb * j for i, j in [(1, 0), (0, 1), (-1, 1), (2, -1), (0, 2), (-2, 0), (1, 1)]))
+        rms, *_ = tao.fit_spiral(logm, 3, grid=0.01, top=1.5)
+        assert rms < 0.01
+
+    def test_grm_refines_the_seeds(self):
+        import grm_tao as tao
+        rms, la, lb, off, assign = tao.fit_spiral(tao.LOGM, 3)
+        g = tao.grm_spiral(assign, sigma_theory=rms)
+        assert abs(math.log10(g["values"]["seed_a"]) - la) < 0.05 and abs(math.log10(g["values"]["seed_b"]) - lb) < 0.05
+        assert g["reduced_chi2"] < 3
