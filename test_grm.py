@@ -411,6 +411,42 @@ class TestGuitar:
         assert 0 not in [i for i, _, _ in up]                            # an upstroke misses the low E
 
 
+class TestVoice:
+    def test_uniform_tube_resonates_at_odd_quarter_waves(self):
+        # a tube closed at the glottis and open at the lips: F_n = (2n - 1) c / (4 L), raised a little by the
+        # yielding walls and the narrower larynx
+        import grm_voice as v
+        p = {"xc": 9.0, "Ac": v.A_OPEN, "Alip": v.A_OPEN, "Llip": 1.0, "Avel": 0.0}
+        L = (v.TRACT_LENGTH + 1.0) * v.CM
+        found = [F for F, _ in v.resonances(p)][:3]
+        for n, F in enumerate(found, start=1):
+            assert F == pytest.approx((2 * n - 1) * v.C_AIR / (4 * L), rel=0.12)
+
+    def test_vowel_shapes_give_their_formants(self):
+        import grm_voice as v
+        for sym in ("i", "a", "u"):
+            shape = dict(v.VOWEL_SHAPES[sym], Avel=0.0)
+            F = [f for f, _ in v.resonances(shape)][:2]
+            assert F[0] == pytest.approx(shape["F"][0], rel=0.03)
+            assert F[1] == pytest.approx(shape["F"][1], rel=0.03)
+            assert v.VOWEL_MIN_AREA <= shape["Ac"] <= v.A_OPEN          # a human mouth
+
+    def test_nasal_closure_makes_an_antiresonance(self):
+        import grm_voice as v
+        m = dict(v.VOWEL_SHAPES["a"], Alip=0.0, Avel=0.5)                # lips shut, velum open: [m]
+        zeros = v.resonances(m, "zero")
+        assert zeros and 700 < zeros[0][0] < 1600                          # the closed mouth, a side branch
+
+    def test_airflow_shares_the_lung_pressure(self):
+        import grm_voice as v
+        open_ = v.airflow_network(800.0, v.AG_VOICED, 3.0, v.stress_for(110.0))
+        shut = v.airflow_network(800.0, v.AG_VOICED, v.CLOSED, v.stress_for(110.0))
+        assert open_["dPg"] + open_["dPc"] == pytest.approx(800.0, rel=1e-4)
+        assert open_["Avib"] > 0.05 and open_["dPg"] > v.P_TH            # an open mouth: the folds vibrate
+        assert shut["dPg"] < v.P_TH and shut["Avib"] < 1e-3              # a closure: the pressure moves forward
+        assert open_["f0"] == pytest.approx(110.0 + v.KP * open_["dPg"], rel=1e-3)
+
+
 class TestPong:
     def test_intercept_network_predicts_the_bounce(self):
         import grm_pong as gp

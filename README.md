@@ -14,6 +14,7 @@ This repository contains:
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
+| `grm_voice.py` | **GRM Voice**: a voice made of relations. Lungs, vocal folds, airflow, vocal tract, velum, nose and lips are GRM networks; it says "Bonjour Anthony. Je suis le réseau." |
 | `grm_pong.py` | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks |
 | `grm_guitar.py` | **GRM Guitar**: a guitar simulated as one object: strings, bridge, top, air, palm, fingers and the player's arm are all GRM networks |
 
@@ -373,6 +374,67 @@ Results on 40 held-out sentences, written separately and never used to build the
 Off-topic sentences: 4 of 6 give `unknown`. The two others share a word with the table by chance (`acte`, then `plante` and `besoin`)
 and get an answer: the table is small, and a single shared word is enough. A larger table, or a minimum amount of
 evidence, would be the next step.
+
+## GRM Voice (`grm_voice.py`)
+
+```bash
+python grm_voice.py                              # "Bonjour Anthony. Je suis le réseau." -> grm_voice.wav
+python grm_voice.py "m e R s i ||" -o merci.wav  # any French phonemes (SAMPA), "|" pause, "||" end of sentence
+python grm_voice.py --vowels                     # the eleven vowels, one after the other
+```
+
+Listen: [grm_voice_bonjour.wav](docs/audio/grm_voice_bonjour.wav), [grm_voice_vowels.wav](docs/audio/grm_voice_vowels.wav).
+
+No recording, no learning, no speech library: every part of the voice is a network solved by the GRM core.
+
+**Lungs, glottis and airflow** (one network per 5 ms)
+```
+pressure      dPg + dPc = Ps                         the lungs' pressure is shared by two orifices in series
+glottis       U = (Ag + OQ/2 Avib) sqrt(2 dPg / rho)  Bernoulli
+downstream    U = A_out sqrt(2 dPc / rho)            tongue or lip constriction, velum port, yielding walls
+vibration     Avib = Amax k sqrt((dPg - P_th) / (P_ref - P_th))   no voicing below the threshold pressure
+folds         f0 = 1 / (2 L_f) sqrt(stress / rho)    a string under tension
+pressure      f0 += KP dPg                           pitch rises with the pressure across the folds
+```
+When the lips close for p or b, the pressure moves from the glottis to the lips and the voicing dies by itself;
+when they open, the fast flow through the small opening is the burst.
+
+**The vocal tract** is a tube of 0.5 cm sections whose areas come from the articulators (tongue place and
+narrowing, tongue length, jaw, pharynx, lips, lip protrusion, velum). Each section is a lossless tube with the
+viscous drag of its walls and the flow its yielding walls take; the lips and nostrils radiate. Its resonances are
+the complex frequencies at which a closed glottis lets no flow through:
+```
+resonance     U_glottis(F + iB/2) = 0                two nodes (F, B), two relations (real and imaginary parts)
+glottal loss  U_g + P_g / R_g,  R_g = 2 dPg / U      an open glottis widens the formants (from the airflow network)
+nose          a side branch at the velum: poles of the whole, zeros where the closed mouth shorts it ([m], [n], nasal vowels)
+hiss          p = K 1/2 rho v^2 (1 - (Re_c / Re)^2)  turbulence of the jet (Stevens), strongest at f = 0.2 v / d,
+              through the resonances of the cavity in front of the constriction (s, ch, f, bursts)
+```
+
+**The vowels are found, not written.** For each vowel an inverse network has the articulators as unknowns and
+measured formants as measurements (male averages, Wikipedia "Formant"); its relations are the tract's own
+resonance relations. The network finds the mouth shape whose resonances match, within the limits of a human mouth:
+
+| vowel | i | e | ɛ | a | ɑ | ɔ | o | u | y | ø | œ |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| F1 found / measured | 271 / 240 | 390 / 390 | 589 / 610 | 729 / 850 | 729 / 750 | 488 / 500 | 357 / 360 | 251 / 250 | 250 / 235 | 370 / 370 | 578 / 585 |
+| F2 found / measured | 2221 / 2400 | 2174 / 2300 | 1798 / 1900 | 1493 / 1610 | 970 / 940 | 755 / 700 | 656 / 640 | 602 / 595 | 1964 / 2100 | 1895 / 1900 | 1690 / 1710 |
+
+Where the match is not exact ([i], [a]), the measured formants ask for a mouth the bounds do not allow.
+
+**Articulation in time.** Each articulator is a network over all the frames: the targets of the sounds are
+measurements, the continuity of its motion (second difference ~ 0) is a relation. A sound that does not use an
+articulator gives it no target, and the network moves it from its neighbours: coarticulation is what it finds.
+The prosody is planned the same way (lung pressure, fold stress): a slow fall through each group, a rise at the end
+of a group that goes on, a fall at the end of the sentence, and the French lengthening of the last syllable.
+
+**Sound.** The glottal pulses (with the folds' small irregularities), the aspiration and the hiss are filtered,
+frame by frame, by the transfer of the tract built from its GRM poles and zeros, then radiated from the lips.
+
+**Hypotheses**: male tract of 17 cm and its typical areas; wall mass and resistance (Fant); folds 16 mm; phonation
+threshold 300 Pa; turbulence constant K = 0.02 and the voice bar radiated by the walls (set without a measurement);
+the bounds of a human mouth used by the inverse networks; the inertia of each articulator; the durations of the
+sounds. Work in progress: how intelligible and how natural it is remains to be judged by ear.
 
 ## GRM Pong (`grm_pong.py`)
 
