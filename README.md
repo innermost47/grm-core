@@ -9,12 +9,13 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
-| `test_grm.py` | A hardcore test battery: 85 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 89 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
 | `grm_matter.py` | **GRM Matter**: from the quantum constants and Z alone to ionization energies, then the density and stiffness of simple metals |
+| `grm_rain.py` | **GRM Rain**: the sound of every drop falling on water (drag, impact, trapped bubble), used by GRM Water |
 | `grm_water.py` | **GRM Water**: a basin of liquid to play with (drops, finger, rain, paddle); every wave swings and dies as a GRM network says |
 | `grm_brain.py` | **GRM Brain**: a brain that learns while it discovers a maze, with a memory of tensions; watch its network form |
 | `grm_scales.py` | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension |
@@ -124,7 +125,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 85 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 89 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
@@ -470,6 +471,24 @@ paddle makes 39 cm waves. The tests check these numbers against the textbook val
 The picture: a fixed camera; each pixel sees the sky (with clouds, a texture to read the slopes) reflected by the
 tilted surface (Fresnel, Schlick), and the bottom through the water, which absorbs red more than blue (Pope and
 Fry 1997).
+
+**The sound of the rain** (`grm_rain.py`). A slider in millimetres per hour: the drops come in the sizes of real
+rain (Marshall and Palmer 1948), each at the terminal speed a drag network gives it (weight = drag; 0.8 to 1.2 mm
+drops within 6 % of the measured speeds). What makes the sound of rain on water is mostly not the impact but a tiny
+air bubble trapped under the surface, ringing for a millisecond (Prosperetti and Oguz 1993). The impact network
+gives the Froude and Weber numbers of each drop and decides: drops of 0.82 to 1.1 mm always trap one (the 13-25 kHz
+hiss of drizzle), 1.1 to 2 mm trap none and are quiet, larger ones trap one about half of the time, lower and
+louder (Nystuen, NASA Earth Observatory). The bubble network gives its pitch (Minnaert) and its damping (radiation,
+viscosity, heat exchange, Devin 1959). A click is heard too. The place: outdoors (the air takes the highs with
+distance), or one of the rooms of GRM Guitar, with its walls and the listener's distance. Light rain comes out high,
+heavy rain spreads down to 1 kHz; both are checked by the tests.
+Hypotheses: the size of the regular bubble follows the drop; the bubble wall starts with 3 % of its radius (0.6 %
+for the irregular bubbles of big drops, set so that drizzle peaks high, as measured); the loudness scale of the
+impact (its law, E ~ M^3 T, is the review's). A real bathtub receives thousands of drops a second: a sample of up to
+120 per frame is synthesized and made louder in proportion (incoherent sum); the ripples drawn are only those of
+drops above 1.6 mm, and exaggerated (a real drop's crater is smaller than the finest wave the basin's modes show).
+Examples: [drizzle outdoors](docs/audio/grm_rain_outdoors.wav), [heavy rain outdoors](docs/audio/grm_rain_heavy_outdoors.wav),
+[drizzle heard in a living room](docs/audio/grm_rain_living_room.wav).
 
 Limits: linear waves (small amplitude: no breaking, no splash, no drops thrown up), a flat bottom, perfectly
 reflecting walls, a clean surface. The damping by the walls of a closed box (1/Lx + 1/Ly) extends the channel formula

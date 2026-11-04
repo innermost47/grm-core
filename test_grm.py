@@ -948,3 +948,41 @@ class TestMatter:
             p = m.predict_metal(sym, c)
             assert abs(p["density"] / m.MEASURED_DENSITY[sym] - 1) < 0.15
             assert abs(p["bulk_GPa"] / m.MEASURED_BULK[sym] - 1) < 0.15
+
+
+class TestRain:
+    """GRM Rain: each drop's sound from the drag, impact and bubble networks."""
+
+    def test_terminal_velocity_of_small_drops(self):
+        # measured terminal velocities quoted by Prosperetti & Oguz (1993): 0.8 mm 3.28, 0.9 mm 3.66,
+        # 1.0 mm 4.01, 1.2 mm 4.65 m/s
+        import grm_rain as r
+        for d, v in ((0.8e-3, 3.28), (0.9e-3, 3.66), (1.0e-3, 4.01), (1.2e-3, 4.65)):
+            assert abs(r.terminal_network(d) / v - 1) < 0.06
+
+    def test_which_drops_ring(self):
+        import grm_rain as r
+        p = r.RainPhysics()
+        kinds = {d: p.regime(d, p.terminal(d)) for d in (0.6e-3, 0.95e-3, 1.5e-3, 3e-3)}
+        assert kinds == {0.6e-3: "none", 0.95e-3: "regular", 1.5e-3: "none", 3e-3: "large"}
+
+    def test_minnaert_bubble(self):
+        import grm_rain as r
+        f, delta = r.bubble_network(1e-3)
+        assert abs(f / 3260 - 1) < 0.02                  # f R = 3.26 m/s for air in water at 1 atm
+        f14, d14 = r.bubble_network(r.RainPhysics().R14)
+        assert abs(f14 / 14000 - 1) < 1e-3 and 0.03 < d14 < 0.12
+
+    def test_light_rain_is_heard_high_heavy_rain_low(self):
+        import numpy as np
+        import grm_rain as r
+
+        def shares(rate):
+            a, _ = r.render_rain(3.0, rate, 1.0, seed=1)
+            spec = np.abs(np.fft.rfft(a)) ** 2
+            f = np.fft.rfftfreq(len(a), 1 / r.SAMPLE_RATE)
+            return spec[(f > 13e3) & (f < 25e3)].sum() / spec.sum(), spec[(f > 1e3) & (f < 1e4)].sum() / spec.sum()
+        hi_light, lo_light = shares(2.0)
+        hi_heavy, lo_heavy = shares(25.0)
+        assert hi_light > lo_light                       # drizzle: the 13-25 kHz bubbles dominate
+        assert lo_heavy > hi_heavy                       # heavy rain: the large drops' low bubbles take over

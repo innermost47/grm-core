@@ -36,6 +36,7 @@ import time
 import numpy as np
 
 from grm import GlobalRelationalNetwork
+import grm_rain
 
 try:
     import tkinter as tk
@@ -383,7 +384,8 @@ class WaterApp:
     def __init__(self, root):
         self.root = root
         root.title("GRM Water — waves from a network of relations")
-        root.geometry("1290x900")
+        root.geometry("1290x980")
+        root.protocol("WM_DELETE_WINDOW", self.close)
         self.basin_name = tk.StringVar(value="Bathtub")
         self.liquid = tk.StringVar(value="Water")
         self.planet = tk.StringVar(value="Earth")
@@ -392,7 +394,14 @@ class WaterApp:
         self.strength_mm = tk.DoubleVar(value=6.0)
         self.relief = tk.DoubleVar(value=6.0)
         self.speed = tk.DoubleVar(value=1.0)
-        self.rain = tk.DoubleVar(value=0.0)
+        self.rain = tk.DoubleVar(value=0.0)         # mm/h
+        self.sound_on = tk.BooleanVar(value=True)
+        self.environment = tk.StringVar(value="Outdoors")
+        self.env_material = tk.StringVar(value="Painted brick")
+        self.listener_m = tk.DoubleVar(value=2.0)
+        self.rain_physics = grm_rain.RainPhysics()
+        self.voice = grm_rain.RainVoice()
+        self.env_job = None
         self.paddle_on = tk.BooleanVar(value=False)
         self.paddle_hz = tk.DoubleVar(value=2.0)
         self.status = tk.StringVar(value="")
@@ -402,6 +411,7 @@ class WaterApp:
         self.physics_job = None
         self._build()
         self.new_basin()
+        self.apply_environment()
         self.root.after(30, self.tick)
 
     def _build(self):
@@ -450,7 +460,7 @@ class WaterApp:
         hand.pack(fill="x", pady=(8, 0))
         for label, var, lo, hi, res in (("Drop / finger size (cm)", self.drop_cm, 0.3, 50, 0.1),
                                         ("Strength (mm)", self.strength_mm, 0.5, 60, 0.5),
-                                        ("Rain (drops per second)", self.rain, 0, 40, 1),
+                                        ("Rain (mm per hour)", self.rain, 0, 60, 0.5),
                                         ("Paddle frequency (Hz)", self.paddle_hz, 0.1, 12, 0.1)):
             tk.Scale(hand, label=label, variable=var, from_=lo, to=hi, resolution=res, orient="horizontal",
                      length=330, command=(lambda _v: self.update_paddle()) if var is self.paddle_hz else None).pack(fill="x")
@@ -461,6 +471,24 @@ class WaterApp:
         ttk.Button(row, text="Calm the water", command=lambda: self.basin.calm()).pack(side="right")
         self.paddle_label = ttk.Label(hand, text="", font=("Segoe UI", 8), wraplength=400)
         self.paddle_label.pack(anchor="w")
+
+        ear = ttk.LabelFrame(right, text="Listening (every drop's sound from its own network)", padding=6)
+        ear.pack(fill="x", pady=(8, 0))
+        r1 = ttk.Frame(ear)
+        r1.pack(fill="x")
+        ttk.Checkbutton(r1, text="Sound", variable=self.sound_on).pack(side="left")
+        ttk.Label(r1, text="  place").pack(side="left")
+        from grm_guitar import MATERIALS, ROOMS
+        env = ttk.Combobox(r1, textvariable=self.environment, values=["Outdoors"] + list(ROOMS), state="readonly", width=11)
+        env.pack(side="left", padx=4)
+        env.bind("<<ComboboxSelected>>", lambda _e: self.environment_later())
+        mat = ttk.Combobox(r1, textvariable=self.env_material, values=list(MATERIALS), state="readonly", width=13)
+        mat.pack(side="left", padx=4)
+        mat.bind("<<ComboboxSelected>>", lambda _e: self.environment_later())
+        tk.Scale(ear, label="Listener distance (m)", variable=self.listener_m, from_=0.3, to=15, resolution=0.1,
+                 orient="horizontal", length=330, command=lambda _v: self.environment_later()).pack(fill="x")
+        self.ear_label = ttk.Label(ear, text="", font=("Segoe UI", 8), wraplength=400)
+        self.ear_label.pack(anchor="w")
 
         look = ttk.LabelFrame(right, text="Looking", padding=6)
         look.pack(fill="x", pady=(8, 0))
@@ -564,6 +592,13 @@ class WaterApp:
         if p is not None:
             size = float(self.drop_cm.get()) / 100 * self.size_scale
             self.basin.drop(p[0], p[1], size, float(self.strength_mm.get()) / 1000)
+            if self.sound_on.get():
+                # a drop as wide as the hollow it makes would be a bucketful: the sound is that of a drop of
+                # the given size falling from 50 cm (or at its terminal speed if slower)
+                D = min(size / 4, 6e-3)
+                v = min(math.sqrt(2 * 9.81 * 0.5), self.rain_physics.terminal(D))
+                snd, _ = self.rain_physics.drop_sound(D, v, self.rng)
+                self.voice.add(snd)
         self.finger = (p, time.perf_counter())
 
     def drag(self, event):
@@ -586,6 +621,50 @@ class WaterApp:
     def release(self, _event):
         self.finger = None
 
+    # ---------------------------------------------------------------- sound
+    def environment_later(self):
+        if self.env_job is not None:
+            self.root.after_cancel(self.env_job)
+        self.env_job = self.root.after(250, self.apply_environment)
+
+    def apply_environment(self):
+        self.env_job = None
+        ir = grm_rain.environment_ir(self.environment.get(), self.env_material.get(), float(self.listener_m.get()))
+        self.voice.set_room(ir)
+        self.voice.gain = 0.02 * max(1.0, float(self.listener_m.get())) ** 0.5   # the level stays listenable
+        self.ear_label.config(text=f"{self.environment.get()}: impulse response of {len(ir) / grm_rain.SAMPLE_RATE:.2f} s"
+                              + ("" if self.voice.stream is not None else " — no sound device (pip install sounddevice)"))
+
+    def rain_sounds(self, real):
+        """The drops falling on the basin during `real` seconds: their number from the rain rate (Marshall-Palmer
+        sizes, terminal speeds from the drag network), each one's sound from the impact and bubble networks.
+        Very many drops: a sample of them is synthesized, each made louder by sqrt(drops / sample) (incoherent)."""
+        b = self.basin
+        d_mm, flux = grm_rain.drops_per_second(self.rain_physics, float(self.rain.get()), b.Lx * b.Ly)
+        counts = self.rng.poisson(flux * real)
+        total = int(counts.sum())
+        if total == 0:
+            return
+        cap = 120
+        scale = math.sqrt(total / cap) if total > cap else 1.0
+        chosen = self.rng.choice(np.repeat(d_mm, counts), size=min(total, cap), replace=False)
+        dist = float(self.listener_m.get())
+        for d in chosen:
+            D = d * 1e-3
+            v = self.rain_physics.terminal(D)
+            snd, kind = self.rain_physics.drop_sound(D, v, self.rng, distance=1.0)
+            if self.sound_on.get():
+                self.voice.add(snd * scale, delay=self.rng.uniform(0, real))
+            if D >= 1.6e-3:
+                # what the eye sees of a big drop: its crater is smaller than the finest wave of this basin,
+                # so its ripple is drawn at the finest size the modes can show (exaggerated)
+                size = max(4 * D, 1.5 * b.Lx / b.Gx)
+                b.drop(self.rng.uniform(0, b.Lx), self.rng.uniform(0, b.Ly), size, 0.6 * D)
+
+    def close(self):
+        self.voice.close()
+        self.root.destroy()
+
     # ---------------------------------------------------------------- time
     def tick(self):
         now = time.perf_counter()
@@ -593,12 +672,9 @@ class WaterApp:
         self.last = now
         dt = real * float(self.speed.get())
         b = self.basin
-        rate = float(self.rain.get())
-        if rate > 0:
-            for _ in range(self.rng.poisson(rate * real)):
-                size = float(self.drop_cm.get()) / 100 * self.size_scale * 0.4
-                b.drop(self.rng.uniform(0, b.Lx), self.rng.uniform(0, b.Ly), size,
-                       float(self.strength_mm.get()) / 1000 * 0.4)
+        if float(self.rain.get()) > 0:
+            self.rain_sounds(real)
+        self.voice.process()
         if self.paddle_on.get():
             b.paddle(float(self.strength_mm.get()) / 1000 * 0.5, float(self.paddle_hz.get()), dt)
         b.step(dt)
