@@ -855,3 +855,65 @@ class TestWater:
         # with unequal bonds the same closure relation no longer gives 104.5 degrees
         _, angle = water(104.5, d1=0.9584, d2=1.20)
         assert abs(angle - 104.5) > 1.0
+
+
+class TestWaterWaves:
+    """GRM Water: the waves of a basin from the dispersion network."""
+
+    def test_dispersion_matches_the_formula(self):
+        import numpy as np
+        import grm_water as w
+        ks = np.geomspace(1.0, 2000.0, 12)
+        net = w.water_network("Water", 9.81, 0.3, 1.6, 0.7, ks)
+        rho, nu, sig = w.LIQUIDS["Water"]
+        exact = np.sqrt((9.81 * ks + sig / rho * ks ** 3) * np.tanh(ks * 0.3))
+        assert np.max(np.abs(net["w"] / exact - 1)) < 1e-6
+        assert np.all(net["gamma"] >= 2 * nu * ks ** 2)          # never less than the bulk viscosity
+
+    def test_known_numbers_of_water(self):
+        # capillary length of water ~2.7 mm; slowest ripple ~23 cm/s near 1.7 cm (textbook values)
+        import numpy as np
+        import grm_water as w
+        net = w.water_network("Water", 9.81, 1.0, 1.0, 1.0, np.geomspace(50, 1500, 40))
+        assert abs(net["lc"] * 1000 - 2.7) < 0.1
+        assert abs(net["cmin"] - 0.231) < 0.003
+        c = net["w"] / net["k"]
+        lam = 2 * np.pi / net["k"][np.argmin(c)]
+        assert 0.014 < lam < 0.020
+        assert c.min() >= net["cmin"] * 0.999
+
+    def test_inverse_network_finds_the_wavelength(self):
+        import grm_water as w
+        deep = w.wavelength_network("Water", 9.81, 10.0, 2.0)        # deep water: lambda = g / (2 pi f^2)
+        assert abs(deep["wavelength"] - 9.81 / (2 * 3.141592653589793 * 4)) < 0.002
+        shallow = w.wavelength_network("Water", 9.81, 0.02, 0.2)     # shallow water: speed sqrt(g h)
+        assert abs(shallow["speed"] / (9.81 * 0.02) ** 0.5 - 1) < 0.02
+
+    def test_drop_keeps_the_level_and_fades(self):
+        import numpy as np
+        import grm_water as w
+        b = w.Basin(*w.BASINS["Bathtub"])
+        b.drop(0.8, 0.35, 0.03, 0.005)
+        eta, _, _ = b.surface()
+        volume = np.trapezoid(np.trapezoid(eta, b.y, axis=1), b.x)
+        assert abs(volume) < 1e-6 * np.abs(eta).max() * b.Lx * b.Ly  # no water created or lost
+        e0 = b.energy()
+        for _ in range(50):
+            b.step(0.02)
+        assert 0.5 * e0 < b.energy() < e0                            # it dies, slowly
+        honey = w.Basin(*w.BASINS["Bathtub"], liquid="Olive oil")
+        honey.drop(0.8, 0.35, 0.03, 0.005)
+        e1 = honey.energy()
+        for _ in range(50):
+            honey.step(0.02)
+        assert honey.energy() / e1 < b.energy() / e0                 # a viscous liquid calms down faster
+
+    def test_symmetric_drop_gives_symmetric_waves(self):
+        import numpy as np
+        import grm_water as w
+        b = w.Basin(1.0, 1.0, 0.2)
+        b.drop(0.5, 0.5, 0.04, 0.005)
+        for _ in range(20):
+            b.step(0.03)
+        eta, _, _ = b.surface()
+        assert np.allclose(eta, eta[::-1, :], atol=1e-9) and np.allclose(eta, eta.T, atol=1e-9)

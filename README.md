@@ -9,11 +9,12 @@ This repository contains:
 | File | What it is |
 |---|---|
 | `grm.py` | The relational solver: one file, NumPy optional |
-| `test_grm.py` | A hardcore test battery: 76 tests, plus a validation protocol for full models |
+| `test_grm.py` | A hardcore test battery: 81 tests, plus a validation protocol for full models |
 | `grm_model.py` | The full GRM physics network (147 quantities, 113 relations, 55 measurements), exported from the web model |
 | `grm_sat.py` | Random 3-SAT written as a GRM network (one relation per clause), with a WalkSAT baseline |
 | `grm_tsp.py` | The travelling salesman as a GRM network: an elastic ring pulled between cities and its own length |
 | `grm_text.py` | Sentence categories without any training: a table of example sentences and their categories, and one small GRM network per new sentence |
+| `grm_water.py` | **GRM Water**: a basin of liquid to play with (drops, finger, rain, paddle); every wave swings and dies as a GRM network says |
 | `grm_brain.py` | **GRM Brain**: a brain that learns while it discovers a maze, with a memory of tensions; watch its network form |
 | `grm_scales.py` | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension |
 | `grm_voice.py` | **GRM Voice**: a voice made of relations. Lungs, vocal folds, airflow, vocal tract, velum, nose and lips are GRM networks; it says "Bonjour Anthony. Je suis le réseau." |
@@ -122,7 +123,7 @@ GRM_SPEC=grm_model.py python -m pytest -v -s test_grm.py          # PowerShell: 
 - **relation knock-out**: each relation is removed in turn. A relation matters if its removal moves a prediction by more than 0.1 sigma or widens its uncertainty by more than 5 %. Relations are sorted into definitions, untestable theory, redundant identities, and *idle claims*, which fail the test;
 - **chance test**: every measurement is scrambled by up to a factor of 10. If the network recovers as many scrambled values as real ones, its successes prove nothing.
 
-With part 3 below, the file holds 76 tests, all passing; 4 more run only on a full model.
+With part 3 below, the file holds 81 tests, all passing; 4 more run only on a full model.
 
 **3. The water test.** A geometry test that looked like an emergent bond angle is kept as a lesson: the tests show that the angle is an input, not an emergence.
 
@@ -401,6 +402,42 @@ Results on 40 held-out sentences, written separately and never used to build the
 Off-topic sentences: 4 of 6 give `unknown`. The two others share a word with the table by chance (`acte`, then `plante` and `besoin`)
 and get an answer: the table is small, and a single shared word is enough. A larger table, or a minimum amount of
 evidence, would be the next step.
+
+## GRM Water (`grm_water.py`)
+```bash
+python grm_water.py              # the window
+python grm_water.py --headless   # a drop in a bathtub, without a window
+```
+![GRM Water](docs/grm_water.png)
+
+A basin of liquid seen from above. Click: a drop falls. Drag: a finger goes through the water and leaves a wake.
+Rain, a paddle on the left wall, four basins (puddle, bathtub, pool, harbour), four liquids (water, sea water,
+olive oil, mercury), three gravities (Earth, Mars, Moon) and the depth.
+
+The surface is the sum of the standing waves of the basin (cosine modes, walls that reflect). How fast each one
+swings and how fast it dies is the answer of one GRM network, solved for 32 wavenumbers covering the basin (the modes
+in between read it by interpolation):
+```
+gravity          G = g k                     capillarity   C = (sigma / rho) k^3
+restoring        S = G + C                   depth         th = tanh(k h)
+dispersion       w^2 = S th
+bulk viscosity   g_bulk = 2 nu k^2           walls, bottom g_edge = sqrt(nu w / 2) (k / sinh(2 k h) + 1/Lx + 1/Ly)
+decay            gamma = g_bulk + g_edge
+also             c0 = sqrt(g h), capillary length sqrt(sigma / (rho g)), slowest ripple (4 g sigma / rho)^(1/4)
+```
+The liquid's handbook values come with their uncertainties, so every frequency has one too (about 0.4 %).
+A second network runs backwards: given the paddle's frequency, which wavelength must it make? (unknown: k).
+What the network finds, without being told: water ripples never run slower than 23.1 cm/s, and do so near
+1.7 cm; the capillary length of water is 2.73 mm; long waves in a 30 cm deep bathtub run at 1.72 m/s; a 2 Hz
+paddle makes 39 cm waves. The tests check these numbers against the textbook values.
+
+The picture: a fixed camera; each pixel sees the sky (with clouds, a texture to read the slopes) reflected by the
+tilted surface (Fresnel, Schlick), and the bottom through the water, which absorbs red more than blue (Pope and
+Fry 1997).
+
+Limits: linear waves (small amplitude: no breaking, no splash, no drops thrown up), a flat bottom, perfectly
+reflecting walls, a clean surface. The damping by the walls of a closed box (1/Lx + 1/Ly) extends the channel formula
+of Robertson and Rousseaux (arXiv:1706.05255), a hypothesis; real water, with dust on its surface, calms down faster.
 
 ## GRM Brain (`grm_brain.py`)
 
