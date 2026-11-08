@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="en" prefix="og: https://ogp.me/ns#">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+
+    <title>
+      GRM Explorer — 3D Interactive Global Relational Model | Anthony Charretier
+    </title>
+    <meta
+      name="description"
+      content="Explore Anthony Charretier's Global Relational Model (GRM) in real-time 3D. Complete unification of quantum scales, planetary mechanics, and cosmic horizons around the Zero Point."
+    />
+    <meta
+      name="keywords"
+      content="Global Relational Model, GRM, Anthony Charretier, unified physics, cosmology, cosmological constant, zero point, quantum physics, Three.js 3D, Planck scale, WebGPU, hydrodynamics, vocal cords, guitar acoustics"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="./apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="./favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="./favicon-16x16.png"
+    />
+    <link rel="manifest" href="./site.webmanifest" />
+    <meta name="author" content="Anthony Charretier" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://grm-explorer.anthony-charretier.fr" />
+    <meta name="theme-color" content="#0b0f19" />
+
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://grm-explorer.anthony-charretier.fr"
+    />
+    <meta
+      property="og:title"
+      content="GRM Explorer — 3D Interactive Global Relational Model"
+    />
+    <meta
+      property="og:description"
+      content="A single standing wave for the entire cosmos: from the Planck scale to galaxies, solved in real-time by the GRM relational core."
+    />
+    <meta
+      property="og:image"
+      content="https://grm-explorer.anthony-charretier.fr/preview.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="GRM Explorer" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="GRM Explorer — Global Relational Model (Anthony Charretier)"
+    />
+    <meta
+      name="twitter:description"
+      content="Real-time 3D visualizer unifying 170+ physical constants and 130 fundamental relations without spacetime separation."
+    />
+    <meta
+      name="twitter:image"
+      content="https://grm-explorer.anthony-charretier.fr/preview.png"
+    />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "GRM Explorer — Global Relational Model",
+        "url": "https://grm-explorer.anthony-charretier.fr",
+        "author": {
+          "@type": "Person",
+          "name": "Anthony Charretier"
+        },
+        "description": "Interactive 3D real-time visualizer based on the Global Relational Model (GRM). Solves a relational network unifying Planck's constant, particles, fluids, solids, and cosmological horizons.",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "All",
+        "inLanguage": "en"
+      }
+    </script>
+
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  </head>
+  <body>
+    <div
+      id="canvas-container"
+      role="region"
+      aria-label="Interactive 3D GRM Universe"
+    ></div>
+
+    <header id="top-bar">
+      <div class="top-bar-left">
+        <button
+          id="btn-tools-toggle"
+          class="btn btn-icon btn-tools-mobile"
+          title="Toggle Views & Tools"
+          aria-label="Toggle Tools"
+        >
+          🛠️ <span class="btn-text">Tools</span>
+        </button>
+        <div class="brand">
+          <span class="logo-dot" aria-hidden="true"></span>
+          <h1>GRM Explorer</h1>
+        </div>
+      </div>
+
+      <div class="top-bar-center">
+        <div class="control-group group-automation">
+          <button
+            id="btn-auto-play"
+            class="btn btn-primary"
+            title="Toggle automatic network relaxation"
+          >
+            ▶ Auto
+          </button>
+          <select
+            id="auto-interval-select"
+            aria-label="Cadence"
+            title="Expansion speed"
+          >
+            <option value="silent">⚡ Silent Mode (Max Speed)</option>
+            <option value="100">100 ms</option>
+            <option value="250">250 ms</option>
+            <option value="500" selected>500 ms</option>
+            <option value="1000">1000 ms (1s)</option>
+            <option value="2000">2000 ms (2s)</option>
+          </select>
+          <button
+            id="btn-mine-bridges"
+            class="btn btn-warning"
+            title="Run WebGPU Invariant Discovery"
+          >
+            ⚡ Mine Laws (WebGPU)
+          </button>
+        </div>
+
+        <div class="control-group group-scenario">
+          <label for="network-select">Scenario:</label>
+          <select id="network-select" aria-label="Select Scenario"></select>
+        </div>
+
+        <div class="control-group group-actions">
+          <button id="btn-add-net" class="btn" title="Create a new scenario">
+            + Scenario
+          </button>
+          <button
+            id="btn-add-node"
+            class="btn btn-primary"
+            title="Insert a node manually"
+          >
+            + Node
+          </button>
+          <button
+            id="btn-add-relation"
+            class="btn btn-primary"
+            title="Connect a new relation"
+          >
+            + Relation
+          </button>
+          <button
+            id="btn-reset"
+            class="btn btn-danger"
+            title="Reset network to defaults"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <div class="top-bar-right">
+        <button
+          id="btn-diag-toggle"
+          class="btn btn-icon btn-diag-mobile"
+          title="Toggle Diagnostics"
+          aria-label="Toggle Diagnostics"
+        >
+          📊 <span class="btn-text">Diagnostics</span>
+        </button>
+        <a
+          href="https://github.com/innermost47/grm-core"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="github-link"
+          title="Source Code on GitHub"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"
+            />
+          </svg>
+          <span class="gh-text">GitHub</span>
+        </a>
+      </div>
+    </header>
+
+    <aside
+      id="tools-panel"
+      class="glass-card"
+      aria-label="Views and Display Tools"
+    >
+      <div class="panel-header">
+        <div class="panel-header-title">
+          <span class="panel-icon">🛠️</span>
+          <h2>Views & Tools</h2>
+        </div>
+        <button
+          id="btn-close-tools"
+          class="close-btn"
+          aria-label="Close tools panel"
+        >
+          &times;
+        </button>
+      </div>
+
+      <div class="tools-buttons-list">
+        <button id="btn-red-thread" class="tool-btn btn-red-toggle">
+          <span>🔴 Red Thread: OFF</span>
+        </button>
+        <button id="btn-blue-thread" class="tool-btn btn-blue-toggle">
+          <span>🔵 Blue Thread: OFF</span>
+        </button>
+        <button id="btn-toggle-nodes" class="tool-btn">
+          <span>🟢 Nodes Display: ON</span>
+        </button>
+        <button id="btn-toggle-rels" class="tool-btn">
+          <span>🔗 Relations Display: ON</span>
+        </button>
+        <button id="btn-audio-mode" class="tool-btn btn-audio-toggle">
+          <span>🎵 Audio Resonance: OFF</span>
+        </button>
+        <button id="btn-toggle-diag" class="tool-btn">
+          <span>📊 Diagnostics Panel: ON</span>
+        </button>
+        <button id="btn-guide" class="tool-btn btn-guide-highlight">
+          <span>📖 Theory & Guide</span>
+          <span class="status-indicator">VIEW</span>
+        </button>
+      </div>
+    </aside>
+
+    <aside
+      id="status-panel"
+      class="glass-card"
+      aria-label="Real-time Network Diagnostics"
+    >
+      <div class="panel-header">
+        <div class="panel-header-title">
+          <span class="panel-icon">📊</span>
+          <h2>Diagnostics</h2>
+        </div>
+        <div class="panel-header-actions">
+          <span id="net-badge" class="badge">Analyzing...</span>
+          <button
+            id="btn-close-diag"
+            class="close-btn"
+            aria-label="Close Diagnostics"
+            title="Close Panel"
+          >
+            &times;
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="metric-row">
+          <span>State:</span>
+          <strong id="stability-status">---</strong>
+        </div>
+        <div class="metric-row">
+          <span>Total Cost &Chi;²:</span>
+          <strong id="cost-val">---</strong>
+        </div>
+        <div class="metric-row">
+          <span>Reduced &Chi;²:</span>
+          <strong id="chi2-val">---</strong>
+        </div>
+        <div class="metric-row">
+          <span>Degrees of Freedom:</span>
+          <strong id="dof-val">---</strong>
+        </div>
+      </div>
+
+      <div class="panel-section highlight-box">
+        <h3>Required Relaxation Energy</h3>
+        <div class="energy-display">
+          <span id="energy-val">0.00</span>
+          <span class="unit">dex² / tension</span>
+        </div>
+        <p id="energy-hint" class="hint">
+          Calculating required manifold relaxation...
+        </p>
+
+        <h4>Highest Tensions:</h4>
+        <ul id="top-pulls" class="pull-list"></ul>
+      </div>
+
+      <div class="panel-section">
+        <h3>Disabled Nodes (<span id="disabled-count">0</span>)</h3>
+        <div id="disabled-tags" class="tag-cloud"></div>
+      </div>
+    </aside>
+
+    <nav id="scale-nav" class="glass-card" aria-label="Quick scale navigation">
+      <div class="nav-arrows">
+        <button
+          id="btn-pan-left"
+          class="btn btn-nav"
+          title="Pan left towards Planck scale"
+        >
+          ◀
+        </button>
+        <button
+          id="btn-pan-right"
+          class="btn btn-nav"
+          title="Pan right towards cosmic horizons"
+        >
+          ▶
+        </button>
+      </div>
+      <div class="nav-jumps">
+        <button class="btn btn-jump" data-target="-450">🔬 Planck</button>
+        <button class="btn btn-jump" data-target="-200">
+          ⚛️ Particles (Tao)
+        </button>
+        <button class="btn btn-jump" data-target="0">🎸 Human & Voice</button>
+        <button class="btn btn-jump" data-target="250">
+          🪐 Planets & Mountains
+        </button>
+        <button class="btn btn-jump" data-target="550">
+          🌌 Cosmos (Hubble)
+        </button>
+      </div>
+    </nav>
+
+    <div
+      id="info-bubble"
+      class="glass-card hidden"
+      role="dialog"
+      aria-labelledby="bubble-title"
+    >
+      <div class="bubble-header">
+        <div>
+          <h3 id="bubble-title">Node Inspector</h3>
+          <span id="bubble-subtitle" class="node-id-sub">---</span>
+        </div>
+        <button
+          id="bubble-close"
+          class="close-btn"
+          aria-label="Close inspector"
+        >
+          &times;
+        </button>
+      </div>
+      <div class="bubble-body" id="bubble-content"></div>
+      <div class="bubble-actions">
+        <button id="btn-toggle-active" class="btn btn-sm">
+          Toggle Active / Inactive
+        </button>
+      </div>
+    </div>
+
+    <aside
+      id="sequencer-panel"
+      class="glass-card hidden"
+      aria-label="Cosmic Audio Arpeggiator"
+    >
+      <div class="seq-header">
+        <div class="seq-title-wrap">
+          <span class="seq-icon">✨</span>
+          <span class="seq-title">Cosmic Arpeggiator</span>
+        </div>
+        <span
+          class="badge-mini badge-blue"
+          title="Clocked to Newton's constant G"
+          >G = 66.7 BPM</span
+        >
+      </div>
+      <div class="seq-actions">
+        <button id="btn-seq-toggle" class="btn btn-primary btn-sm">
+          ▶ Start
+        </button>
+        <select
+          id="seq-mode-select"
+          class="btn btn-sm"
+          aria-label="Arpeggiator Mode"
+        >
+          <option value="mixed">Mixed Harmonics</option>
+          <option value="strings">Strings Only</option>
+          <option value="nodes">Constellations</option>
+        </select>
+      </div>
+    </aside>
+
+    <div
+      id="expansion-log-panel"
+      class="glass-card"
+      aria-label="Relational Expansion Log"
+    >
+      <div id="expansion-log-header">
+        <div class="log-title-wrap">
+          <span class="log-icon">🧬</span>
+          <span>GRM Expansion Log</span>
+        </div>
+        <button id="btn-copy-logs" onclick="copyExpansionLogs()">
+          Copy All
+        </button>
+      </div>
+      <div id="expansion-log-content">
+        <span class="log-empty-msg">Awaiting generation...</span>
+      </div>
+    </div>
+
+    <div
+      id="guide-modal"
+      class="modal-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="modal-card glass-card guide-card">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-badge-icon" aria-hidden="true">📖</span>
+            <h2>GRM Explorer — Theory & System Architecture</h2>
+          </div>
+          <button
+            id="guide-modal-close"
+            class="close-btn"
+            aria-label="Close guide"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="guide-body">
+          <section class="guide-section grand-public-intro">
+            <h3>1. What is Displayed Here?</h3>
+            <p class="intro-lead">
+              The universe is modeled as a continuous, interconnected relational
+              manifold spanning 60+ orders of magnitude.
+            </p>
+            <div class="intro-cards-trio">
+              <div class="intro-mini-card">
+                <span class="intro-emoji">🔮</span>
+                <strong>The Spheres (Nodes)</strong>
+                <p>
+                  The state variables of nature: electron mass, droplet
+                  capillary size, guitar strings, Martian mountain limits, up to
+                  cosmic horizons.
+                </p>
+              </div>
+              <div class="intro-mini-card">
+                <span class="intro-emoji">⚡</span>
+                <strong>The Filaments (Relations)</strong>
+                <p>
+                  Geometric constraints & scaling laws. Pulling on a subatomic
+                  node at the left propagates mathematical tension across the
+                  entire cosmos.
+                </p>
+              </div>
+              <div class="intro-mini-card">
+                <span class="intro-emoji">⚖️</span>
+                <strong>The Green Equilibrium</strong>
+                <p>
+                  <strong>"HARMONIZED"</strong> indicates zero residual stress:
+                  the quantum microcosm and cosmic macrocosm agree within
+                  laboratory sigma tolerances.
+                </p>
+              </div>
+            </div>
+
+            <div class="journey-box">
+              <span class="journey-title"
+                >Logarithmic Scale Spectrum (Left to Right):</span
+              >
+              <div class="journey-steps">
+                <div class="step-item">
+                  <span class="step-badge">LEFT</span>
+                  <strong>Infinitely Small</strong>
+                  <small>Planck scale, quarks, gauge bosons</small>
+                </div>
+                <span class="journey-arrow">⟶</span>
+                <div class="step-item">
+                  <span class="step-badge step-mid">CENTER</span>
+                  <strong>Human & Mesoscopic</strong>
+                  <small>Atoms, water waves, voice, acoustics, metals</small>
+                </div>
+                <span class="journey-arrow">⟶</span>
+                <div class="step-item">
+                  <span class="step-badge step-cosmo">RIGHT</span>
+                  <strong>Cosmic Macrocosm</strong>
+                  <small>Planets, stars, black holes, Hubble horizon</small>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section">
+            <h3>2. Sphere Color Coding</h3>
+            <div class="legend-grid">
+              <div class="legend-card">
+                <div class="legend-head">
+                  <span class="dot-legend dot-blue"></span>
+                  <strong>Invariant Constants</strong>
+                  <span class="badge-mini badge-blue">Fixed Anchors</span>
+                </div>
+                <p class="legend-desc">
+                  Immovable pillars of the manifold (<code>c</code>,
+                  <code>G</code>, <code>ℏ</code>, <code>e</code>,
+                  <code>k_B</code>). Scaled +65% in size.
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <span class="dot-legend dot-green"></span>
+                  <strong>Experimental Measurements</strong>
+                  <span class="badge-mini badge-green">Laboratory</span>
+                </div>
+                <p class="legend-desc">
+                  Empirical laboratory values (CODATA 2024, CERN, Planck
+                  Satellite, DESI 2024, rock mechanics).
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <span class="dot-legend dot-purple"></span>
+                  <strong>Derived Variables</strong>
+                  <span class="badge-mini badge-purple">Solved</span>
+                </div>
+                <p class="legend-desc">
+                  Free state variables solved by the non-linear Gauss-Newton /
+                  Levenberg-Marquardt solver.
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <span class="dot-legend dot-yellow"></span>
+                  <strong>Auto-Generated Nodes</strong>
+                  <span class="badge-mini badge-yellow">Expanded</span>
+                </div>
+                <p class="legend-desc">
+                  Nodes spawned dynamically by the relaxation engine or WebGPU
+                  dimensional pipeline.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section">
+            <h3>3. WebGPU Features & Computational Discovery</h3>
+            <div class="legend-grid">
+              <div class="legend-card">
+                <div class="legend-head">
+                  <strong>⚡ WebGPU Bridge Miner</strong>
+                </div>
+                <p class="legend-desc">
+                  Uses compute shaders (WGSL) to test millions of node
+                  combinations in &lt;15 ms. Detects exact dimensionless
+                  invariants $[M, L, T, Q, K] = [0,0,0,0,0]$ linking distant
+                  physical realms.
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <strong>📐 Strict Dimensional Verification</strong>
+                </div>
+                <p class="legend-desc">
+                  Guarantees that no fractional power units exist. Geometric
+                  means $\sqrt{A \times B}$ require dimension parity $\sum
+                  \mathbf{d} \pmod 2 = 0$, eliminating 100% of dimensional
+                  noise.
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <strong>🔴 Red Thread & 🔵 Blue Line</strong>
+                </div>
+                <p class="legend-desc">
+                  Dynamic Catmull-Rom tube splines tracing the upper and lower
+                  geometric hulls of the manifold, visualizing scale-dependent
+                  renormalization flow.
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <strong>🎵 Cosmic Arpeggiator & Acoustic Plucking</strong>
+                </div>
+                <p class="legend-desc">
+                  Converts physical parameters into acoustic frequencies.
+                  Features an interactive synthesizer and an autonomous
+                  arpeggiator clocked to $G = 66.7\text{ BPM}$.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section">
+            <h3>4. Relation Color Spectrum (&sigma; Pull)</h3>
+            <div class="legend-grid">
+              <div class="legend-card">
+                <div class="legend-head">
+                  <span
+                    class="dot-legend"
+                    style="background: #10b981; box-shadow: 0 0 8px #10b981"
+                  ></span>
+                  <strong>0.00 to 1.00 &sigma; (Emerald)</strong>
+                </div>
+                <p class="legend-desc">
+                  Perfect harmony. Relations agree within standard experimental
+                  margins.
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <span
+                    class="dot-legend"
+                    style="background: #eab308; box-shadow: 0 0 8px #eab308"
+                  ></span>
+                  <strong>1.00 to 2.00 &sigma; (Gold)</strong>
+                </div>
+                <p class="legend-desc">
+                  Standard compromise. Minor curvature tension (e.g. nuclear
+                  mass deficit).
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <span
+                    class="dot-legend"
+                    style="background: #f97316; box-shadow: 0 0 8px #f97316"
+                  ></span>
+                  <strong>2.00 to 3.00 &sigma; (Orange)</strong>
+                </div>
+                <p class="legend-desc">
+                  Confirmed tension. Two physical principles are pulling against
+                  one another.
+                </p>
+              </div>
+              <div class="legend-card">
+                <div class="legend-head">
+                  <span
+                    class="dot-legend"
+                    style="background: #ec4899; box-shadow: 0 0 8px #ec4899"
+                  ></span>
+                  <strong>&gt; 3.00 &sigma; (Critical Magenta)</strong>
+                </div>
+                <p class="legend-desc">
+                  Critical friction or physical anomaly (e.g. Hubble tension
+                  between local and CMB horizons).
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section ontologie-box">
+            <h3>5. Zero Point Ontology</h3>
+            <p>
+              This explorer demonstrates absolute non-separation: there is not
+              an isolated quantum world, a human world, and an astronomical
+              universe. There is only
+              <strong>one single standing wave</strong> projecting itself across
+              logarithmic scales to contemplate its own harmonic architecture.
+            </p>
+          </section>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btn-guide-close" class="btn btn-primary">
+            Close Guide
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="context-menu" class="glass-card hidden" role="menu">
+      <ul>
+        <li id="cm-add-node" role="menuitem">➕ Add New Node</li>
+        <li id="cm-add-relation" role="menuitem">🔗 Add New Relation</li>
+        <li id="cm-solve" role="menuitem">⚡ Recalculate Network</li>
+        <li id="cm-center" role="menuitem">🎯 Reset Camera View</li>
+      </ul>
+    </div>
+
+    <div
+      id="node-modal"
+      class="modal-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="modal-card glass-card">
+        <div class="modal-header">
+          <h3>Add Physical Node</h3>
+          <button id="modal-close" class="close-btn" aria-label="Close">
+            &times;
+          </button>
+        </div>
+        <form id="add-node-form">
+          <div class="form-group">
+            <label for="node-id">Identifier (e.g. M_test):</label>
+            <input type="text" id="node-id" required pattern="[A-Za-z0-9_]+" />
+          </div>
+          <div class="form-group">
+            <label for="node-desc">Description:</label>
+            <input
+              type="text"
+              id="node-desc"
+              placeholder="e.g. Radius of hypothetical vortex..."
+            />
+          </div>
+          <div class="form-group">
+            <label for="node-scale">Scale:</label>
+            <select id="node-scale">
+              <option value="log">Logarithmic (strictly positive)</option>
+              <option value="lin">Linear (signed parameter)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="node-guess">Initial Guess:</label>
+            <input
+              type="number"
+              step="any"
+              id="node-guess"
+              required
+              value="1.0"
+            />
+          </div>
+          <div class="form-group checkbox-group">
+            <label
+              ><input type="checkbox" id="node-measured" /> Set Experimental
+              Measurement</label
+            >
+          </div>
+          <div id="measured-fields" class="form-subgroup hidden">
+            <div class="form-group">
+              <label for="node-meas-val">Measured Value:</label>
+              <input type="number" step="any" id="node-meas-val" />
+            </div>
+            <div class="form-group">
+              <label for="node-meas-sigma">Uncertainty &sigma; (dex):</label>
+              <input
+                type="number"
+                step="any"
+                id="node-meas-sigma"
+                value="0.01"
+              />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn modal-cancel-btn">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Node</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div
+      id="relation-modal"
+      class="modal-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="modal-card glass-card">
+        <div class="modal-header">
+          <h3>Add Geometric Relation</h3>
+          <button id="rel-modal-close" class="close-btn" aria-label="Close">
+            &times;
+          </button>
+        </div>
+        <form id="add-relation-form">
+          <div class="form-group">
+            <label for="rel-name">Relation Name (e.g. c_law_unified):</label>
+            <input type="text" id="rel-name" required pattern="[A-Za-z0-9_]+" />
+          </div>
+          <div class="form-group">
+            <label for="rel-terms"
+              >Log-linear Terms (format:
+              <code>node:power</code> comma-separated):</label
+            >
+            <input
+              type="text"
+              id="rel-terms"
+              required
+              placeholder="e.g. Rh: 1, c: -1, H0: 1"
+            />
+            <small class="hint"
+              >Represents: &sum; (power &times; log10(node)) = RHS Target</small
+            >
+          </div>
+          <div class="form-group">
+            <label for="rel-rhs">RHS Target Value (log10):</label>
+            <input type="number" step="any" id="rel-rhs" required value="0.0" />
+          </div>
+          <div class="form-group">
+            <label for="rel-sigma">Tolerance &sigma; (dex):</label>
+            <input
+              type="number"
+              step="any"
+              id="rel-sigma"
+              required
+              value="0.01"
+            />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn modal-cancel-btn">Cancel</button>
+            <button type="submit" class="btn btn-primary">
+              Connect Relation
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div
+      id="invariants-modal"
+      class="modal-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="modal-card glass-card invariants-card">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-badge-icon" aria-hidden="true">⚡</span>
+            <div>
+              <h2 id="invariants-modal-title">
+                WebGPU Physical Invariants Discovery
+              </h2>
+              <span id="invariants-modal-subtitle" class="invariants-sub"
+                >Scanning manifold...</span
+              >
+            </div>
+          </div>
+          <button
+            id="invariants-modal-close"
+            class="close-btn"
+            aria-label="Close invariants modal"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="invariants-toolbar">
+          <div class="invariants-actions-left">
+            <button
+              id="btn-copy-all-invariants"
+              class="btn btn-primary"
+              title="Copy all discovered invariants as JavaScript relations"
+            >
+              📋 Copy All as Code
+            </button>
+            <button
+              id="btn-inject-all-invariants"
+              class="btn btn-warning"
+              title="Inject all discovered invariants directly into the active 3D network"
+            >
+              ⚡ Inject All into Manifold
+            </button>
+          </div>
+          <span id="invariants-count-badge" class="badge-mini badge-green"
+            >0 Invariants</span
+          >
+        </div>
+
+        <div class="invariants-body">
+          <div id="invariants-list" class="invariants-grid"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
