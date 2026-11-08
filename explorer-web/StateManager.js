@@ -48,6 +48,20 @@ export class StateManager {
     );
   }
 
+  exportJson() {
+    const rawData = JSON.stringify(this.data, null, 2);
+    const fileBlob = new Blob([rawData], { type: "application/json" });
+    const downloadUrl = URL.createObjectURL(fileBlob);
+    const exportAnchor = document.createElement("a");
+
+    exportAnchor.href = downloadUrl;
+    exportAnchor.download = `grm_network_store_${Date.now()}.json`;
+    document.body.appendChild(exportAnchor);
+    exportAnchor.click();
+    document.body.removeChild(exportAnchor);
+    URL.revokeObjectURL(downloadUrl);
+  }
+
   createNetwork(name) {
     const id = "net_" + Date.now();
     const current = this.getActive();

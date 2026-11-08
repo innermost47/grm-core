@@ -2067,6 +2067,10 @@ window.addEventListener("keydown", (e) => {
 
 document.addEventListener("click", () => hideContextMenu());
 
+document.getElementById("btn-export-json")?.addEventListener("click", () => {
+  state.exportJson();
+});
+
 netSelect.onchange = (e) => {
   state.data.activeId = e.target.value;
   state.save();
