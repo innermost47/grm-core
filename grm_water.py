@@ -35,7 +35,7 @@ import time
 
 import numpy as np
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 import grm_rain
 
 try:

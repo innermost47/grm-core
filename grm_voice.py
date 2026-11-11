@@ -35,7 +35,7 @@ import wave
 
 import numpy as np
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 SAMPLE_RATE = 22050
 RHO_AIR = 1.14          # kg/m^3, warm humid air in the vocal tract

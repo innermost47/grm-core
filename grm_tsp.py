@@ -30,7 +30,7 @@ import time
 
 import numpy as np
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 
 # ------------------------------------------------------------------ instances

@@ -36,7 +36,7 @@ import time
 
 import numpy as np
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 LN10 = math.log(10.0)
 

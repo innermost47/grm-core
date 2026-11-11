@@ -21,7 +21,7 @@ import math
 import random
 import sys
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 MASSES = {"A": 12.0, "B": 25.0, "C": 40.0, "D": 55.0, "E": 70.0}   # g, the truth
 COMBOS = ["AB", "BC", "ACD", "BDE", "AE", "CDE", "ABC", "BD", "ACE", "ABDE"]

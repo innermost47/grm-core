@@ -34,7 +34,7 @@ import os
 import random
 from collections import defaultdict
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "weo_2026oct_current_accounts.csv")
 LAST_MEASURED = 2024

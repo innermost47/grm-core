@@ -24,7 +24,7 @@ import copy
 import json
 import math
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 from grm_presets import PRESETS
 
 try:

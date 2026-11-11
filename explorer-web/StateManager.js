@@ -1,5 +1,6 @@
 import { DEFAULT_MEASURED } from "./measured.js";
 import { DEFAULT_NODES } from "./nodes.js";
+import { DEFAULT_RELATIONS } from "./relations.js";
 
 const STORAGE_KEY = "GRM_EXPLORER_STORE_V2";
 
@@ -19,6 +20,7 @@ export class StateManager {
           id: "default",
           name: "Unified Global Network (Cosmos + Atoms + Planets)",
           nodes: JSON.parse(JSON.stringify(DEFAULT_NODES)),
+          relations: JSON.parse(JSON.stringify(DEFAULT_RELATIONS)),
           customRelations: [],
           measured: JSON.parse(JSON.stringify(DEFAULT_MEASURED)),
           disabledNodes: [],
@@ -48,8 +50,32 @@ export class StateManager {
     );
   }
 
-  exportJson() {
-    const rawData = JSON.stringify(this.data, null, 2);
+  exportJson(solvedValues = null) {
+    const activeNet = this.getActive();
+    const disabledNodes = new Set(activeNet.disabledNodes || []);
+
+    if (solvedValues) {
+      for (const [nodeName, val] of Object.entries(solvedValues)) {
+        if (activeNet.nodes[nodeName] && !disabledNodes.has(nodeName)) {
+          activeNet.nodes[nodeName].solved = val;
+        }
+      }
+    }
+
+    const activeMeasurements = {};
+    for (const [name, meas] of Object.entries(activeNet.measured || {})) {
+      if (!disabledNodes.has(name)) {
+        activeMeasurements[name] = meas;
+      }
+    }
+    activeNet.measured = activeMeasurements;
+
+    const storeExport = {
+      activeId: this.data["activeId"] || "default",
+      networks: [activeNet],
+    };
+
+    const rawData = JSON.stringify(storeExport, null, 2);
     const fileBlob = new Blob([rawData], { type: "application/json" });
     const downloadUrl = URL.createObjectURL(fileBlob);
     const exportAnchor = document.createElement("a");

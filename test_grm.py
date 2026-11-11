@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Anthony Charretier
 """
-Test battery for the Global Relational Model engine (grm.py).
+Test battery for the Global Relational Model engine (pygrm).
 
     python -m pytest -v test_grm.py
     GRM_SPEC=path/to/my_model.py python -m pytest -v -s test_grm.py     # also test a full model
@@ -23,7 +23,7 @@ import time
 
 import pytest
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 REL_TOL = 1e-6          # an exactly solvable system must be solved to this precision
 

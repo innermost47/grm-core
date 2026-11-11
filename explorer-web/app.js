@@ -1373,6 +1373,14 @@ function autoExpandNetwork(nodes, relations, thresholdTension = 0.75) {
   let newRelations = JSON.parse(JSON.stringify(relations));
   let addedCount = 0;
 
+  const seenPairs = new Set();
+  for (const rel of newRelations) {
+    if (rel.parents && rel.parents.length >= 2) {
+      const sortedParents = [...rel.parents].sort();
+      seenPairs.add(sortedParents.join("_"));
+    }
+  }
+
   let nodeKeys = Object.keys(newNodes);
   nodeKeys.sort(() => Math.random() - 0.5);
 
@@ -1383,6 +1391,10 @@ function autoExpandNetwork(nodes, relations, thresholdTension = 0.75) {
 
     for (let j = i + 1; j < nodeKeys.length; j++) {
       const nodeBName = nodeKeys[j];
+
+      const pairKey = [nodeAName, nodeBName].sort().join("_");
+      if (seenPairs.has(pairKey)) continue;
+
       const meshB = nodeMeshes.get(nodeBName);
 
       if (meshB) {
@@ -1390,6 +1402,8 @@ function autoExpandNetwork(nodes, relations, thresholdTension = 0.75) {
         const tension = Math.abs(distance - 50) / 50;
 
         if ((tension > thresholdTension || distance > 120) && addedCount < 2) {
+          seenPairs.add(pairKey);
+
           const nodeASpec = newNodes[nodeAName] || { guess: 1.0 };
           const nodeBSpec = newNodes[nodeBName] || { guess: 1.0 };
 
@@ -1738,7 +1752,10 @@ document
     btn.textContent = origText;
     btn.disabled = false;
 
+    const maxAllowedResidual = 0.005;
+
     const novelInvariants = discoveredBridges.filter((b) => {
+      if (b.residualDex > maxAllowedResidual) return false;
       const sig = [...b.nodes].sort().join("|");
       return !knownSignatures.has(sig);
     });
@@ -1747,7 +1764,7 @@ document
       alert(
         `WebGPU Search Completed in ${elapsed} ms.\n\n` +
           `Tested Combinations: ~${Math.round(nodeNames.length ** 3 / 6).toLocaleString()}\n` +
-          `Result: All invariant relations for current nodes are already connected.`,
+          `Result: No new low-tension invariant relations found within the strict threshold (${maxAllowedResidual} dex).`,
       );
       return;
     }
@@ -1760,22 +1777,22 @@ document
     const listContainer = document.getElementById("invariants-list");
 
     subtitle.textContent = `Mined in ${elapsed} ms across ${Math.round(nodeNames.length ** 3 / 6).toLocaleString()} triplet combinations`;
-    countBadge.textContent = `${novelInvariants.length} Novel Invariant(s)`;
+    countBadge.textContent = `${novelInvariants.length} Low-Tension Invariant(s)`;
 
     listContainer.innerHTML = novelInvariants
       .map(
         (inv, idx) => `
-      <div class="invariant-card-item">
-        <div class="invariant-info-left">
-          <div class="invariant-formula-display">#${idx + 1} : ${inv.formula}</div>
-          <div class="invariant-meta-text">Identifier: ${inv.name} | Target: 10^(${inv.rhs.toFixed(4)})</div>
+        <div class="invariant-card-item">
+          <div class="invariant-info-left">
+            <div class="invariant-formula-display">#${idx + 1} : ${inv.formula}</div>
+            <div class="invariant-meta-text">Identifier: ${inv.name} | Target: 10^(${inv.rhs.toFixed(4)})</div>
+          </div>
+          <div class="invariant-badges-right">
+            <span class="accuracy-badge">${inv.accuracyPercent}%</span>
+            <span class="residual-badge">&sigma; = ${inv.residualDex.toFixed(6)} dex</span>
+          </div>
         </div>
-        <div class="invariant-badges-right">
-          <span class="accuracy-badge">${inv.accuracyPercent}%</span>
-          <span class="residual-badge">&sigma; = ${inv.residualDex.toFixed(6)} dex</span>
-        </div>
-      </div>
-    `,
+      `,
       )
       .join("");
 
@@ -2068,7 +2085,7 @@ window.addEventListener("keydown", (e) => {
 document.addEventListener("click", () => hideContextMenu());
 
 document.getElementById("btn-export-json")?.addEventListener("click", () => {
-  state.exportJson();
+  state.exportJson(lastSolvedResult?.values);
 });
 
 netSelect.onchange = (e) => {

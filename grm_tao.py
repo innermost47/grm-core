@@ -40,7 +40,7 @@ import sys
 
 import numpy as np
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 # PDG 2024, GeV, with their 1-sigma uncertainties
 MASSES = {

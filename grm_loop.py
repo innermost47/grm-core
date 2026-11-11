@@ -29,7 +29,7 @@ import itertools
 import math
 import random
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 ME, MMU, MTAU = (0.51099895000, 1.5e-10), (105.6583755, 2.3e-6), (1776.93, 0.09)     # MeV, PDG 2024
 DM21 = (7.53e-5, 0.18e-5)                                   # eV^2, PDG 2024

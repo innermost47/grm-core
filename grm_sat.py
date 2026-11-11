@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Anthony Charretier
 """
-Random 3-SAT solved by the GRM core (grm.py).
+Random 3-SAT solved by the GRM core (pygrm).
 
 A 3-SAT formula is a set of clauses (a OR not-b OR c ...). Here each variable is a GRM node and each
 clause is a relation that must equal zero:
@@ -24,7 +24,7 @@ import math
 import random
 import time
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 CLAUSE_SIGMA = 1e-2
 
@@ -264,7 +264,7 @@ def main():
         return
 
     print("=" * 78)
-    print(f"  RANDOM 3-SAT — GRM core (grm.py) vs WalkSAT    alpha = {args.alpha}")
+    print(f"  RANDOM 3-SAT — GRM core (pygrm) vs WalkSAT    alpha = {args.alpha}")
     print("=" * 78)
     jobs = []
     if args.dimacs:

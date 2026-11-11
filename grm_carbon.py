@@ -31,7 +31,7 @@ import csv
 import math
 import os
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gcb2025_global_budget.csv")
 TERMS = ("fossil", "land_use_change", "atmospheric_growth", "ocean_sink", "land_sink", "cement_carbonation")

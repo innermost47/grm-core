@@ -38,7 +38,7 @@ import argparse
 import math
 import random
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 MOVES = {"N": (0, -1), "E": (1, 0), "S": (0, 1), "W": (-1, 0)}
 NEW_TENSION = 1.0        # a relation just discovered: not sure yet

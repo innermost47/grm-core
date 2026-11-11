@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Anthony Charretier
 """
-GRM Guitar - six vibrating strings computed by the Global Relational Model core (grm.py).
+GRM Guitar - six vibrating strings computed by the Global Relational Model core (pygrm).
 
 Python 3.10+
 Dependencies: numpy (required), sounddevice (optional, for sound; WAV export works without it)
@@ -36,7 +36,7 @@ import numpy as np
 
 LG10 = math.log10
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 try:
     import sounddevice as sd

@@ -29,7 +29,7 @@ import math
 
 import numpy as np
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 SAMPLE_RATE = 44100
 LN10 = math.log(10.0)

@@ -26,7 +26,7 @@ import math
 import re
 import unicodedata
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 SIGMA_WORD = 0.5      # dex, uncertainty of one word seen once
 SMOOTHING = 0.5       # added to every word / category count

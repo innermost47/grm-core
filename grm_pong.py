@@ -31,7 +31,7 @@ import argparse
 import math
 import random
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 WIDTH, HEIGHT = 800, 500
 BALL_RADIUS = 8

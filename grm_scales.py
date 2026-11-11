@@ -26,7 +26,7 @@ Usage:
 import math
 import random
 
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 LG = math.log10
 SCALING_SIGMA = 0.15        # dex: a law of physics written without its exact prefactor (hypothesis)

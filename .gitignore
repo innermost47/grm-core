@@ -8,3 +8,10 @@ __pycache__/
 *.tsp.gz
 *.npz
 .venv/
+
+# outputs of the scripts in equation/
+equation/*.png
+equation/*.csv
+equation/*.html
+equation/cf4_summary.json
+equation/data/grm_network_cf4*.json

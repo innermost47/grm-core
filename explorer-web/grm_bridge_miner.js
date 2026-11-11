@@ -195,10 +195,9 @@ export class GRMBridgeMiner {
     }
 
     const scientificPasses = [
+      { toleranceDex: 0.001, minScaleDistance: 0.0 },
+      { toleranceDex: 0.003, minScaleDistance: 0.0 },
       { toleranceDex: 0.005, minScaleDistance: 0.0 },
-      { toleranceDex: 0.015, minScaleDistance: 0.0 },
-      { toleranceDex: 0.035, minScaleDistance: 0.0 },
-      { toleranceDex: 0.06, minScaleDistance: 0.0 },
     ];
 
     for (const p of scientificPasses) {
@@ -341,6 +340,7 @@ export class GRMBridgeMiner {
 
     const discovered = [];
     const seenSignatures = new Set();
+    const seenCanonicalForms = new Set();
 
     for (let h = 0; h < totalHits; h++) {
       const base = h * 8;
@@ -352,6 +352,8 @@ export class GRMBridgeMiner {
       const wC = hitInt[base + 5];
       const res = hitFloat[base + 6];
       const targetLog = hitFloat[base + 7];
+
+      if (res > 0.01) continue;
 
       const nameA = nodeNames[idxA];
       const nameB = nodeNames[idxB];
@@ -374,6 +376,38 @@ export class GRMBridgeMiner {
       const sigKey = activeKeys.map((k) => `${k}:${terms[k]}`).join("|");
       if (seenSignatures.has(sigKey)) continue;
       seenSignatures.add(sigKey);
+      const powers = activeKeys.map((k) => terms[k]);
+      let commonGcd = powers[0];
+      for (let i = 1; i < powers.length; i++) {
+        let x = commonGcd,
+          y = powers[i];
+        while (y) {
+          let t = y;
+          y = x % y;
+          x = t;
+        }
+        commonGcd = x;
+      }
+      commonGcd = Math.abs(commonGcd);
+
+      // Si le premier coefficient non nul est négatif, on inverse tout pour stabiliser la forme
+      let signMultiplier = 1;
+      const firstNonZero = powers.find((p) => p !== 0);
+      if (firstNonZero < 0) {
+        signMultiplier = -1;
+      }
+
+      const canonicalParts = activeKeys.map((k, i) => {
+        const reducedPower = (powers[i] * signMultiplier) / commonGcd;
+        return `${k}:${reducedPower}`;
+      });
+
+      const normalizedTargetLog = targetLog * signMultiplier;
+      const canonicalKey =
+        canonicalParts.join("|") + `_rhs:${normalizedTargetLog.toFixed(3)}`;
+
+      if (seenCanonicalForms.has(canonicalKey)) continue;
+      seenCanonicalForms.add(canonicalKey);
 
       const netDim = [0, 0, 0, 0, 0];
       let isDimValid = true;

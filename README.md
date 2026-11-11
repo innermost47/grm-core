@@ -10,7 +10,8 @@ This repository contains:
 
 | File | What it is |
 |---|---|
-| `grm.py` | The relational solver: one file, NumPy optional |
+| [`pygrm`](https://pypi.org/project/pygrm/) | The relational solver, now its own package: `pip install pygrm` ([repository](https://github.com/innermost47/pygrm)) |
+| `equation/` | **The equation between the data**: one network of 199 quantities (cosmos, atoms, planets, a guitar, a voice) brings up S × Equant = Estock, the quantum and gravity in one loop, and shows how it found it |
 | `web/` | **The Relational Universe** ([live](https://simulation.anthony-charretier.fr)): from the Big Bang to the end of time in the browser (3D, music), every number held by one GRM network (`grm.js`, the JavaScript port) |
 | `grm_hidden_node.py` | **A node nobody mentioned**: the network sees that something is missing, makes the missing node emerge (where it acts, how large it is), and refuses to invent one when nothing is missing |
 | `grm_tao.py` | **From the 0 the 1, from the 1 the 2...**: are the particle masses harmonics born in cascade from two seeds? Three readings of "relation" (spiral, intermodulation, trinity), each judged against random spectra |
@@ -61,7 +62,16 @@ The guitar simulator applies the same method to a concrete object. Every place w
 
 ---
 
-## The engine (`grm.py`)
+## The engine (`pygrm`)
+
+The engine is published on PyPI as [pygrm](https://pypi.org/project/pygrm/) (one file, NumPy optional):
+
+```bash
+pip install pygrm            # pure Python
+pip install pygrm[fast]      # with NumPy
+```
+
+Every script of this repository imports it with `from pygrm import GlobalRelationalNetwork`.
 
 ### Nodes
 - **positive quantities** (default), handled in log space: `x = log10(value)`. Values from 1e-44 to 1e122 coexist without loss.
@@ -88,7 +98,7 @@ Each relation has a `sigma` (its tolerance, in dex for log-linear relations). A 
 Measurements are data with an uncertainty, not starting points:
 
 ```python
-from grm import GlobalRelationalNetwork
+from pygrm import GlobalRelationalNetwork
 
 net = GlobalRelationalNetwork(nodes, relations)
 out = net.solve(measured_dict={"m": 2.0, "H0": (70.0, 0.01)})   # value, or (value, sigma in dex)
@@ -116,6 +126,111 @@ out = net.solve(measured_dict={"m": 2.0, "H0": (70.0, 0.01)})   # value, or (val
 
 ---
 
+## The equation between the data (`equation/`)
+
+```bash
+cd equation
+python trace_derivation.py           # the chain of relations the network took (1 second)
+python test_equation.py              # the equation against data: four tests (a few seconds)
+python equation_wave.py              # the wave of the equation over a cycle (picture)
+```
+
+Nothing new was measured. One GRM network holds 199 quantities already known (cosmology, the Planck units, atoms,
+planets, rock, a guitar, a voice), 123 relations and 98 measurements (`data/grm_network_fully_enriched.json`). Solved
+and asked for the invariant that ties the widest span of scales together, it brings up, over 175 decades:
+
+```math
+S \cdot E_{quant} = E_{stock}
+\qquad
+S = \frac{\pi}{(H\,t_P)^2} \approx 10^{122},\quad
+E_{quant} = \frac{\hbar H}{2\pi} \approx 10^{-53}\ \text{J},\quad
+E_{stock} = \frac{c^5}{2 G H} \approx 10^{70}\ \text{J}
+```
+
+S is the entropy of the horizon (its area in Planck cells), E_quant the energy of the horizon's temperature (the
+quantum, ħ only), E_stock the energy that fills the horizon (gravity, G only). The equation holds for any H: it ties the
+quantum and gravity through S, the only term that holds both.
+
+### The chain the network took
+
+`trace_derivation.py` asks the network for the smallest combination of its own relations that gives the equation.
+Seven relations, all written separately; every constant cancels, and the right side comes out exactly 1:
+
+```math
+\begin{aligned}
+(0)\quad & l_P = \sqrt{\hbar G / c^3} && \times(-2)\\
+(0\to 1)\quad & H_{end} = H_0 \sqrt{\Omega_\Lambda} && \times 2\\
+(1\to 2A)\quad & \rho_\Lambda = 3 c^2 H_0^2 \Omega_\Lambda / (8\pi G) && \times(-1)\\
+(1\to 2A)\quad & E_{stock} = \tfrac{4\pi}{3}\,\rho_\Lambda\,(c/H_{end})^3 && \times(-1)\\
+(1\to 2B)\quad & T_{floor} = \hbar H_{end} / (2\pi k_B) && \times 1\\
+(1\to 2B)\quad & E_{quant} = k_B T_{floor} && \times 1\\
+(2A \leftrightarrow 2B)\quad & S = \pi c^2 / (H_{end}^2\, l_P^2) && \times 1\\
+\Longrightarrow\quad & S \cdot E_{quant} = E_{stock}
+\end{aligned}
+```
+
+The Planck definition enters twice, the other way round: it is what cancels ħ and G and closes the loop
+(left side minus right side on the solved values: 1e-14 decades). The network builds E_stock as the vacuum filling the
+horizon; on paper it is a black hole of the horizon's size. Both give the same number: a sphere of radius c/H filled at
+the critical density has exactly the size of its own black hole.
+
+![The chain and its triangle](docs/equation/draw_chain.png)
+
+**The structure.** Four nodes and four relations: 0 (the Planck tick, where ħ, G and c are fused) to 1 (the bubble and
+its rate H), 1 to 2A (gravity: the content) and to 2B (the quantum: the grain), and the 3, which is not a node but the
+relation between 2A and 2B: S. A network of N nodes and R relations holds R − N + 1 independent loops: here
+4 − 4 + 1 = 1, one invariant, and it is this equation; the open tail 0 – 1 is its one degree of freedom, H. Placed by
+their powers of ħ, G and H, the three terms close a triangle on the origin: in log, the equation is a zero.
+`generations.py --with-equation` shows the same order inside the network: S and E_quant are born in the same
+generation, E_stock one generation later, from the two of them.
+
+**The wave.** In log, E_quant and E_stock are one wave and its mirror around E_P/√(4π) ≈ 10^8.74 J: their sum never
+moves, S is the gap between them. From the point zero (S = 1, the grain equals the content) to the plateau and back,
+each cycle closes on the point it started from (the return drawn as the expansion replayed backwards, a hypothesis).
+Today sits almost exactly in the middle of the cycle counted in decades of Planck time (60.9 of 61.2).
+
+![The wave of the equation](docs/equation/equation_wave.png)
+
+### Against data (`test_equation.py`)
+
+| test | what is compared | result |
+|---|---|---|
+| 1. a final plateau? | the future of H with each DESI DR2 fit of w(a) (CPL, or w frozen at today's value) | the plateau needs w = −1 in the end; DESI measures the past only, so this is an extrapolation |
+| 2. **the container is the content** | the law Econtent = Econtainer added to the network (it is Friedmann's equation for a flat universe: Ω_K = 0, for ever), with DESI+CMB Ω_K = 0.0023 ± 0.0011 | 2.1 sigma: not rejected, the number to watch |
+| 3. Padmanabhan's equipartition | N_bulk / N_sur, 1 at equilibrium | 0.56 today; reaches 1 (the equation) only with w = −1 |
+| 4. the equation at every instant | holographic dark energy on the event horizon (Li 2004, C = 1, no free parameter) | w today −0.89 and w_a > 0, where the four DESI fits give w_a < 0 (3.7 to 5.6 sigma, w0–wa correlation left out) |
+
+With the Cosmicflows-4 distances (`import_cf4.py`, one H0 node per distance method, a network per systematic floor;
+`test_master_discovery.py` compares them), the network takes H0 = 75.2 km/s/Mpc and puts the Hubble tension on
+Planck's ω_c (+7.1 sigma); it stops siding with CF4 only once each method is given a systematic floor between 3 and 5 %. The type II supernovae disagree with the other CF4 methods at every floor. The equation itself does not move:
+only the scale of the cycle does (H_end from 58.4 to 64.3 km/s/Mpc).
+
+**What is known, what is not.** The equation is not new physics: it is the equilibrium of Padmanabhan's holographic
+equipartition for a vacuum ([arXiv:1206.4916](https://arxiv.org/abs/1206.4916)), the cosmic form of Smarr's relation
+for black holes. What this folder shows is that a network of unrelated known relations brings it up by itself, and how:
+the chain, the loop that closes through the Planck time, the wave. It is a demonstration of what the tool does, and a
+point of view; the tests above are where it meets the data.
+
+| script | what it does |
+|---|---|
+| `expand.py` | solves the store with its measurements, expands it where it is in tension, writes `data/grm_network_fully_enriched.json` |
+| `trace_derivation.py` | the relations the network combines to give an equation, with their weights |
+| `generations.py` | in which generation each node is born from the constants (`--with-equation`, `--data`) |
+| `test_master_discovery.py` | solves every network of a store and compares them (the master invariant, H0, the tensions) |
+| `test_equation.py` | the four tests above; `--save` writes a store with the container law in every network |
+| `import_cf4.py` | adds the Cosmicflows-4 H0 per method, one network per systematic floor (`--sys 0,0.01,...`) |
+| `equation_graph.py`, `equation_wave.py`, `draw_chain.py` | the figures |
+| `grm_strings.py` (+ `grm_anatomy.py`) | every relation plucked like a string: families, timbres, the load and resistance of each node, the floors that never answer and why, where each string breaks (HTML report with the equations) |
+| `seismograph.py` | shakes one node over a range of decades and records how every other node answers |
+| `quantum_classical.py`, `bridge_explorer.py` | the laws that hold for any object between a quantum and a classical quantity |
+| `harmonics.py` | are the network's dimensionless numbers rational powers of S? (judged against random fundamentals) |
+
+The Cosmicflows-4 table is not shipped: download "All CF4 Individual Distances" from the
+[Extragalactic Distance Database](https://edd.ifa.hawaii.edu) and cite its article (Tully et al. 2023), as the EDD asks.
+DESI DR2 numbers: [arXiv:2503.14738](https://arxiv.org/abs/2503.14738).
+
+---
+
 ## The Relational Universe (`web/`)
 
 > **Live: [simulation.anthony-charretier.fr](https://simulation.anthony-charretier.fr)**, nothing to install, phones included.
@@ -132,7 +247,7 @@ constant of nature: everything answers, the pitch of the flute included. Push it
 sky) and the universe closes: the expansion stops, the light warms up again and everything falls into a Big Crunch.
 Both endings are played to the end, every step a node of the network: black dwarfs, evaporating galaxies, decaying
 protons and the last flashes of the black holes on one side; galaxies colliding, stars cooked by the sky, atoms then
-nuclei broken and the final point on the other. `grm.js` is the JavaScript port of `grm.py`,
+nuclei broken and the final point on the other. `grm.js` is the JavaScript port of the engine (`pygrm`),
 checked against it (`web/tests`). Details, sources and limits: [web/README.md](web/README.md).
 
 ---
@@ -322,7 +437,7 @@ a display.
 ## The tests (`test_grm.py`)
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt      # pygrm included
 python -m pytest -v test_grm.py
 ```
 
