@@ -1,0 +1,9 @@
+# A network called twice: a function. Its nodes get the name given at the call.
+#     use programs/circles.grm ; ask area_small ; ask area_big
+network circle(id, radius)
+  observe r_{id} = {radius}
+  relate area_{id}: area_{id} = pi * r_{id}^2
+  output area_{id}
+end
+call circle(id=small, radius=1)
+call circle(id=big, radius=3)

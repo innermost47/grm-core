@@ -31,6 +31,8 @@ This repository contains:
 | `grm_scales.py` | **GRM Scales**: from the forces to the classical world and back: atoms, rock, Jupiter, the Sun, asteroids and mountains as pairs in tension |
 | `grm_voice.py` | **GRM Voice**: a voice made of relations. Lungs, vocal folds, airflow, vocal tract, velum, nose and lips are GRM networks; it says "Bonjour Anthony. Je suis le réseau." |
 | `grm_pong.py` | **GRM Pong**: two paddles that play by themselves, each one deciding with two small GRM networks |
+| `talk/` | **grm talk**: talk to a network from a terminal (node, relate, observe, keep, network, call, use, ask, why, what-if), watch it work, put it to sleep and wake it; a relational machine where every node and relation is a processor; the constants of the universe and the seven relations as a base (`universe.grm`) |
+| `vm/` | **The GRM machine**: a virtual machine that is one GRM network: a blank network that is the program, the memory and the calculator at once, a Turing-complete language, GRML ([docs/GRML.md](docs/GRML.md)), weights that learn from CSV or JSON files, a memory kept between sessions, and a body (keyboard and files in, outputs shown and heard by a human) |
 | `grm_guitar.py` | **GRM Guitar**: a guitar simulated as one object: strings, bridge, top, air, palm, fingers and the player's arm are all GRM networks. VST3 plugin (work in progress): [grm-guitar-vst](https://github.com/innermost47/grm-guitar-vst) |
 
 The cosmology and particle-physics model this engine was built for is presented at [grm.anthony-charretier.fr](https://grm.anthony-charretier.fr), with its own repository: [innermost47/GRM](https://github.com/innermost47/GRM).
@@ -993,6 +995,60 @@ aiming can be changed for each paddle.
 With equal settings, a paddle that aims wins 57 % of the points against one that only intercepts (175 to 133 over
 three runs of 1500 s). Aiming only paid off once the edge relation was added: without it, the aiming paddle hit too
 close to the edge for its own uncertainty and lost more points than it won.
+
+## grm talk (`talk/`)
+
+```bash
+python talk/grm_talk.py -c "load equation; graph on; relax; why S; bench"
+```
+
+A small language to talk to a GRM network (`node`, `relate`, `observe`, `forget`), questions (`ask`, `why`,
+`what-if`) and two ways of working: `solve` (pygrm, the whole network at once) and `relax`, a **relational machine**
+where every node and every relation is its own small processor that only talks to its neighbours (Gaussian belief
+propagation). The graph shows the nodes moving and the relations coming to hold. `bench` prices both on a cost model
+(cycles for operations, cache and RAM accesses, messages between neighbours): on the store network of `equation/`,
+the relational machine needs 515 processors and 134 rounds, 8 300 x fewer modelled cycles than a dense solve and
+400 x fewer than the same messages run by one core; the number of rounds stays about 80 from 100 to 10 000 random
+nodes. A model, not a chip, and in Python the simulation is slower than pygrm: the details and the limits are in
+[talk/README.md](talk/README.md).
+
+![grm talk](docs/grm_talk.png)
+
+**Programs in the network.** The same language writes programs: signed quantities and sums (a sum is a product of
+exponentials, e^x1 = e^x0 · (e^v)^dt, and a converter ties a positive quantity to its signed twin), contacts that
+decide by themselves when they push, networks that can be called (`network`, `call`, `use`). They run on the GRM
+machine below.
+
+## The GRM machine (`vm/`)
+
+```bash
+python vm/grm_vm.py               # in the terminal
+python vm/grm_vm.py --window      # in a window: the outputs shown and heard
+```
+
+A virtual machine that is one GRM network, and nothing else: the network is the program, the memory and the
+calculator at once. It starts blank (or from its memory, `vm/memory.json`) and puts itself to sleep there when it
+stops. Its language, GRML (the Global Relational Model Language: [docs/GRML.md](docs/GRML.md), a reference, a tutorial and
+examples run by the tests), is Turing complete: variables that the network holds until they are written again (`var`,
+`set x = x + 1` at each tick: loops), relations that hold only while conditions hold (`when`: choices); any Minsky
+machine is written in it (the tests run addition and multiplication). Weights (`learn k`) learn from files
+(`load data.csv`, row by row), together with the weights they share relations with (the least squares, exactly, for
+a line), and stay learned at the next session. Inspired by the brain: weights that know how sure they are, a surprise
+(prediction errors) shown and heard with the outputs, a night of sleep that loosens what was learned a little. It is
+born with a small base (30 points of the world, from the Planck scales to the Sun) that new data can find, and it
+never writes a node twice: a routine of its own fuses what is one thing under two names (two inputs that agree row
+by row; an input that holds still at the value of a node known precisely). It also writes, by itself, the relations
+it finds among what it has seen (power laws, lines, exponentials and logarithms, sums built on products, growths,
+decays and oscillations from one moment to the next: a blank machine given heights and times of a fall writes
+h = 4.90 t²; given a damped wave, it finds its period and carries it on) and makes a node appear where a relation
+keeps missing something, a constant or a hidden variable with its own law (pygrm 0.3.0, `pygrm.discover`); the user
+is told, not asked. Its nodes are held as the brain seems to hold quantities: magnitudes in log with relative
+uncertainties, the inverse as the same node, and, for the human, every output as two opposed channels. Inside, it counts in its own units, where c, ħ, G and k_B are 1 (pygrm.units "ticks"): the constants are in
+how it counts, not in nodes. Python is only its body: the inputs measured, the clock's ticks, the outputs turned into
+what a human sees (a panel of values, bars and curves) and hears (a voice per output: its pitch where its value
+stands, its loudness how much it has just moved). Details and limits: [vm/README.md](vm/README.md).
+
+![The GRM machine's panel of outputs: a Minsky machine doubling 5, a line learned from 100 rows, then a row it did not expect](docs/grm_vm_panel.png)
 
 ## Status and limits
 - **Work in progress**: names, defaults and interfaces may change.

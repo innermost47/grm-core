@@ -1,0 +1,20 @@
+# A Minsky machine: two counters and a state, the instructions INC and DEC-or-JUMP-IF-ZERO. Any program of any
+# computer can be written with them (Minsky, 1967): the language of the GRM machine is Turing complete.
+# This one doubles a: b = 2 a. Each `set` writes at the next tick, only when its conditions hold.
+
+var s = 0          # the state (the line of the program)
+input a = 5        # the counter given
+var b = 0          # the counter computed
+output b
+output s
+
+# state 0: if a = 0 stop (state 9), otherwise a - 1 and go to 1
+set a = a - 1 when s in -0.5 .. 0.5 and a in 0.5 .. inf
+set s = 1     when s in -0.5 .. 0.5 and a in 0.5 .. inf
+set s = 9     when s in -0.5 .. 0.5 and a in -0.5 .. 0.5
+# state 1: b + 1, go to 2
+set b = b + 1 when s in 0.5 .. 1.5
+set s = 2     when s in 0.5 .. 1.5
+# state 2: b + 1, go to 0
+set b = b + 1 when s in 1.5 .. 2.5
+set s = 0     when s in 1.5 .. 2.5

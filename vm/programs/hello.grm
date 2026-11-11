@@ -1,0 +1,6 @@
+# Hello, GRML: two measurements and one relation. The network finds the third quantity.
+#     use programs/hello.grm ; ask speed
+observe distance = 100 ± 1%     # m (a positive quantity: solved in log10)
+observe time = 9.58 ± 0.1%      # s
+relate run: speed * time = distance
+output speed

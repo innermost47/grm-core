@@ -1,0 +1,8 @@
+# Units: values given and read in SI. Inside, the machine counts in its own units (c = hbar = G = kB = 1).
+#     use programs/fall.grm ; ask height        (19.6 m)
+input g positive [0 1 -2 0 0]        # m/s^2
+input t positive [0 0 1 0 0]         # s
+output height positive [0 1 0 0 0]   # m
+relate fall: 2 * height = g * t^2
+observe g = 9.81 ± 0.1%
+observe t = 2 ± 0.1%

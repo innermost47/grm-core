@@ -1,0 +1,76 @@
+# The base the machine is born with (loaded at its first start, not with --blank). Not knowledge of everything: a
+# few points of the world at every scale, measured, with their dimension [M L T Q K], so that what comes in later
+# finds something to hold on to. Nothing here is fixed: data can move all of it.
+# Inside, the machine counts in its own units (c = hbar = G = kB = 1): these nodes are given and read in SI.
+# Values: CODATA 2018, IAU 2015, Planck 2018, usual reference values.
+
+# the scales of the machine itself (inside, each one is 1)
+node planck_length [0 1 0 0 0]
+node planck_time [0 0 1 0 0]
+node planck_mass [1 0 0 0 0]
+node planck_temperature [0 0 0 0 1]
+observe planck_length = 1.616255e-35 ± 0.0011%
+observe planck_time = 5.391247e-44 ± 0.0011%
+observe planck_mass = 2.176434e-8 ± 0.0011%
+observe planck_temperature = 1.416784e32 ± 0.0011%
+node light_speed [0 1 -1 0 0]
+observe light_speed = 299792458 ± 0.0000001%
+node gravitation [-1 3 -2 0 0]
+observe gravitation = 6.67430e-11 ± 0.0022%
+
+# the atom
+node electron_mass [1 0 0 0 0]
+node proton_mass [1 0 0 0 0]
+node elementary_charge [0 0 0 1 0]
+node bohr_radius [0 1 0 0 0]
+observe electron_mass = 9.1093837015e-31 ± 0.0000003%
+observe proton_mass = 1.67262192369e-27 ± 0.0000003%
+observe elementary_charge = 1.602176634e-19 ± 0.0000001%
+observe bohr_radius = 5.29177210903e-11 ± 0.0000002%
+
+# a human body
+node human_height [0 1 0 0 0]
+node human_mass [1 0 0 0 0]
+node heartbeat [0 0 1 0 0]
+node body_temperature [0 0 0 0 1]
+observe human_height = 1.7 ± 6%
+observe human_mass = 70 ± 20%
+observe heartbeat = 0.86 ± 15%
+observe body_temperature = 310 ± 0.3%
+
+# the Earth, the air, the water, a sound
+node earth_mass [1 0 0 0 0]
+node earth_radius [0 1 0 0 0]
+node earth_gravity [0 1 -2 0 0]
+node day [0 0 1 0 0]
+node year [0 0 1 0 0]
+node air_pressure [1 -1 -2 0 0]
+node air_density [1 -3 0 0 0]
+node sound_in_air [0 1 -1 0 0]
+node water_density [1 -3 0 0 0]
+node sound_in_water [0 1 -1 0 0]
+node la_440 [0 0 -1 0 0]
+observe earth_mass = 5.9722e24 ± 0.01%
+observe earth_radius = 6.3710e6 ± 0.1%
+observe day = 86400 ± 0.0001%
+observe year = 3.15581e7 ± 0.0001%
+observe air_pressure = 101325 ± 3%
+observe air_density = 1.204 ± 3%
+observe water_density = 998 ± 0.5%
+observe sound_in_water = 1481 ± 1%
+observe la_440 = 440 ± 0.0001%
+relate weight: earth_gravity * earth_radius^2 = gravitation * earth_mass
+relate sound: sound_in_air^2 * air_density = 1.4 * air_pressure       # an ideal gas: c^2 = gamma p / rho
+
+# the Sun and the sky
+node sun_mass [1 0 0 0 0]
+node sun_luminosity [1 2 -3 0 0]
+node astronomical_unit [0 1 0 0 0]
+node hubble_rate [0 0 -1 0 0]
+node cmb_temperature [0 0 0 0 1]
+observe sun_mass = 1.98892e30 ± 0.01%
+observe sun_luminosity = 3.828e26 ± 0.1%
+observe astronomical_unit = 1.495978707e11 ± 0.0000001%
+observe hubble_rate = 2.184e-18 ± 0.74%
+observe cmb_temperature = 2.7255 ± 0.02%
+relate kepler: year^2 * gravitation * sun_mass = 4 * pi^2 * astronomical_unit^3

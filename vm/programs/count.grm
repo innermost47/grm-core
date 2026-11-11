@@ -1,0 +1,4 @@
+# A loop: at each tick (Enter, or the clock) n grows by one, and stops at 10.
+var n = 0
+output n
+set n = n + 1 when n in -inf .. 9.5

@@ -1,0 +1,13 @@
+# S x Equant = Estock: the horizon's entropy times the energy of one quantum of its temperature is the energy of
+# the vacuum it holds. Run it with:  run examples/equation.grm
+node c = 299792458 fixed
+node hbar = 1.054571817e-34 fixed
+node G = 6.6743e-11
+observe G = 6.6743e-11 ± 0.000022 dex          # CODATA 2018: 2.2e-5 relative
+node H = 2e-18
+observe H = 2.18e-18 ± 1%                      # Hubble rate, about 67 km/s/Mpc
+
+relate entropy: S * hbar * G * H^2 = pi * c^5  # S = A / (4 lP^2), A = 4 pi (c/H)^2
+relate quantum: Equant = hbar * H / 2 / pi     # kB T of the horizon (Gibbons-Hawking)
+relate stock:   Estock * 2 * G * H = c^5       # vacuum energy inside the horizon
+relate law:     S * Equant = Estock            # the equation (it follows from the three above)

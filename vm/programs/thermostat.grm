@@ -1,0 +1,11 @@
+# A loop and a choice: a room, a heater, a thermostat with a dead band (it heats under 19, stops above 21).
+#     use programs/thermostat.grm ; tick 60 ; outputs
+input outside = 5          # degrees C
+var room = 15
+var heater = 0             # 1: on, 0: off
+output room
+output heater
+set heater = 1 when room in -inf .. 19
+set heater = 0 when room in 21 .. inf
+# each tick: the heater adds 3 degrees, the walls give back 10 % of the difference with outside
+set room = room + 3 * heater - 0.1 * room + 0.1 * outside

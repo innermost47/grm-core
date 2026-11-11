@@ -1,0 +1,9 @@
+# A network that learns: y = k x + c, with k and c weights. Load measures.csv (columns x and y): each row is seen
+# once, and k and c keep what they have learned (they are in the memory at the next session).
+#     use programs/fit.grm ; load programs/measures.csv ; put x = 10 ; ask y
+learn k = 0
+learn c = 0
+input x
+input y
+output y
+relate model: y = k * x + c ± 0.5

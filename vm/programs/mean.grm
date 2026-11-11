@@ -1,0 +1,5 @@
+# Learning a mean: every value seen says "mu, give or take 1". Load numbers.csv (one column x).
+#     use programs/mean.grm ; load programs/numbers.csv ; ask mu
+learn mu = 0
+input x
+relate seen: x = mu ± 1

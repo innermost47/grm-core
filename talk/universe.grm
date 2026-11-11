@@ -1,0 +1,41 @@
+# The base of every program: the constants of the universe (SI, CODATA 2018) and the seven relations of the chain
+# that brings up S x Equant = Estock (grm-core README, "The chain the network took"). Every program `use`s it.
+
+# exact by definition (SI 2019)
+node c = 299792458 fixed                 # m/s
+node hbar = 1.054571817e-34 fixed        # J s
+node kB = 1.380649e-23 fixed             # J/K
+node qe = 1.602176634e-19 fixed          # C
+node NA = 6.02214076e23 fixed            # 1/mol
+
+# measured
+observe G = 6.67430e-11 ± 0.0022%        # m^3 kg^-1 s^-2
+observe me = 9.1093837015e-31 ± 0.00000003%   # kg
+observe mp = 1.67262192369e-27 ± 0.00000003%  # kg
+observe eps0 = 8.8541878128e-12 ± 0.00000015% # F/m
+observe alpha = 7.2973525693e-3 ± 0.00000015%
+relate fine_structure: alpha * 4 * pi * eps0 * hbar * c = qe^2
+
+# the cosmos today (Planck 2018)
+observe H0 = 2.184e-18 ± 0.74%           # 1/s (67.4 km/s/Mpc)
+observe OmegaL = 0.6847 ± 1.07%
+
+# the seven relations of the chain
+relate planck:  lP^2 * c^3 = hbar * G                          # (0)       lP = sqrt(hbar G / c^3)
+relate end:     Hend^2 = H0^2 * OmegaL                         # (0 -> 1)  Hend = H0 sqrt(OmegaL)
+relate vacuum:  rhoL * 8 * pi * G = 3 * c^2 * H0^2 * OmegaL    # (1 -> 2A) energy density of the vacuum
+relate stock:   Estock * 3 * Hend^3 = 4 * pi * rhoL * c^3      # (1 -> 2A) the vacuum inside the horizon
+relate floor:   Tfloor * 2 * pi * kB = hbar * Hend             # (1 -> 2B) the horizon's temperature
+relate quantum: Equant = kB * Tfloor                           # (1 -> 2B)
+relate entropy: S * Hend^2 * lP^2 = pi * c^2                   # (2A <-> 2B)
+# S * Equant = Estock is not written: it comes out of the seven (ask S, Equant, Estock)
+
+# planets: what a world weighs and how wide it is gives the gravity at its surface
+network planet(name, mass, radius)
+  observe M_{name} = {mass} ± 0.01%
+  observe R_{name} = {radius} ± 0.01%
+  relate weight_{name}: g_{name} * R_{name}^2 = G * M_{name}
+end
+call planet(name=earth, mass=5.9722e24, radius=6.3710e6)
+call planet(name=moon, mass=7.342e22, radius=1.7374e6)
+call planet(name=mars, mass=6.4171e23, radius=3.3895e6)

@@ -1,0 +1,7 @@
+# Fibonacci: all the writes of a tick are made at once, from the values before the tick.
+#     use programs/fibonacci.grm ; tick 10 ; ask b        (89)
+var a = 0
+var b = 1
+output b
+set a = b
+set b = a + b
