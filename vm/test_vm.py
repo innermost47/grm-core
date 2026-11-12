@@ -7,6 +7,7 @@ import os
 import random
 import sys
 
+import numpy as np
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -631,9 +632,9 @@ def test_picture_and_cards():
     places = graph.layout(vm.net, {}, steps=40)
     assert set(places) == {("n", n) for n in vm.net.nodes} | {("r", "fall")}
     assert all(math.isfinite(v) for p in places.values() for v in p)
-    card = "\n".join(graph.node_card(vm, "height"))
-    assert "value  19.62" in card and "[0 1 0 0 0]" in card and "fall" in card
-    card = "\n".join(graph.relation_card(vm, "fall"))
+    card = "\n".join(graph.table(graph.node_card(vm, "height")))
+    assert "value      │ 19.62" in card and "[0 1 0 0 0]" in card and "relations  │ fall" in card
+    card = "\n".join(graph.table(graph.relation_card(vm, "fall")))
     assert "2 * height = g * t^2" in card and "(holds)" in card
 
 
@@ -872,7 +873,7 @@ def test_every_program_says_what_it_does():
     assert programs.find("no_such_program") is None
 
 
-def test_programs_read_and_new(tmp_path):
+def test_programs_read_and_new(tmp_path, monkeypatch):
     vm = grm_vm.VM(memory=None, blank=True)
     sh, out = shell_of(vm)
     sh.onecmd("progs")
@@ -886,7 +887,7 @@ def test_programs_read_and_new(tmp_path):
     sh.onecmd("open fall")                                                    # no window: said, not a crash
     assert "--window" in out[-1]
     (tmp_path / "programs").mkdir()
-    sh.base = str(tmp_path)
+    monkeypatch.chdir(tmp_path)                                               # new: in the folder it is in
     sh.onecmd("new mine")
     path = tmp_path / "programs" / "mine.grm"
     assert path.exists() and programs.header(str(path))["name"] == "mine"
@@ -945,6 +946,11 @@ def said_texts():
     found |= {what for _, what, _ in editor.DOCS.values()} | set(guide.MORE.values())
     found |= {t for title, text, _ in guide.TOUR for t in (title, text)} | {g for g, _ in guide.GROUPS}
     found |= set(language.ROLES.values()) | set(grm_vm.WATCH_KINDS.values())
+    import ambient
+    import senses
+    found |= set(ambient.KINDS) | set(senses.LEVELS) | {"on", "off", "motion", "colour", "waves", "sound", "logbook"}
+    import journal
+    found |= set(journal.WEEKDAYS) | set(journal.MONTHS) | set(ambient.LAYERS) | {"mixer", "volume"}
     return found
 
 
@@ -1131,3 +1137,421 @@ def test_play_and_pause():
     assert sh.clock == 0 and vm.clock_hz == 0 and out[-1].strip() == "paused"
     sh.onecmd("play")                                     # again at the last clock that ran
     assert sh.clock == 4
+
+
+def test_step_by_step_nothing_runs_but_a_round_at_a_time():
+    vm = example("hello")
+    vm.tick()
+    vm.step()                                             # step by step from now on
+    assert vm.stepping
+    m = vm.machine
+    vm.say("observe time = 10")                           # a measurement of a node it has: heard in place
+    assert vm.machine is m and vm.get("speed") == pytest.approx(100 / 9.58, rel=1e-6)
+    report = vm.step(3)
+    assert report[1]["moved"][0][0] == "time" and report[2]["moved"][0][0] == "speed"
+    vm.say("relate dbl: s2 = 2 * speed")                  # a new relation: built again, not settled
+    assert vm.machine is None and not vm.m().quiet
+    vm.step(20)
+    assert vm.get("s2") == pytest.approx(20, rel=1e-6)
+    vm.tick()                                             # a tick, and the machine runs as before
+    assert not vm.stepping
+    vm.say("relate tpl: s3 = 3 * speed")
+    assert vm.m().quiet
+
+
+def test_the_machines_own_helpers_are_named_for_a_human():
+    vm = grm_vm.VM(memory=None, blank=True)
+    vm.say("var n = 0")
+    vm.say("set n = n + 1")
+    vm.tick(2)
+    assert graph.shown(vm.net, "n__next1") == "next n" and graph.shown(vm.net, "set_n_1") == "set n"
+    assert graph.shown(vm.net, "n") == "n"
+    assert "set n = n + 1" in graph.table(graph.relation_card(vm, "set_n_1"))[1]
+    report = vm.step(4)
+    assert any("set n" in r.get("worked", []) for r in report)
+    assert editor.complete("ask n", 5, nodes=list(vm.net.nodes))[1] == ["n"]       # n__next1 is not offered
+    assert "n__next1" in editor.complete("ask n__", 7, nodes=list(vm.net.nodes))[1]  # unless asked for
+
+
+def test_a_card_is_a_table():
+    rows = ["heading", ("a", "1"), ("longer", "2")]
+    assert graph.table(rows) == ["heading", "a      │ 1", "longer │ 2"]
+    vm = example("fall")
+    sh, out = shell_of(vm)
+    sh.onecmd("inspect fall")
+    assert any(s.strip().startswith("sigma") and "│ 1e-09 dex" in s for s in out)
+
+
+# ---------------------------------------------------------------------- files, history, focus
+import files   # noqa: E402
+
+
+def test_files_as_a_unix_shell_has_them(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data.csv").write_text("x,y\n" + "".join(f"{i},{2 * i}\n" for i in range(30)), encoding="utf-8")
+    (tmp_path / "sub").mkdir()
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    assert sh.prompt == f"grm {files.short()}> " and sh.prompt.endswith("unix_shell_has0> ")
+    sh.onecmd("ls")
+    assert "data.csv" in out[-1] and "sub/" in out[-1]
+    out.clear()
+    sh.onecmd("head -n 3 data.csv")
+    assert [s.strip() for s in out] == ["x,y", "0,0", "1,2"]
+    out.clear()
+    sh.onecmd("tail -2 data.csv ; cp data.csv sub/copy.csv ; ls -l sub")
+    assert out[0].strip() == "28,56" and "copy.csv" in out[-1] and out[-1].strip().startswith("-rw")
+    sh.onecmd("cd sub")
+    assert os.getcwd() == str(tmp_path / "sub") and "sub" in sh.prompt
+    sh.onecmd("mv copy.csv renamed.csv ; cd .. ; mkdir runs ; cd -")
+    assert os.getcwd() == str(tmp_path / "sub") and (tmp_path / "runs").is_dir()
+    sh.onecmd("cd .. ; use programs/fall.grm")                # the machine's own programs, from anywhere
+    assert vm.get("height") == pytest.approx(19.62, rel=1e-3)
+    out.clear()
+    sh.onecmd("cd nowhere ; cat sub")
+    assert out[0].startswith("  ?") and out[1].startswith("  ?")
+
+
+def test_rm_asks_first(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.csv").write_text("x\n1\n")
+    (tmp_path / "d").mkdir()
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("rm a.csv")
+    assert out[-1].startswith("  ! delete a.csv? (y/n)") and (tmp_path / "a.csv").exists()
+    sh.onecmd("n")
+    assert (tmp_path / "a.csv").exists() and "nothing deleted" in out[-1]
+    sh.onecmd("rm d")
+    assert "rm -r" in out[-1] and sh.asking is None
+    sh.onecmd("rm -r d *.csv")
+    sh.onecmd("y")
+    assert not (tmp_path / "a.csv").exists() and not (tmp_path / "d").exists()
+    i18n.set_lang("fr")
+    (tmp_path / "b.csv").write_text("x\n1\n")
+    sh.onecmd("rm b.csv")
+    assert "supprimer b.csv ? (o/n)" in out[-1]
+    sh.onecmd("oui")
+    assert not (tmp_path / "b.csv").exists()
+
+
+def test_a_table_written_by_any_program(tmp_path):
+    p = tmp_path / "fr.csv"
+    p.write_bytes("Température (°C);Hauteur m;2020\n20,5;1 234,5;3\n21,0;12%;4\n".encode("cp1252"))
+    rows, renamed = grm_vm.read_table(str(p))
+    assert renamed == {"Température (°C)": "Temperature_C", "Hauteur m": "Hauteur_m", "2020": "_2020"}
+    assert [grm_vm.number(rows[0][k]) for k in ("Temperature_C", "Hauteur_m", "_2020")] == [20.5, 1234.5, 3]
+    assert grm_vm.number(rows[1]["Hauteur_m"]) == pytest.approx(0.12)
+    assert grm_vm.number("1,234.5") == 1234.5 and grm_vm.number("abc") is None and grm_vm.number("") is None
+    vm = grm_vm.VM(memory=None, blank=True)
+    seen = []
+    vm.on_progress = lambda d, t, what: seen.append((d, t))
+    said = vm.load(str(p))
+    assert "2 rows learned" in said and "'Température (°C)' -> Temperature_C" in said
+    assert (1, 2) in seen and (2, 2) in seen and vm.get("Hauteur_m") == pytest.approx(0.12)
+
+
+def test_what_was_typed_is_kept_from_session_to_session(tmp_path):
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True)
+    sh, _ = shell_of(vm)
+    for line in ("node a = 2", "node a = 2", "ask a", "  "):
+        sh.add_history(line)
+    sh2, _ = shell_of(grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True))
+    assert sh2.history == ["node a = 2", "ask a"]
+    assert grm_vm.Shell(grm_vm.VM(memory=None, blank=True)).history_path is None    # no memory, nothing written
+
+
+def test_long_work_is_known():
+    sh, _ = shell_of(grm_vm.VM(memory=None, blank=True))
+    assert sh.is_long("load data.csv") and sh.is_long("use programs/fall.grm") and sh.is_long("t 100")
+    assert not sh.is_long("tick") and not sh.is_long("ask height") and not sh.is_long("run")
+    assert grm_vm.progress_text(5, 10, "rows").endswith("] 5/10 rows") and grm_vm.progress_text(None, None, "x") == "x"
+
+
+def test_networks_in_the_network_and_focus():
+    vm = grm_vm.VM(memory=None)                                            # born with its base
+    vm.say("use programs/fall.grm")
+    vm.say("use programs/circles.grm")
+    g = graph.groups(vm.net)
+    assert {"base", "fall", "circles"} <= set(g)
+    assert g["fall"] == ({"height", "g", "t"}, {"fall"})
+    assert vm.focus == ("group", "circles")                                # it goes by itself to what was said
+    front = graph.focus_keys(vm.net, ("group", "fall"))
+    planes = graph.planes(vm.net, front)
+    assert planes[("r", "fall")] == 1 and planes[("n", "height")] == 1
+    assert planes[("n", "area_small")] == 3 and set(planes.values()) == {1, 3}
+    assert graph.focus_keys(vm.net, ("node", "height", 1)) == {("n", "height"), ("r", "fall"), ("n", "g"),
+                                                                 ("n", "t")}
+    assert graph.focus_keys(vm.net, ("between", "g", "t")) == {("n", "g"), ("r", "fall"), ("n", "t")}
+    sh, out = shell_of(vm)
+    sh.onecmd("focus")
+    assert any("fall" in s and "3 node(s), 1 relation(s)" in s for s in out)
+    sh.onecmd("focus fall ; focus height 2 ; focus relation fall ; focus g t")
+    assert vm.focus == ("between", "g", "t")
+    sh.onecmd("fc all")
+    assert vm.focus is None
+    sh.onecmd("focus nope")
+    assert out[-1].startswith("  ?")
+    vm.load(os.path.join(HERE, "programs", "numbers.csv"))
+    assert vm.focus == ("group", "numbers") and "numbers" in graph.groups(vm.net)
+
+
+def test_focus_draws_the_front_together():
+    pytest.importorskip("numpy")
+    vm = grm_vm.VM(memory=None)
+    vm.say("use programs/fall.grm")
+    places = {}
+    graph.layout(vm.net, places, steps=60)
+    front = graph.focus_keys(vm.net, ("group", "fall"))
+
+    def spread():
+        pts = [places[k] for k in front]
+        cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+        return max(math.hypot(p[0] - cx, p[1] - cy) for p in pts)
+    before = spread()
+    graph.layout(vm.net, places, steps=60, front=front)
+    assert spread() < before
+
+
+def test_groups_are_remembered(tmp_path):
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True)
+    vm.say("use programs/fall.grm")
+    vm.sleep()
+    vm2 = grm_vm.VM(memory=str(tmp_path / "m.json"))
+    assert "fall" in graph.groups(vm2.net)
+
+
+# ---------------------------------------------------------------------- what it feels, seen and heard
+import ambient   # noqa: E402
+import senses   # noqa: E402
+
+
+def test_what_it_feels_is_real():
+    vm = example("fall")
+    vm.get("height")
+    feel = senses.Feel()
+    st = feel.state(vm)
+    assert st["harmony"] == pytest.approx(1.0, abs=1e-3)                  # its one relation holds
+    assert [v["name"] for v in st["voices"]] == ["fall"] and -1 <= st["pleasure"] <= 1
+    vm.put("t", 3)
+    vm.machine.run(2)                                                     # two rounds: t has moved, fall not yet
+    st = feel.state(vm)
+    assert st["voices"][0]["strain"] > 1 and st["harmony"] < 0.5
+
+
+def test_a_discovery_is_a_moment():
+    vm = grm_vm.VM(memory=None, blank=True)
+    feel = senses.Feel()
+    assert feel.moments(vm) == []
+    vm.load(os.path.join(HERE, "programs", "falling.csv"))
+    (mo,) = [m for m in feel.moments(vm) if m["kind"] == "discovery"]
+    assert mo["sentence"] == "when t doubles, h is multiplied by 4" and mo["ratio"] == 2.0     # t²: the octave
+    assert len(mo["points"][0]) == 40 and feel.moments(vm) == []                              # once
+    vm = grm_vm.VM(memory=None, blank=True)
+    feel = senses.Feel()
+    feel.moments(vm)
+    vm.load(os.path.join(HERE, "programs", "wave.csv"))
+    (mo,) = [m for m in feel.moments(vm) if m["kind"] == "discovery"]
+    assert mo["sentence"].startswith("wave swings: it comes back every 25 moments")
+
+
+def test_a_surprise_is_a_moment():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, _ = shell_of(vm)
+    sh.onecmd("input x ; input y ; relate r: y = 2 * x +/- 0.01 ; put x = 1 ; put y = 2 ; tick ; tick")
+    feel = senses.Feel()
+    feel.moments(vm)
+    sh.onecmd("put y = 3 ; tick")
+    (mo,) = feel.moments(vm)
+    assert mo["kind"] == "surprise" and mo["sigma"] > 3 and mo["where"][0][0] == "r"
+
+
+def test_the_ambient_sound_is_calm(tmp_path):
+    calm = {"activity": 0.1, "harmony": 1.0, "pleasure": 0.3, "voices": [{"bits": 5, "strain": 0.0}]}
+    for kind in ambient.KINDS:
+        a = ambient.Ambient(kind, volume=1.0)
+        y = a.save(str(tmp_path / f"{kind}.wav"), 12, [(0, calm, None), (4, None, ("discovery", 2.0)),
+                                                         (6, None, ("surprise",))])
+        assert y.shape == (12 * ambient.RATE, 2) and (tmp_path / f"{kind}.wav").stat().st_size > 1e6
+        assert np.abs(y).max() <= ambient.CAP + 1e-6                     # never louder than the cap
+        assert np.abs(y[:ambient.RATE // 2]).max() < 0.1                  # nothing starts suddenly
+        assert np.abs(np.diff(y[:, 0])).max() < 0.1                       # no click
+        spectrum = np.abs(np.fft.rfft(y[:, 0])) ** 2
+        f = np.fft.rfftfreq(len(y), 1 / ambient.RATE)
+        assert spectrum[f > 4000].sum() < 1e-3 * spectrum.sum()           # nothing sharp
+
+
+def test_strain_is_heard_as_a_beat():
+    a = ambient.Ambient("pad", volume=1.0)
+    a.set({"voices": [{"bits": 5, "strain": 3.0}]})
+    for _ in range(4000):
+        a._follow(ambient.BLOCK)
+    assert a.detune[0] == pytest.approx(2.7, rel=1e-2)                    # 3 sigma from holding: 2.7 beats a second
+
+
+def test_senses_and_ambient_commands(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("senses present motion off")
+    assert sh.settings["senses"] == {"level": "present", "motion": False, "colour": True, "waves": True}
+    sh.onecmd("amb wind 30%")
+    assert sh.settings["ambient"]["kind"] == "wind" and sh.settings["ambient"]["volume"] == 0.3
+    assert sh.ambient is not None or "pip install sounddevice" in out[-1]    # no sound card here: said
+    sh.onecmd("ambient off ; ambient save calm.wav 3")
+    assert (tmp_path / "calm.wav").exists() and sh.ambient is None
+    sh2, _ = shell_of(grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True))
+    assert sh2.senses_settings()["level"] == "present" and sh2.ambient is None   # remembered, and off at start
+
+
+def test_clear():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    cleared = []
+    sh.on_clear = lambda: cleared.append(True)
+    sh.onecmd("node a = 2 ; clear")
+    assert cleared and "a" in vm.net.nodes                         # the screen, not the machine
+
+
+def test_history_and_again():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    for line in ("node a = 2", "ask a"):
+        sh.add_history(line)
+        sh.onecmd(line)
+    out.clear()
+    sh.onecmd("history")
+    assert [s.split()[-2:] for s in out] == [["=", "2"], ["ask", "a"]] and out[0].strip().startswith("1")
+    out.clear()
+    sh.onecmd("!2")
+    assert out[0].strip() == "ask a" and "a = 2" in out[1]
+    sh.onecmd("!!")
+    sh.onecmd("!9")
+    assert out[-1].startswith("  ?")
+
+
+# ---------------------------------------------------------------------- its logbook, the colours of its networks
+import journal   # noqa: E402
+
+
+def test_the_logbook(tmp_path):
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"))
+    vm.say("use programs/fall.grm")
+    vm.load(os.path.join(HERE, "programs", "falling.csv"))
+    kinds = [e["kind"] for e in journal.entries(vm.net)]
+    assert kinds == ["born", "program", "file", "discovery"]
+    icon, sentence, more = journal.say(journal.entries(vm.net)[-1])
+    assert icon == "✦" and sentence == "found by itself: h = 4.90618 * t^2"
+    assert more[0] == "when t doubles, h is multiplied by 4" and len(journal.entries(vm.net)[-1]["points"][0]) == 40
+    vm.sleep(night=True)
+    night = journal.entries(vm.net)[-1]
+    assert night["kind"] == "night" and night["discoveries"] == 1 and night["files"] == 1
+    vm2 = grm_vm.VM(memory=str(tmp_path / "m.json"))                 # remembered; the next day begins
+    assert [e["kind"] for e in journal.entries(vm2.net)][-2:] == ["night", "woke"]
+    i18n.set_lang("fr")
+    assert journal.say(journal.entries(vm2.net)[3])[1] == "trouvé toute seule : h = 4.90618 * t^2"   # read in French
+    sh, out = shell_of(vm2)
+    sh.onecmd("jr falling")
+    assert any("falling.csv" in s for s in out) and out[0].strip().startswith("──")
+
+
+def test_a_surprise_goes_in_the_logbook():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, _ = shell_of(vm)
+    sh.onecmd("input x ; input y ; relate r: y = 2 * x +/- 0.01 ; put x = 1 ; put y = 2 ; tick ; tick ; put y = 3 ; "
+              "tick")
+    (e,) = [e for e in journal.entries(vm.net) if e["kind"] == "surprise"]
+    assert e["sigma"] > 3 and e["where"][0][0] == "r"
+
+
+def test_each_network_has_its_colour():
+    vm = grm_vm.VM(memory=None)
+    vm.say("use programs/fall.grm")
+    vm.say("use programs/circles.grm")
+    c = graph.colours(vm.net)
+    assert c["base"] == graph.SPECIAL["base"] and c["fall"] != c["circles"]
+    assert c["fall"] in graph.PALETTE and graph.colours(vm.net) == c          # it keeps it
+    home = graph.home(vm.net)
+    assert home[("r", "fall")] == "fall" and home[("n", "area_small")] == "circles"
+
+
+def test_a_day_as_a_human_writes_it():
+    assert journal.pretty("2026-11-12") == "Thursday 12 November 2026"
+    i18n.set_lang("fr")
+    assert journal.pretty("2026-11-12") == "jeudi 12 novembre 2026"
+
+
+def test_the_mixer_and_the_drone(tmp_path):
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("ambient drone 70% reverb 20%")
+    a = sh.settings["ambient"]
+    assert a["drone"] == 0.7 and a["reverb"] == 0.2 and "drone 70%" in out[-1]
+    calm = {"activity": 0.0, "harmony": 1.0, "pleasure": 0.0, "voices": []}
+    quiet, deep = ambient.Ambient("wind", 1.0), ambient.Ambient("wind", 1.0)
+    quiet.set_mix(drone=0.0, main=0.0)
+    deep.set_mix(drone=1.0, main=0.0)
+    yq = quiet.save(str(tmp_path / "q.wav"), 8, [(0, calm, None)])
+    yd = deep.save(str(tmp_path / "d.wav"), 8, [(0, calm, None)])
+    spectrum = np.abs(np.fft.rfft(yd[-4 * ambient.RATE:, 0])) ** 2
+    f = np.fft.rfftfreq(4 * ambient.RATE, 1 / ambient.RATE)
+    assert np.abs(yq[-ambient.RATE:]).max() < 1e-3 < np.abs(yd[-ambient.RATE:]).max()          # the drone is heard
+    peak = f[spectrum.argmax()]
+    assert min(abs(peak - 65.41), abs(peak - 130.81)) < 1.0                                    # a low C, or its octave
+    assert np.abs(yd).max() <= ambient.CAP + 1e-6
+
+
+def test_the_state_is_kept_for_the_next_time(tmp_path, monkeypatch):
+    here = os.getcwd()
+    (tmp_path / "work").mkdir()
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True)
+    sh, _ = shell_of(vm)
+    sh.onecmd(f"cd {tmp_path / 'work'} ; use {os.path.join(HERE, 'programs', 'fall.grm')} ; clock 4 ; pause ; quit")
+    monkeypatch.chdir(here)
+    sh2, _ = shell_of(grm_vm.VM(memory=str(tmp_path / "m.json")))
+    assert os.getcwd() == str(tmp_path / "work") and sh2.vm.focus == ("group", "fall") and sh2.last_clock == 4
+    assert "work" in sh2.prompt
+
+
+def test_a_new_file_of_any_kind(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("new prices.csv ; touch notes.txt a.md ; new orbit")
+    assert (tmp_path / "prices.csv").read_text() == "" and (tmp_path / "notes.txt").exists()
+    assert (tmp_path / "a.md").exists() and (tmp_path / "orbit.grm").read_text().startswith("#! name: orbit")
+    sh.onecmd("new prices.csv")
+    assert "already exists" in out[-1]
+    sh.onecmd("new")                                                   # a tab with no name: in the window only
+    assert "--window" in out[-1]
+
+
+def test_an_equation_as_a_human_writes_it():
+    vm = example("thermostat")
+    assert graph.in_equation(vm.net, "room__next1 - 0.9·room = 0") == "room′ - 0.9·room = 0"
+
+
+def test_each_network_has_its_key():
+    vm = grm_vm.VM(memory=None)
+    vm.say("use programs/fall.grm")
+    vm.say("use programs/circles.grm")
+    keys = {}
+    for name in ("base", "fall", "circles"):
+        vm.focus = ("group", name)
+        keys[name] = senses.key_of(vm)
+    vm.focus = None
+    assert senses.key_of(vm) == 1.0 and len(set(keys.values())) == 3 and set(keys.values()) <= set(ambient.KEYS)
+    a = ambient.Ambient("pad", 1.0)
+    a.set({"key": 0.75, "voices": [{"bits": 5, "strain": 0.0}]})
+    a._follow(ambient.BLOCK)
+    assert 0.99 < a.key_now < 1.0                                    # it glides, it does not jump
+    for _ in range(int(40 * ambient.RATE / ambient.BLOCK)):
+        a._follow(ambient.BLOCK)
+    assert a.key_now == pytest.approx(0.75, rel=1e-3)
+
+
+def test_a_warning_is_not_an_error():
+    vm = grm_vm.VM(memory=None)
+    sh, out = shell_of(vm)
+    sh.onecmd("relate r: pressure = 2")
+    assert any(s.startswith("  ⚠ warning: 'pressure' is a new node") for s in out)

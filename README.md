@@ -1071,10 +1071,15 @@ per output (its pitch where its value stands, its loudness how much it has just 
 a window of their own, a tab each, edited, run and searched from the keyboard. The interface speaks English or French
 (`lang fr`; the words of GRML stay English, so a program runs anywhere: [docs/GRML.fr.md](docs/GRML.fr.md)). It can be
 watched at work: played and paused, a tick or a round at a time (who worked, who moved), stopped at breakpoints
-(`watch`), and asked `why` a node has its value (the messages it hears, and their share). Details
+(`watch`), and asked `why` a node has its value (the messages it hears, and their share). It works in folders as a Unix shell does (`cd`, `ls`, `head`,
+`rm` asked first), reads CSV files from any program, and brings a program or a file of data to the front of the
+picture (`focus`), the rest fading behind it. What it feels is perceptible, and true: messages going
+along the links, a halo for the information a relation brings, a discovery shared as a moment, and a slow ambient
+sound where relations that hold are in tune and one that does not beats, over a low drone, in a key of its own for
+each network (`senses`, `ambient`, a mixer); and a logbook of what it lived, day after day (`journal`). Details
 and limits: [vm/README.md](vm/README.md).
 
-![The GRM machine's window: the words, the network itself (the mouse over a relation it found), the master equation, the outputs and what it feels](docs/grm_vm_window.png)
+![The GRM machine's window: the words; the network, each of its networks in its colour, a law it has just found shared as a moment; what it feels and its outputs](docs/grm_vm_window.png)
 
 ## Status and limits
 - **Work in progress**: names, defaults and interfaces may change.

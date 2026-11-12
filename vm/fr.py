@@ -163,7 +163,7 @@ FR = {
     "a program in a tab": "un programme dans un onglet",
     "go to a tab": "aller à un onglet",
     "close a tab": "fermer un onglet",
-    "a new program, in a tab": "un nouveau programme, dans un onglet",
+    "a new program, a new file, in a tab": "un nouveau programme, un nouveau fichier, dans un onglet",
     "write in a tab (Esc: back here)": "écrire dans un onglet (Échap : retour ici)",
     "save the tab (Ctrl+S)": "enregistrer l'onglet (Ctrl+S)",
     "search the tab (Ctrl+F)": "chercher dans l'onglet (Ctrl+F)",
@@ -304,15 +304,15 @@ FR = {
     "fused by itself: {gone} is {keep}": "fusionné tout seul : {gone} est {keep}",
     "{mean} held still, {a} is {va}, {t} sigma apart": "{mean} immobile, {a} vaut {va}, à {t} sigma",
     # ---------------------------------------------------------------- the shell
-    "tick {tick}: {rounds} rounds": "tick {tick} : {rounds} tours",
-    "{n} ticks (now {tick}): {rounds} rounds": "{n} ticks (maintenant {tick}) : {rounds} tours",
+    "tick {tick}: {rounds} rounds": "tick {tick} : {rounds} passes",
+    "{n} ticks (now {tick}): {rounds} rounds": "{n} ticks (maintenant {tick}) : {rounds} passes",
     "{s} inside": "{s} à l'intérieur",
     "surprise": "surprise",
     "{s} sigma (how far the last inputs were from what it expected)":
         "{s} sigma (à quel point les dernières entrées s'écartaient de ce qu'il attendait)",
     "{nodes} nodes, {relations} relations, {sets} writes at each tick, {networks} networks":
         "{nodes} nœuds, {relations} relations, {sets} écritures à chaque tick, {networks} réseaux",
-    "{p} processors, tick {tick}, round {round}": "{p} processeurs, tick {tick}, tour {round}",
+    "{p} processors, tick {tick}, round {round}": "{p} processeurs, tick {tick}, passe {round}",
     "asleep in {path}": "endormie dans {path}",
     "awake at tick {tick}": "réveillée au tick {tick}",
     "blank": "vierge",
@@ -381,7 +381,7 @@ FR = {
         "ses valeurs ne bougent plus mais ses messages deviennent toujours plus sûrs : des relations exactes qui "
         "disent deux fois la même chose dans une boucle, ou qui se contredisent",
     "around {names}": "autour de {names}",
-    "the network did not settle in the rounds it was given": "le réseau ne s'est pas stabilisé dans les tours donnés",
+    "the network did not settle in the rounds it was given": "le réseau ne s'est pas stabilisé dans les passes données",
     "swinging back and forth: {names}": "oscille d'avant en arrière : {names}",
     "relation {name} does not hold: {s} sigma ({text}). Two relations that contradict each other, or data that "
     "disagree with it.":
@@ -410,7 +410,7 @@ FR = {
     "host: {limit}": "hôte : {limit}",
     "links {n} of {cap} ({limit})": "liens {n} sur {cap} ({limit})",
     "rent {p} bit a link a tick": "loyer {p} bit par lien et par tick",
-    "tick {tick}   {p} processors   round {round}": "tick {tick}   {p} processeurs   tour {round}",
+    "tick {tick}   {p} processors   round {round}": "tick {tick}   {p} processeurs   passe {round}",
     "master equation ({when}{tick})": "équation maîtresse ({when}{tick})",
     "{span} decades of scale, residual {residual}": "{span} décades d'échelle, résidu {residual}",
     "holds": "tient",
@@ -458,7 +458,7 @@ FR = {
     "seeing it work": "le voir travailler",
     "the clock runs (F8: play / pause)": "l'horloge tourne (F8 : lecture / pause)",
     "the clock stops": "l'horloge s'arrête",
-    "n rounds, one at a time (F11)": "n tours, un à la fois (F11)",
+    "n rounds, one at a time (F11)": "n passes, une à la fois (F11)",
     "n ticks (Enter alone, F10: one)": "n ticks (Entrée seule, F10 : un)",
     "stop when it is met": "s'arrêter quand c'est atteint",
     "take a watch away": "retirer un point d'arrêt",
@@ -466,8 +466,8 @@ FR = {
     "A tick is a few rounds: in each, the nodes that heard something new tell their relations, and the relations "
     "that heard something new answer. step shows that conversation, round after round: who worked, who moved, and "
     "the writes at the end of the tick.":
-        "Un tick, c'est quelques tours : à chacun, les nœuds qui ont appris du nouveau le disent à leurs relations, "
-        "et les relations qui ont appris du nouveau répondent. step montre cette conversation, tour après tour : qui "
+        "Un tick, c'est quelques passes : à chacune, les nœuds qui ont appris du nouveau le disent à leurs relations, "
+        "et les relations qui ont appris du nouveau répondent. step montre cette conversation, passe après passe : qui "
         "a travaillé, qui a bougé, et les écritures à la fin du tick.",
     "A breakpoint. NODE in LO .. HIGH stops when the condition becomes true, NODE when its value changes, RELATION "
     "when it no longer holds. The clock pauses, and tick n stops there.":
@@ -481,8 +481,8 @@ FR = {
     "Step by step": "Pas à pas",
     "A tick is a conversation in rounds. Set a breakpoint, run, and ask why a value is what it is (F8 play, F10 a "
     "tick, F11 a round in the window):":
-        "Un tick est une conversation en tours. Posez un point d'arrêt, lancez, et demandez pourquoi une valeur est "
-        "ce qu'elle est (dans la fenêtre : F8 lecture, F10 un tick, F11 un tour) :",
+        "Un tick est une conversation en passes. Posez un point d'arrêt, lancez, et demandez pourquoi une valeur est "
+        "ce qu'elle est (dans la fenêtre : F8 lecture, F10 un tick, F11 une passe) :",
     "stops when it becomes true": "s'arrête quand elle devient vraie",
     "stops when it changes": "s'arrête quand il change",
     "stops when it no longer holds": "s'arrête quand elle ne tient plus",
@@ -496,12 +496,12 @@ FR = {
     "watch: {name} changed, {a} -> {b} (tick {tick})": "point d'arrêt : {name} a changé, {a} -> {b} (tick {tick})",
     "watch: {name} no longer holds (tick {tick})": "point d'arrêt : {name} ne tient plus (tick {tick})",
     "stopped after {done} of {n} ticks (now {tick})": "arrêtée après {done} ticks sur {n} (maintenant {tick})",
-    "tick {tick}, round {round}": "tick {tick}, tour {round}",
+    "tick {tick}, round {round}": "tick {tick}, passe {round}",
     "{names} worked": "au travail : {names}",
     "; ": " ; ",
     "no relation worked": "aucune relation n'a travaillé",
     "moved: {moved}": "en mouvement : {moved}",
-    "tick {tick} done in {rounds} rounds": "tick {tick} fini en {rounds} tours",
+    "tick {tick} done in {rounds} rounds": "tick {tick} fini en {rounds} passes",
     "written: {writes}": "écrit : {writes}",
     "the measurement of {name}": "la mesure de {name}",
     "the weights' memory": "la mémoire des poids",
@@ -522,9 +522,194 @@ FR = {
     "play": "lecture",
     "pause": "pause",
     "tick": "tick",
-    "round": "tour",
+    "round": "passe",
     "playing at {hz} Hz": "en marche à {hz} Hz",
     "paused": "en pause",
-    "in tick {tick}, round {round}": "dans le tick {tick}, tour {round}",
+    "in tick {tick}, round {round}": "dans le tick {tick}, passe {round}",
     "{n} watch(es)": "{n} point(s) d'arrêt",
+    "relations": "relations",
+    "none": "aucune",
+    "next {name}": "{name} suivant",
+    "step by step": "pas à pas",
+    # ---------------------------------------------------------------- files (files.py), focus
+    "files": "fichiers",
+    "the folder it is in": "le dossier où elle est",
+    "into a folder": "aller dans un dossier",
+    "what is there": "ce qu'il y a",
+    "the first lines of a file": "les premières lignes d'un fichier",
+    "the last lines of a file": "les dernières lignes d'un fichier",
+    "a whole file": "un fichier entier",
+    "a new folder": "un nouveau dossier",
+    "a copy": "une copie",
+    "moved or renamed": "déplacé ou renommé",
+    "deleted, once it is asked": "supprimé, une fois demandé",
+    "The machine really goes into the folder: use, load, run, open and new start from there; the machine's own "
+    "programs are still found from anywhere. The prompt says where it is.":
+        "La machine va vraiment dans le dossier : use, load, run, open et new partent de là ; les programmes de la "
+        "machine sont trouvés de partout. Le prompteur dit où elle est.",
+    "Nothing is deleted before the human has said yes (y / n). A folder: rm -r.":
+        "Rien n'est supprimé avant que l'humain ait dit oui (o / n). Un dossier : rm -r.",
+    "nothing matches {pattern}": "rien ne correspond à {pattern}",
+    "no folder before": "pas de dossier d'avant",
+    "no folder {name}": "pas de dossier {name}",
+    "{name} is a file, not a folder": "{name} est un fichier, pas un dossier",
+    "no file or folder {name}": "pas de fichier ni de dossier {name}",
+    "{name} is a folder (ls {name})": "{name} est un dossier (ls {name})",
+    "{name} is not a text file": "{name} n'est pas un fichier texte",
+    "which file? ({word} [-n N] FILE)": "quel fichier ? ({word} [-n N] FICHIER)",
+    "which file? ({word} FILE)": "quel fichier ? ({word} FICHIER)",
+    "which file? (rm [-r] FILE...)": "quel fichier ? (rm [-r] FICHIER...)",
+    "which folder? (mkdir [-p] FOLDER)": "quel dossier ? (mkdir [-p] DOSSIER)",
+    "... {n} more lines (head, tail)": "... {n} lignes de plus (head, tail)",
+    "{name} already exists": "{name} existe déjà",
+    "made {names}": "créé : {names}",
+    "from where to where? ({word} FROM... TO)": "d'où vers où ? ({word} DE... VERS)",
+    "{name} is not a folder": "{name} n'est pas un dossier",
+    "{name} is a folder: cp -r": "{name} est un dossier : cp -r",
+    "copied {names} -> {to}": "copié : {names} -> {to}",
+    "moved {names} -> {to}": "déplacé : {names} -> {to}",
+    "{name} is a folder: rm -r": "{name} est un dossier : rm -r",
+    "deleted {names}": "supprimé : {names}",
+    " and {n} more": " et {n} de plus",
+    "and {n} more": "et {n} de plus",
+    "delete {names}? (y/n)": "supprimer {names} ? (o/n)",
+    "nothing deleted": "rien n'a été supprimé",
+    "rows": "lignes",
+    "looking for what it has not been told": "cherche ce qu'on ne lui a pas dit",
+    "columns named as the machine can write them: {names}": "colonnes nommées comme la machine peut les écrire : {names}",
+    "focus": "focus",
+    "what comes to the front": "ce qui vient au premier plan",
+    "A program, a call, a file of data is a network in the network. focus brings one to the front: what touches it "
+    "stays in the second plane, the rest fades into the third, and the picture zooms on it. focus node N [depth]: a "
+    "node and what is around it; focus between A B: the ways that tie them. It goes by itself to a program that is "
+    "used, a file that is loaded, a tab that is chosen.":
+        "Un programme, un appel, un fichier de données est un réseau dans le réseau. focus en amène un au premier "
+        "plan : ce qui le touche reste au deuxième plan, le reste s'efface au troisième, et l'image zoome dessus. "
+        "focus node N [profondeur] : un nœud et ce qui l'entoure ; focus between A B : les chemins qui les relient. "
+        "Il y va tout seul pour un programme utilisé, un fichier chargé, un onglet choisi.",
+    "a network in the network": "un réseau dans le réseau",
+    "no network in the network yet (use a program, call a network)":
+        "pas encore de réseau dans le réseau (use un programme, call un réseau)",
+    "{n} node(s), {r} relation(s)": "{n} nœud(s), {r} relation(s)",
+    "now: {what}": "maintenant : {what}",
+    "between what and what? (focus between A B)": "entre quoi et quoi ? (focus between A B)",
+    "nothing ties them": "rien ne les relie",
+    "focus: {what}": "focus : {what}",
+    "nothing called {name}; did you mean {like}?": "rien ne s'appelle {name} ; vouliez-vous dire {like} ?",
+    "nothing called {name} (focus: the list)": "rien ne s'appelle {name} (focus : la liste)",
+    "everything": "tout",
+    "node {name}, {depth} relation(s) around": "nœud {name}, {depth} relation(s) autour",
+    "between {names}": "entre {names}",
+    "Folders and focus": "Dossiers et focus",
+    "It works in folders as a Unix shell does (pwd, cd, ls, head...). And one part of the network can be brought to "
+    "the front, the rest fading behind it:":
+        "Elle travaille dans des dossiers comme un shell Unix (pwd, cd, ls, head...). Et une partie du réseau peut "
+        "venir au premier plan, le reste s'effaçant derrière :",
+    # ---------------------------------------------------------------- feeling it (senses.py, ambient.py)
+    "feeling it": "la ressentir",
+    "a calm sound of what it feels": "un son calme de ce qu'elle ressent",
+    "how strongly it shows what it feels": "à quel point elle montre ce qu'elle ressent",
+    "A slow, soft sound made of what the machine feels: its relations that hold are in tune, one that does not beats "
+    "against the others, its pleasure opens the higher harmonics, a discovery rings a bell, a surprise swells and "
+    "settles. engine: a low hum; pad: a voice a relation; wind: a breath. Off unless asked for; needs sounddevice to "
+    "play, ambient save FILE.wav writes it without.":
+        "Un son lent et doux fait de ce que ressent la machine : ses relations qui tiennent sont accordées, une qui "
+        "ne tient pas bat contre les autres, son plaisir ouvre les harmoniques aiguës, une découverte fait sonner une "
+        "cloche, une surprise enfle puis s'apaise. engine : un bourdon grave ; pad : une voix par relation ; wind : un "
+        "souffle. Éteint sauf demande ; il faut sounddevice pour l'entendre, ambient save FICHIER.wav l'écrit sans.",
+    "Everything the picture shows of what the machine feels is a real quantity: messages going along the links (its "
+    "work), the glow of a relation (the information it brings), a slow ripple (a surprise), a warmer or colder light "
+    "(pleasure, displeasure). calm by default; nothing flashes.":
+        "Tout ce que l'image montre de ce que ressent la machine est une vraie grandeur : des messages qui courent le "
+        "long des liens (son travail), le halo d'une relation (l'information qu'elle apporte), une onde lente (une "
+        "surprise), une lumière plus chaude ou plus froide (plaisir, déplaisir). calm par défaut ; rien ne clignote.",
+    "a law that holds on every row it has seen": "une loi qui tient sur toutes les lignes qu'elle a vues",
+    "a surprise": "une surprise",
+    "it is learning from it": "elle en apprend",
+    "it did not expect that: {s} sigma from what it thought": "elle ne s'y attendait pas : à {s} sigma de ce qu'elle pensait",
+    "when {x} doubles, {y} is multiplied by {k}": "quand {x} double, {y} est multiplié par {k}",
+    "{x} fades: it loses half of itself every {h} moments": "{x} s'éteint : il perd la moitié de lui-même tous les {h} instants",
+    "{x} grows: it doubles every {d} moments": "{x} grandit : il double tous les {d} instants",
+    "{x} swings: it comes back every {p} moments, and keeps {d} of itself each moment":
+        "{x} oscille : il revient tous les {p} instants, et garde {d} de lui-même à chaque instant",
+    "{y} follows a straight line": "{y} suit une droite",
+    "{y} is a sum of products: two worlds of the machine, stacked":
+        "{y} est une somme de produits : les deux mondes de la machine, empilés",
+    "ambient off": "ambiance éteinte",
+    "ambient: {kind}, volume {v}%": "ambiance : {kind}, volume {v} %",
+    "ambient: {state} ({kind}, volume {v}%)": "ambiance : {state} ({kind}, volume {v} %)",
+    "no sound here ({why}): pip install sounddevice; ambient save FILE.wav writes it to a file":
+        "pas de son ici ({why}) : pip install sounddevice ; ambient save FICHIER.wav l'écrit dans un fichier",
+    "{kind}, {s} seconds, in {path}": "{kind}, {s} secondes, dans {path}",
+    "senses: {level}; motion {m}, colour {c}, waves {w}": "sens : {level} ; mouvement {m}, couleur {c}, vagues {w}",
+    "waves": "vagues",
+    "volume {v}%": "volume {v} %",
+    "sound": "son",
+    "on": "activé",
+    "off": "éteint",
+    "present": "présent",
+    "vivid": "vif",
+    "motion": "mouvement",
+    "colour": "couleur",
+    "engine": "moteur",
+    "pad": "nappe",
+    "wind": "souffle",
+    "the words cleared from the screen (Ctrl+L)": "les mots effacés de l'écran (Ctrl+L)",
+    "what was typed (!N: again)": "ce qui a été tapé (!N : à nouveau)",
+    "no line {ref} in the history (history: the list)": "pas de ligne {ref} dans l'historique (history : la liste)",
+    # ---------------------------------------------------------------- the logbook (journal.py)
+    "logbook": "journal de bord",
+    "its logbook, day after day": "son journal de bord, jour après jour",
+    "What it lived, day after day: when it woke, the programs and files it was given, what it found by itself (with "
+    "the law, a sentence and the points), what surprised it, what each night kept or forgot. Kept with its memory; "
+    "read in the language of the machine.":
+        "Ce qu'elle a vécu, jour après jour : quand elle s'est réveillée, les programmes et les fichiers qu'on lui a "
+        "donnés, ce qu'elle a trouvé toute seule (avec la loi, une phrase et les points), ce qui l'a surprise, ce que "
+        "chaque nuit a gardé ou oublié. Gardé avec sa mémoire ; lu dans la langue de la machine.",
+    "a night: {d} found, {f} files, {s} surprises today; flourishing {fl}":
+        "une nuit : {d} trouvailles, {f} fichiers, {s} surprises aujourd'hui ; épanouissement {fl}",
+    "born blank": "née vierge",
+    "born with its base: {n} points of the world": "née avec sa base : {n} points du monde",
+    "found by itself: {text}": "trouvé toute seule : {text}",
+    "kept from the sandbox: {what}": "gardé du bac à sable : {what}",
+    "learned from {name}: {rows} rows": "a appris de {name} : {rows} lignes",
+    "nothing in the logbook holds {words}": "rien dans le journal ne contient {words}",
+    "read the program {name}: {nodes} node(s), {relations} relation(s)":
+        "a lu le programme {name} : {nodes} nœud(s), {relations} relation(s)",
+    "the logbook is empty": "le journal est vide",
+    "woke up; it remembers {nodes} nodes and {relations} relations":
+        "s'est réveillée ; elle se souvient de {nodes} nœuds et {relations} relations",
+    "{weekday} {day} {month} {year}": "{weekday} {day} {month} {year}",
+    "Monday": "lundi",
+    "Tuesday": "mardi",
+    "Wednesday": "mercredi",
+    "Thursday": "jeudi",
+    "Friday": "vendredi",
+    "Saturday": "samedi",
+    "Sunday": "dimanche",
+    "January": "janvier",
+    "February": "février",
+    "March": "mars",
+    "April": "avril",
+    "May": "mai",
+    "June": "juin",
+    "July": "juillet",
+    "August": "août",
+    "September": "septembre",
+    "October": "octobre",
+    "November": "novembre",
+    "December": "décembre",
+    "mixer": "table de mixage",
+    "main": "ambiance",
+    "drone": "bourdon",
+    "bells": "cloches",
+    "reverb": "réverbération",
+    "volume": "volume",
+    "an empty file": "un fichier vide",
+    "untitled": "sans nom",
+    "new file: {path}": "nouveau fichier : {path}",
+    "a new tab: save NAME.ext gives it its name (in {folder})":
+        "un nouvel onglet : save NOM.ext lui donne son nom (dans {folder})",
+    "a name first: save NAME.ext (in {folder})": "d'abord un nom : save NOM.ext (dans {folder})",
+    "{name} is not a program (.grm): nothing to run": "{name} n'est pas un programme (.grm) : rien à exécuter",
 }

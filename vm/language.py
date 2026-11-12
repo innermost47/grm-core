@@ -87,6 +87,9 @@ class Network:
         self.origin = {"nodes": {}, "relations": {}}   # where each one comes from: base, written, found
         self.mood = {}         # its neuromodulators, its flourishing
         self.capacity = None   # how many links (synapses) it may hold (None: what the host's budget allows)
+        self.journal = []      # its logbook: what it lived, day after day (journal.py)
+        self.groups = {}       # the networks in the network: a program, a call, the base, what was typed, what it
+                               # found -> {"nodes": [...], "relations": [...]} (what focus shows)
         self.host = {}         # what the host gives (measured each session, not remembered: another host, another
                                # budget)
 

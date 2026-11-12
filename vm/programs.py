@@ -26,7 +26,8 @@ def find(name, base=HERE):
     name = name.strip().strip('"')
     if not name:
         return None
-    candidates = [name, name + ".grm", os.path.join(base, name), os.path.join(base, name + ".grm"),
+    candidates = [name, name + ".grm", os.path.join("programs", name + ".grm"),
+                  os.path.join(base, name), os.path.join(base, name + ".grm"),
                   os.path.join(base, "programs", name), os.path.join(base, "programs", name + ".grm")]
     for c in candidates:
         if os.path.isfile(c):

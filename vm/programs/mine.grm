@@ -1,0 +1,9 @@
+#! name: mine
+#! does: (what it does, in a few words)
+#! try: use programs/mine.grm ; ask y
+#
+# A program is a network: write relations, not steps. Each line is a statement (help WORD for one).
+
+input x = 2
+relate model: y = 3 * x +/- 0.1
+output y

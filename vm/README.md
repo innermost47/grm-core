@@ -15,9 +15,11 @@ python vm/grm_vm.py --blank               # start blank: no memory, no base
 python -m pytest vm/test_vm.py
 ```
 
-![The window: the words on the left, the network in the middle (the mouse over a relation found by itself), the master equation above it, the outputs and what the machine feels on the right](../docs/grm_vm_window.png)
+![The window: the words on the left; on the right the buttons, the master equation, a pill per network in the network, the networks each in its colour, a law it has just found shared as a moment, and under it what it feels and its outputs](../docs/grm_vm_window.png)
 
-![The panel of outputs: a Minsky machine doubling 5 (s, b), a line learned from 100 rows (y), then a row it did not expect (surprise)](../docs/grm_vm_panel.png)
+![Under the network: what the machine feels and its room, and its outputs with their last 240 ticks (a thermostat, a fall)](../docs/grm_vm_panel.png)
+
+![The logbook: what the machine lived, day after day, with the laws it found drawn](../docs/grm_vm_logbook.png)
 
 ## The language: GRML
 
@@ -99,7 +101,7 @@ a shift of their log, signed ones by a scale.
 
 A new way of programming needs help at hand, so the machine gives it where the typing is:
 - **`help`** lists every word by group with a few words each; **`help WORD`** gives its form, what it is and an
-  example (`help relate`); **`tour`** is a guided tour in eleven steps, each with a line to type.
+  example (`help relate`); **`tour`** is a guided tour in twelve steps, each with a line to type.
 - **Short forms**: every statement and command has one (`rel` relate, `obs` observe, `inp` input, `t` tick, `ins`
   inspect...), and **`+/-`** can be written for `±`, which is not on every keyboard. Several statements or commands
   go on one line, separated by `;`.
@@ -110,7 +112,31 @@ A new way of programming needs help at hand, so the machine gives it where the t
 - **Seeing it work**: ▶ / ⏸ (`play`, `pause`, F8), a tick (F10), a round (`step`, F11): each round says which
   relations worked and which nodes moved, and the window frames them. `watch` sets breakpoints (a condition that
   becomes true, a node that changes, a relation that stops holding): the clock pauses there, `tick n` stops there.
-  `why NODE` shows what makes its value: the messages it hears, their share, and what each relation heard.
+  `why NODE` shows what makes its value: the messages it hears, their share, and what each relation heard. From
+  the first `step`, nothing runs but a round at a time (until `tick` or `play`): a new relation or measurement is
+  seen going through the network. The machine's own helpers are named for a human (`next n`, `set n`).
+- **Folders and files**, as a Unix shell has them: `pwd`, `cd`, `ls`, `head`, `tail`, `cat`, `mkdir`, `cp`, `mv`,
+  `rm` (asked first, in red). The prompt says the folder it is in; `use`, `load`, `run` start from there. `load` reads
+  a CSV from any program (`;` or `,`, decimal commas, Windows' encoding, any header). What was typed is kept from
+  session to session; long work turns a wheel with how far it is.
+- **Focus**: a program, a call, a file of data is a network in the network. `focus NAME`, `focus node N`, `focus
+  between A B` bring it to the front, the rest fading into a second and a third plane, the picture zooming on it; it
+  goes there by itself when a program is used or a file loaded. A pill per network above the picture.
+- **Feeling it**: what the machine feels is shown, and every light, movement and sound is a real quantity. Messages
+  go along the links, a halo grows with the information a relation brings, a surprise is a slow ripple, and pleasure
+  warms the light (`senses`, calm by default; nothing flashes). A discovery is a moment: a card with the law, a
+  sentence (`when t doubles, h is multiplied by 4`) and the points it was found in. `ambient pad | engine | wind` is
+  a slow, soft sound of it: relations that hold are in tune, one that does not beats, a discovery rings a bell, with a
+  long reverb, over a low drone; each network has its key (the sound glides to it), and a mixer sets the ambient,
+  the drone, the bells and the reverb. `ambient save FILE.wav` without a sound card.
+- **As it was left**: the folder of the prompt, the focus, the tabs, the logbook, the sound, the sashes come back at
+  the next start. A warning is amber (`⚠`), an error red (`!`).
+- **Colours, waves, logbook**: each network in the network has its soft colour (a territory under its nodes, its
+  links tinted, its pill); the picture moves gently with a sea swell, in time with the sound; `journal` is its
+  logbook, day after day: what it was given, what it found (the law, a sentence, the points drawn), what surprised
+  it, what each night kept or forgot.
+- **Cards** (`inspect`, the mouse over a node or a relation) are tables: the labels dim on the left, the values on
+  the right. The prompt says `grm>`: the human has the hand.
 - **Programs** are files of statements with a header (`#! name`, `#! does`, `#! try`): `programs` lists them with
   what they do and what they take and give (read from the program itself), `read NAME` shows one here, `new NAME`
   starts one from a template. In the window, `open NAME` opens it in a programs window of its own, a tab per program,
@@ -249,9 +275,12 @@ The only part that is not the network: what a human uses to talk to it and to pe
   (statements, commands, known nodes, relations, new names, numbers, comments); Tab completes (statements and
   commands, then nodes and relations, files after `use` and `load`, networks after `call`; twice lists the
   candidates); Up and Down go back through what was typed. In the terminal, Tab completes the same way (readline).
-- Out, for the eyes: the window in three parts.
-  - Left: the words and the answers (errors in red, what the machine did by itself in teal).
-  - Middle: the network itself: a round for each node (blue: input, orange: output, purple: variable, green:
+- Out, for the eyes: the window, on the whole screen, in two columns, with a sash and its grip between the parts
+  (drag it to give one more room; where they are left is kept for the next time).
+  - Left: the words and the answers (errors in red, what the machine did by itself in teal), and the prompt, which
+    says the folder it is in (`grm ~/data>`).
+  - Right, above: the buttons ▶ / ⏸, a tick, a round; the master equation; a pill per network in the network
+    (focus); then the network itself: a round for each node (blue: input, orange: output, purple: variable, green:
     weight, grey: the base, dashed: made by itself), a square for each relation (grey: holds, amber: 1 to 3 sigma
     from holding, red: beyond), a line for each link, a dashed arrow for each write of a tick (`set`), dashed lines
     for a relation whose conditions do not hold; a ring around what has just moved. The mouse over a node shows its
@@ -259,7 +288,8 @@ The only part that is not the network: what a human uses to talk to it and to pe
     from holding, its conditions, swings, weights, last surprise, where it comes from (r² when it was found), its
     use, and the information it brings in bits against its rent. Drag a node to move it (it stays), drag the background to move the picture, the wheel zooms, a double
     click puts everything back. Above it: the master equation, now or at t - n (slider).
-  - Right: inside (pleasure, flourishing, progress, links of capacity and what limits it, the rent), then the
+  - Right, below the network: inside (pleasure, flourishing, progress, links of capacity and what limits it, the
+    rent), and beside it the
     outputs: each with its value, a bar
     and its last 240 ticks, and the surprise.
 - Out, for the ears (`sound on`): each output is a voice. Its pitch is where its value stands between the lowest
@@ -306,6 +336,10 @@ The only part that is not the network: what a human uses to talk to it and to pe
   example, its short form), the line of help and the menu under the prompt, the banner.
 - `guide.py`: `help` and `tour`.
 - `debug.py`: seeing it work: a round at a time, watches, `why`.
+- `files.py`: folders and files, as a Unix shell has them.
+- `journal.py`: its logbook.
+- `senses.py`: what the machine feels, from its real quantities, and the moments worth sharing.
+- `ambient.py`: the ambient sound (oscillators, filtered noise, a long reverb), played with sounddevice or saved.
 - `programs.py`: where programs are, their header, the template of a new one.
 - `i18n.py`, `fr.py`: the two languages (every text the machine says is an English template; `fr.py` gives it in
   French), and the settings kept next to the memory.
@@ -324,4 +358,8 @@ The only part that is not the network: what a human uses to talk to it and to pe
   catalogue whole (every text the machine may say, with the same fields), the language switched and remembered, the
   line under the prompt and the menu above it; a tick a round at a time (the same values as a whole tick), a tick
   stepped into finished by `tick` and by sleep, watches on a condition, a node and a relation, `play` and `pause`,
-  `why`, all of it in French too.
+  `why`, all of it in French too; folders and files (and `rm` asking first), a CSV from any program, what was
+  typed kept from session to session, the networks in the network, focus (a group, a node, a relation, between) and
+  the front drawn together, groups remembered; what it feels (its harmony, a strain heard as a beat), a discovery
+  and a surprise as moments, the ambient sound calm (capped, no sudden start, no click, nothing sharp), the senses
+  and ambient settings remembered.

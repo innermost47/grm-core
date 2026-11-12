@@ -807,6 +807,7 @@ class Machine:
             "tension": getattr(net, "tension", {}), "found": getattr(net, "found", []),
             "seen": getattr(self, "_seen", None),
             "use": getattr(net, "use", {}), "origin": getattr(net, "origin", {}), "mood": getattr(net, "mood", {}),
+            "groups": getattr(net, "groups", {}), "journal": getattr(net, "journal", []),
             "capacity": getattr(net, "capacity", None),
         }
         with open(path, "w", encoding="utf-8") as fh:
@@ -840,6 +841,8 @@ class Machine:
         net.use = st.get("use") or {"nodes": {}, "relations": {}}
         net.origin = st.get("origin") or {"nodes": {}, "relations": {}}
         net.mood = st.get("mood") or {}
+        net.groups = st.get("groups") or {}
+        net.journal = st.get("journal") or []
         net.capacity = st.get("capacity")
         net.networks = {k: (v[0], v[1]) for k, v in st["networks"].items()}
         net.calls = [tuple(c) for c in st["calls"]]

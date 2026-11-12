@@ -18,6 +18,7 @@ import math
 import re
 
 from i18n import colon, tr
+from graph import shown, text_of
 from language import TalkError, _number
 
 NAME = r"[A-Za-z_][A-Za-z0-9_]*"
@@ -129,7 +130,7 @@ def round_report(m, before, woken, moved_from, fresh=()):
     for f in woken:
         fac = m.factors[f]
         if fac.kind in ("relation", "nonlinear", "keep"):
-            worked.add(fac.name)
+            worked.add(shown(m.net, fac.name))
         elif fac.kind == "anchor" and f in fresh and "__" not in m.var_names[fac.vars[0]]:   # a new measurement
             worked.add(tr("the measurement of {name}", name=public(m.var_names[fac.vars[0]])))
         elif fac.kind == "joint":
@@ -220,7 +221,7 @@ def _what(vm, m, f, i):
         others = sorted({m.factors[g].name for g, _ in m.node_factors[twin] if m.factors[g] is not f})
         return tr("through its signed twin, from {names}", names=", ".join(others) or "?"), ""
     rel = net.relation(f.name)
-    text = rel["text"] if rel else f.text
+    text = text_of(net, rel) if rel else f.text
     kind = tr("contact") if f.kind == "keep" else tr("relation")
     heard = []
     for j in dict.fromkeys(f.vars):
@@ -230,9 +231,11 @@ def _what(vm, m, f, i):
         if public(name) == other:
             continue
         try:
-            heard.append(f"{other} = {_fmt(m.value_si(m.var_names[j]))}")
+            heard.append(f"{shown(net, other)} = {_fmt(m.value_si(m.var_names[j]))}")
         except (OverflowError, ValueError):
             pass
+    if text.startswith("set "):                     # a `set`: said as it was written
+        return text, ", ".join(heard[:6]) + (" ..." if len(heard) > 6 else "")
     return f"{kind} {f.name}: {text}", ", ".join(heard[:6]) + (" ..." if len(heard) > 6 else "")
 
 

@@ -21,7 +21,7 @@ STATEMENTS = ("node", "relate", "observe", "forget", "keep", "network", "call", 
 SHORT_COMMANDS = {
     "t": "tick", "ld": "load", "outs": "outputs", "ins": "inspect", "ms": "master", "chk": "check",
     "cap": "capacity", "clk": "clock", "h": "help", "q": "quit", "progs": "programs", "rd": "read", "o": "open",
-    "ed": "edit", "sv": "save", "st": "step", "wt": "watch", "uw": "unwatch",
+    "ed": "edit", "sv": "save", "st": "step", "wt": "watch", "uw": "unwatch", "fc": "focus", "amb": "ambient", "jr": "journal",
 }
 SHORT = dict(SHORT_STATEMENTS, **SHORT_COMMANDS)
 LONG = {v: k for k, v in SHORT.items()}
@@ -64,7 +64,24 @@ DOCS = {
     "watch": ("watch NODE in LO .. HIGH | NODE | RELATION", "stop when it is met", "watch n in 5 .. inf"),
     "unwatch": ("unwatch [N | all]", "take a watch away", "unwatch 1"),
     "why": ("why NODE", "what makes its value", "why height"),
+    # files, as a Unix shell has them
+    "clear": ("clear", "the words cleared from the screen (Ctrl+L)", "clear"),
+    "history": ("history [N] | !N", "what was typed (!N: again)", "history 10"),
+    "pwd": ("pwd", "the folder it is in", "pwd"),
+    "cd": ("cd [FOLDER | .. | ~ | -]", "into a folder", "cd ~/data"),
+    "ls": ("ls [-l] [-a] [PATH...]", "what is there", "ls -l *.csv"),
+    "head": ("head [-n N] FILE", "the first lines of a file", "head -n 5 data.csv"),
+    "tail": ("tail [-n N] FILE", "the last lines of a file", "tail data.csv"),
+    "cat": ("cat FILE", "a whole file", "cat programs/fall.grm"),
+    "mkdir": ("mkdir [-p] FOLDER", "a new folder", "mkdir runs"),
+    "touch": ("touch FILE...", "an empty file", "touch notes.txt"),
+    "cp": ("cp [-r] FROM... TO", "a copy", "cp data.csv runs/"),
+    "mv": ("mv FROM... TO", "moved or renamed", "mv old.csv new.csv"),
+    "rm": ("rm [-r] PATH...", "deleted, once it is asked", "rm old.csv"),
+    "journal": ("journal [N | today | WORDS]", "its logbook, day after day", "journal today"),
     # looking
+    "focus": ("focus [NAME | node N [depth] | relation R | between A B | all]", "what comes to the front",
+              "focus fall"),
     "ask": ("ask NODE", "a node's value", "ask height"),
     "outputs": ("outputs", "the outputs and the surprise", "outputs"),
     "show": ("show", "what the network is", "show"),
@@ -85,12 +102,16 @@ DOCS = {
     "open": ("open PROGRAM", "a program in a tab", "open fall"),
     "tab": ("tab N | NAME", "go to a tab", "tab 2"),
     "close": ("close [N | NAME]", "close a tab", "close"),
-    "new": ("new NAME", "a new program, in a tab", "new orbit"),
+    "new": ("new [NAME | NAME.ext]", "a new program, a new file, in a tab", "new prices.csv"),
     "edit": ("edit [PROGRAM]", "write in a tab (Esc: back here)", "edit fall"),
-    "save": ("save [FILE.grm]", "save the tab (Ctrl+S)", "save"),
+    "save": ("save [NAME.ext]", "save the tab (Ctrl+S)", "save notes.md"),
     "find": ("find WORDS", "search the tab (Ctrl+F)", "find height"),
     # the body, help
     "sound": ("sound on | off", "hear the outputs", "sound on"),
+    "ambient": ("ambient [engine | pad | wind | off] [VOLUME%] | ambient save FILE.wav", "a calm sound of what it feels",
+                "ambient pad 40%"),
+    "senses": ("senses [off | calm | present | vivid] [motion | colour | waves on|off]", "how strongly it shows what it feels",
+               "senses present"),
     "lang": ("lang fr | en", "the language of the machine", "lang fr"),
     "help": ("help [WORD | on | off]", "help on a word; the typing help on or off", "help relate"),
     "tour": ("tour [N | end]", "a guided tour, a step at a time", "tour"),
@@ -152,21 +173,26 @@ COLOURS = {   # dark background
 }
 
 
-def complete(line, cursor, nodes=(), relations=(), commands=(), networks=(), base="."):
+def complete(line, cursor, nodes=(), relations=(), commands=(), networks=(), base=".", groups=()):
     """What Tab can put at the cursor. Returns (start, candidates): the word from `start` to the cursor is replaced
     by a candidate. First word: statements and commands; after use / run / load: files; after call: networks;
     elsewhere: nodes, relations, keywords."""
     left = line[:cursor]
-    m = re.search(r"[A-Za-z0-9_~./\\-]*$", left)
+    m = re.search(r"[A-Za-z0-9_~./\\:$-]*$", left)
     start = m.start()
     word = left[start:]
     before = left[:start]
     part = before.split(";")[-1]
+    if "__" not in word:             # the machine's own helpers (n__next1, set_n_1) are not offered
+        nodes = [n for n in nodes if "__" not in n and not n.startswith("~")]
+        relations = [r for r in relations if not re.fullmatch(r"set_.+_\d+", r)]
     words = part.split()
     if not words:
         pool = sorted(set(STATEMENTS) | set(commands))
     else:
         head = whole(words[0])
+        if head in FILE_COMMANDS:
+            return start, [p for p in any_path(word, folders_only=head == "cd") if p != word]
         if head in ("use", "run", "load", "open", "read", "edit"):
             if head in ("open", "read", "edit") and "/" not in word:
                 return start, sorted({n for n in program_names(base) if n.startswith(word) and n != word})
@@ -177,7 +203,9 @@ def complete(line, cursor, nodes=(), relations=(), commands=(), networks=(), bas
             pool = sorted(DOCS)
         elif head in ("lang",):
             pool = ["en", "fr"]
-        elif head in ("ask", "inspect", "forget"):
+        elif head == "focus":
+            pool = sorted(set(groups) | set(nodes) | set(relations)) + ["all", "between", "group", "node", "relation"]
+        elif head in ("ask", "inspect", "forget", "why"):
             pool = sorted(nodes)
         else:
             pool = sorted(set(nodes) | set(relations)) + [w for w in LITTLE + CONSTANTS]
@@ -198,12 +226,37 @@ def files(prefix, base, endings):
 
 
 def program_names(base):
-    """The names of the programs in programs/ (fall for programs/fall.grm)."""
-    folder = os.path.join(base, "programs")
+    """The names of the programs: the machine's (programs/), and those of the folder it is in."""
+    names = set()
+    for folder in (os.path.join(base, "programs"), ".", "programs"):
+        try:
+            names |= {f[:-4] for f in os.listdir(folder) if f.endswith(".grm")}
+        except OSError:
+            pass
+    return sorted(names)
+
+
+FILE_COMMANDS = ("cd", "ls", "head", "tail", "cat", "rm", "cp", "mv", "mkdir", "touch")
+
+
+def any_path(prefix, folders_only=False):
+    """Every file or folder whose path begins with prefix (~ understood), written as the human began it."""
+    cut = max(prefix.rfind("/"), prefix.rfind(os.sep))
+    typed, partial = (prefix[:cut + 1], prefix[cut + 1:]) if cut >= 0 else ("", prefix)
+    real = os.path.expandvars(os.path.expanduser(typed)) or "."
     try:
-        return sorted(f[:-4] for f in os.listdir(folder) if f.endswith(".grm"))
+        names = os.listdir(real)
     except OSError:
         return []
+    out = []
+    for n in sorted(names, key=str.lower):
+        if not n.startswith(partial) or (n.startswith(".") and not partial.startswith(".")):
+            continue
+        is_dir = os.path.isdir(os.path.join(real, n))
+        if folders_only and not is_dir:
+            continue
+        out.append(typed + n + ("/" if is_dir else ""))
+    return out
 
 
 def describe(word):
@@ -239,12 +292,12 @@ def hint(line, cursor, nodes=None, relations=(), commands=()):
     return ""
 
 
-def suggest(line, cursor, nodes=(), relations=(), commands=(), networks=(), base=".", max_names=12):
+def suggest(line, cursor, nodes=(), relations=(), commands=(), networks=(), base=".", max_names=12, groups=()):
     """The menu under the prompt: [(word, a few words)]. Words of the machine from the first letter; names of nodes
     and relations from the second letter, and only when there are at most max_names of them (not to crowd the
     screen)."""
     start, found = complete(line, cursor, nodes=nodes, relations=relations, commands=commands, networks=networks,
-                            base=base)
+                            base=base, groups=groups)
     word = line[start:cursor]
     left = line[:start].split(";")[-1]
     if not left.split():                                  # the first word: statements, commands and short forms
@@ -257,7 +310,9 @@ def suggest(line, cursor, nodes=(), relations=(), commands=(), networks=(), base
     head = whole(left.split()[0])
     if head in ("help",):
         return [(w, describe(w)) for w in found][:12]
-    if head in ("use", "run", "load", "open", "read", "edit", "lang", "call"):
+    if head == "focus" and len(word) < 2:
+        return [(g, tr("a network in the network")) for g in groups if g.startswith(word)][:12]
+    if head in ("use", "run", "load", "open", "read", "edit", "lang", "call") + FILE_COMMANDS:
         return [(w, "") for w in found][:12]
     if len(word) < 2 or len(found) > max_names:
         return []

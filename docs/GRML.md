@@ -14,6 +14,9 @@ here is what the language does.
 - [Reference](#reference): every word
 - [What the machine does by itself](#what-the-machine-does-by-itself): nodes, relations, fusions
 - [Programs](#programs): files, their header, the programs window
+- [Folders and files](#folders-and-files): pwd, cd, ls, head, rm..., files of data from any program
+- [Focus](#focus-a-network-in-the-network): a network in the network, brought to the front
+- [Feeling it](#feeling-it): what the machine feels, seen and heard
 - [Seeing it work](#seeing-it-work): a round at a time, watches, why a node has its value
 - [The tick](#the-tick): what happens at each beat of the clock
 - [The machine's commands](#the-machines-commands), its help and its two languages
@@ -37,7 +40,7 @@ Nothing told the machine to divide: it found the speed that makes the relation h
 
 `±` can be written `+/-` (it is not on every keyboard), and every word has a short form (`obs`, `rel`, `t`...):
 `obs distance = 100 +/- 1%` is the same line. `help` lists the words, `help WORD` explains one with an example, and
-`tour` is a guided tour of eleven steps. `lang fr` puts the machine's interface in French (the words of the language stay
+`tour` is a guided tour of twelve steps. `lang fr` puts the machine's interface in French (the words of the language stay
 English, so a program runs anywhere).
 
 ## Tutorial
@@ -416,6 +419,154 @@ and everything is done from the keyboard:
 
 An error in a file (`use`, `run`) says the file and the line; when that file is open, its line turns red.
 
+## Folders and files
+
+The machine works in a folder, as a Unix shell does, and the prompt says which one: `grm ~/projects/climate>`. `cd`
+really moves the machine there, so `use`, `load`, `run`, `open`, `read` and `new` start from that folder. The
+machine's own programs (`vm/programs`) are still found from anywhere.
+
+| command | |
+|---|---|
+| `clear` | the words cleared from the screen (Ctrl+L in the window); nothing of the machine is forgotten |
+| `history [N]`, `!N`, `!!` | what was typed, sessions before included (20 lines); line N typed again, the last one again |
+| `pwd` | the folder it is in |
+| `cd [FOLDER \| .. \| ~ \| -]` | into a folder (alone: home; `-`: the one before); `~`, `$VARIABLES` and Windows paths are understood |
+| `ls [-l] [-a] [PATH...]` | what is there: folders/, programs and data in their own colours; `-l` adds rights, size and date; `-a` shows hidden files; wildcards: `ls *.csv` |
+| `head [-n N] FILE`, `tail [-n N] FILE` | its first or last lines (10); `head -5 data.csv` too |
+| `cat FILE` | the whole file (at most 2000 lines) |
+| `mkdir [-p] FOLDER`, `cp [-r] FROM... TO`, `mv FROM... TO` | a folder, a copy, a move or a new name |
+| `touch FILE...` | an empty file |
+| `new NAME.ext` | a new file of any kind (`new prices.csv`, `new notes.md`), empty, in the folder it is in, open in a tab to be written; `new NAME`: a program; `new` alone: a tab with no name yet, which `save NAME.ext` names |
+| `rm [-r] PATH...` | deleted, once asked: `delete data.csv? (y/n)` is said in red, and nothing goes without `y` (`o` / `oui` in French); a folder needs `-r` |
+
+Tab completes paths after each of them (`cd` offers only folders).
+
+**Files of data from any program.** `load` reads a CSV written by any program:
+- UTF-8, with or without BOM, or the encoding of Windows;
+- separated by `,`, `;`, tabs or `|`;
+- with decimal points or commas (`3,14`), thousands separated (`1 234,5`, `1,234.5`), and percentages (`12%`).
+
+A header that is not a name of the language (`Température (°C)`, `CO2 (ppm)`, `2020`) becomes one (`Temperature_C`,
+`CO2_ppm`, `_2020`), and the machine says so.
+
+**What was typed** is kept from session to session in `vm/history.txt`, next to the memory: Up and Down find it again,
+in the window and in the terminal.
+
+**Long work** (a file, a night, `use`, `run`, many ticks) runs aside. In the window, the line under the prompt
+becomes a wheel that turns, with how far the work is (`[████······] 400/1000 rows`); in the terminal, the same at the
+start of the line. The window stays alive meanwhile.
+
+## Focus: a network in the network
+
+A program, a call, a file of data is a network in the network. The machine remembers which nodes and relations
+each one brought, with its memory:
+- a program used or run: its name (`fall`);
+- a call: the network and its first value (`circle(small)`);
+- a file of data: its name (`falling`);
+- the base: `base`;
+- what was typed at the prompt: `typed`;
+- what the machine found by itself: `found`.
+
+`focus` brings one of them to the front:
+- the picture zooms on it, easing there;
+- its nodes and relations draw together;
+- what touches it stays in a second plane: smaller and fainter, with small names;
+- the rest fades into a third plane, with no names.
+
+| command | short | |
+|---|---|---|
+| `focus` | `fc` | the networks in the network, with what each holds, and what is looked at now |
+| `focus NAME` | | a program, a call, a file, the base... |
+| `focus node N [depth]` or `focus N [depth]` | | a node, its relations and their nodes, depth relations away (1) |
+| `focus relation R` | | a relation and its nodes |
+| `focus between A B...` or `focus A B` | | the shortest ways that tie these nodes or relations |
+| `focus all` | | everything again |
+
+The focus goes by itself to the program that has just been used or run, to the file that has just been loaded, and
+to the program whose tab is chosen in the programs window. Step by step, the relations that work come to the front
+too. In the window, a pill per network sits above the picture: a click brings it to the front, as the command would.
+
+## Feeling it
+
+The machine feels: its surprise, its pleasure and displeasure (a dopamine-like error on what it expected), the
+information each relation brings, its work round after round, what it finds by itself. The body lets a human
+perceive it. Every light, movement and sound comes from one of these quantities, never from decoration, so what is
+seen and heard is true. It is calm by design, so that anyone can be at ease with it, autistic people included:
+- nothing flashes (far below the 3 flashes a second of WCAG 2.3.1);
+- every change is slow;
+- the sound is low and soft, starts in silence and is capped;
+- everything can be turned down or off.
+
+**Seen** (`senses`, the ◐ button):
+
+| what moves | what it is |
+|---|---|
+| small lights going along the links | messages: the relations that worked at the last tick or round, telling their nodes |
+| a soft halo around a relation, wider when it brings more | the information it brings (bits) |
+| a slow ripple | a surprise |
+| a light a little warmer, or a little colder | pleasure, displeasure |
+| nothing | it has settled: it is at rest |
+
+`senses off | calm | present | vivid` sets how strongly (`calm` by default); `senses motion off` and `senses colour
+off` turn one channel off.
+
+**Moments.** When the machine finds a relation by itself, the picture shares it with the human. A card comes in
+slowly, with:
+- the law (`h = 4.90618 * t^2`);
+- a sentence (`when t doubles, h is multiplied by 4`);
+- the points it was found in;
+- its r².
+
+The same sentence goes to the words. A surprise gets its own card: how far it was from what the machine expected,
+and where. A card stays a few seconds and fades; a click closes it.
+
+**Colours.** Each network in the network has its own soft colour, the same as its pill:
+- a territory under its nodes;
+- its links and relations tinted with it;
+- its plain nodes wearing it.
+
+The base is slate, what the machine found is gold, and what was typed is lilac. The network in focus glows a little
+more. Amber and red stay kept for what does not hold. Inputs, outputs, variables and weights keep the colours of the
+legend.
+
+**Waves.** The picture moves gently with a sea swell: one wave every ten seconds, each point turning on a small
+circle as water does under a wave. With the sound on, the swell breathes with it and rises with a surprise.
+`senses waves off` stills it.
+
+**The logbook** (`journal`, the ✎ button): what the machine lived, day after day, in words a human likes to read:
+- when it woke, the programs and files it was given;
+- what it found by itself: the law, a sentence, the points it was found in, drawn;
+- what surprised it;
+- what each night kept or forgot, with a summary of the day.
+
+It is kept with its memory and read in the language of the machine. `journal today`, `journal 20`, and `journal
+WORDS` to search; in the window it opens in a window of its own, with a search line.
+
+**Heard** (`ambient`, the ♪ button): a slow, soft, new-age-like sound of what the machine feels, in real time, with a
+long reverb.
+
+| ambient | |
+|---|---|
+| `pad` | a voice for each relation that brings information, tuned on the harmonics of one note. A relation that holds is in tune; one that does not beats against the others, and the beat is its disagreement (one beat a second for about a sigma) |
+| `engine` | a low hum, like an engine at rest: its pulse follows how much the machine works; a roughness comes when its relations do not hold |
+| `wind` | a breath: it rises when the machine works; a surprise is a slow wave |
+
+In every one of them:
+- pleasure opens the higher harmonics, displeasure closes them;
+- a discovery rings a soft bell on an interval taken from its law (t²: the octave);
+- a surprise swells and settles;
+- a low drone holds a C, its octave and its fifth under everything, as a tanpura does;
+- each network in the network has its own key, with its colour: when another one is looked at, the sound glides
+  to its key over a few seconds. The keys stay low and in tune with each other: C, the G and the A below, D...
+
+**The mixer** (♪ ▾ → mixer): the volume, the ambient itself, the drone, the bells, the reverb; each slider is heard
+at once, and the command it stands for is written in the words: `ambient drone 30%`, `ambient reverb 70%`, `ambient
+bells 50%`, `ambient main 80%`.
+
+`ambient pad`, `ambient 40%`, `ambient off`. Its choices are kept, and the sound comes back on at the next start if
+it was left on (rising from silence). It needs `sounddevice` to be heard (`pip install sounddevice`, which brings what it needs on Windows). Without it,
+`ambient save FILE.wav [SECONDS]` writes the same sound to a file.
+
 ## Seeing it work
 
 A tick is a conversation in rounds: in each round, the nodes that heard something new tell their relations, and the
@@ -463,8 +614,15 @@ grm> why height
   and what the relation heard from its other nodes; a measurement, a write of the last tick or the weights' memory are
   messages too. In a tick stepped into, what a relation already says and what the node still is can differ: that is
   the next round.
-- A statement (`relate`, `observe`...) rebuilds the machine, which settles at once; to see an input go through the
-  network round by round, give it with `put`.
+- **Step by step.** From the first `step` (F11), nothing runs but a round at a time, until a `tick` (F10) or `play`
+  (F8): a new relation or a new measurement is left to the rounds, where it can be seen going through the network
+  (`step 3` after `observe t = 3`, or after `relate`). `ask`, `why` and `inspect` read the values as they are. A
+  measurement of a node the machine already has (`observe`, `forget`, `put`) is heard by that node in place; a new
+  node or relation builds the machine again, from its starting values. Out of step by step, the machine settles at
+  once, as before. The line under the buttons says `step by step`.
+- **The machine's own helpers** are named for a human: the node that holds the next value of `n` (`n__next1`) is
+  `next n`, the relation that computes it (`set_n_1`) is `set n`, and its text is the `set` as written. Tab and the
+  menu do not offer them, unless their name is begun (`n__`).
 
 ## The tick
 
@@ -502,6 +660,10 @@ written on one line, separated by `;`.
 | `clock HZ` | `clk` | ticks by themselves (window) |
 | `play`, `pause`, `step`, `watch`, `unwatch`, `why` | | see [Seeing it work](#seeing-it-work) |
 | `programs`, `read`, `open`, `tab`, `edit`, `save`, `find`, `close`, `new`, `run` | | see [Programs](#programs) |
+| `pwd`, `cd`, `ls`, `head`, `tail`, `cat`, `mkdir`, `cp`, `mv`, `rm` | | see [Folders and files](#folders-and-files) |
+| `focus` | `fc` | see [Focus](#focus-a-network-in-the-network) |
+| `senses`, `ambient` | `amb` | see [Feeling it](#feeling-it) |
+| `journal [N \| today \| WORDS]` | `jr` | the logbook, see [Feeling it](#feeling-it) |
 | `help [WORD]` | `h` | the words of the machine by group; one word, with its form and an example |
 | `help on` / `off` | | the menu of words while typing (window) |
 | `tour [N \| end]` | | a guided tour, a step at a time |
@@ -519,6 +681,17 @@ over the words, under the word being typed: the words of the machine from the fi
 forms), then the names of nodes and relations from the second letter, when there are no more than twelve of them. Up
 and Down choose, Tab, Enter or a click takes, Esc closes. The menu can be turned off (the box under the prompt, or
 `help off`); the line stays.
+
+**The window** opens on the whole screen. The sashes between its parts have a grip; where they are left is kept
+for the next time, with the language, in `vm/settings.json`.
+
+**What it was left as, it is again.** The window keeps, for the next time: the folder the prompt was in, the network
+in focus, the program tabs that were open and the one chosen, the logbook if it was open, the sound if it was on,
+the clock, the sashes, the language, the senses and the typing help (`vm/settings.json`, next to the memory). The
+terminal keeps the folder and the focus too.
+
+**Warnings and errors.** An error is said in red (`!`); a warning, in amber (`⚠`): something worth knowing, not
+something broken (`⚠ warning: 'pressure' is a new node; did you mean 'air_pressure'?`).
 
 **Two languages.** The interface speaks English or French: `lang fr`, `lang en`. The first time, it follows the
 language of the system. The words of GRML (`node`, `relate`, `observe`...) stay English in both, so a program written

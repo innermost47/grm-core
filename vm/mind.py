@@ -304,6 +304,7 @@ def after_tick(vm, surprise=None, explore=True):
         relation_names = {r["name"] for r in net.relations}
         worked = {m.factors[i].name for i in m.worked if i < len(m.factors)} & relation_names
         m.worked.clear()
+    vm.last_worked = worked                   # what the body shows working (senses.py)
     nodes_worked = set(getattr(vm, "_read", set()))
     vm._read = set()
     for r in net.relations:
@@ -518,7 +519,7 @@ def snapshot(vm):
     past = vm.past
     if past and past[-1]["relations"] == rels:
         rels = past[-1]["relations"]                 # the same relations: shared, not copied
-    m = vm.m() if nodes else vm.machine
+    m = vm.settle() if nodes else vm.machine
     values = {}
     if m is not None:
         for n in nodes:

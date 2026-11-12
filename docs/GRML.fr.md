@@ -18,7 +18,10 @@ la langue de l'interface. L'interface, elle, parle français avec `lang fr`.
 - [Référence](#référence) : chaque mot
 - [Ce que la machine fait toute seule](#ce-que-la-machine-fait-toute-seule) : nœuds, relations, fusions
 - [Les programmes](#les-programmes) : les fichiers, leur en-tête, la fenêtre des programmes
-- [Le voir travailler](#le-voir-travailler) : un tour à la fois, les points d'arrêt, pourquoi un nœud a sa valeur
+- [Dossiers et fichiers](#dossiers-et-fichiers) : pwd, cd, ls, head, rm..., des données venues de n'importe quel programme
+- [Le focus](#le-focus--un-réseau-dans-le-réseau) : un réseau dans le réseau, amené au premier plan
+- [La ressentir](#la-ressentir) : ce que ressent la machine, vu et entendu
+- [Le voir travailler](#le-voir-travailler) : une passe à la fois, les points d'arrêt, pourquoi un nœud a sa valeur
 - [Le tick](#le-tick) : ce qui se passe à chaque battement de l'horloge
 - [Les commandes de la machine](#les-commandes-de-la-machine), son aide et ses deux langues
 - [Pièges](#pièges)
@@ -42,7 +45,7 @@ Personne n'a dit à la machine de diviser : elle a trouvé la vitesse qui fait t
 
 `±` peut s'écrire `+/-` (il n'est pas sur tous les claviers), et chaque mot a une forme abrégée (`obs`, `rel`,
 `t`...) : `obs distance = 100 +/- 1%` est la même ligne. `help` liste les mots, `help MOT` en explique un avec un
-exemple, et `tour` est une visite guidée en onze étapes.
+exemple, et `tour` est une visite guidée en douze étapes.
 
 ## Tutoriel
 
@@ -93,7 +96,7 @@ relation que la machine résout en log. Quand une somme nomme un nœud positif (
 exposants.
 
 Un terme de somme peut multiplier plusieurs nœuds ou en élever un à une puissance (`z = x * y + x^2`) : une telle
-relation est redessinée, toute seule, en droite autour de l'endroit où se trouvent ses nœuds, à chaque tour.
+relation est redessinée, toute seule, en droite autour de l'endroit où se trouvent ses nœuds, à chaque passe.
 
 ### 4. Une boucle (`programs/count.grm`)
 
@@ -431,9 +434,163 @@ pendant la frappe, et tout se fait au clavier :
 Une erreur dans un fichier (`use`, `run`) dit le fichier et la ligne ; quand ce fichier est ouvert, sa ligne passe
 en rouge.
 
+## Dossiers et fichiers
+
+La machine travaille dans un dossier, comme un shell Unix, et le prompteur dit lequel : `grm ~/projets/climat>`.
+`cd` y emmène vraiment la machine, si bien que `use`, `load`, `run`, `open`, `read` et `new` partent de ce dossier.
+Les programmes de la machine (`vm/programs`) sont trouvés de partout.
+
+| commande | |
+|---|---|
+| `clear` | les mots effacés de l'écran (Ctrl+L dans la fenêtre) ; rien de la machine n'est oublié |
+| `history [N]`, `!N`, `!!` | ce qui a été tapé, sessions d'avant comprises (20 lignes) ; la ligne N tapée à nouveau, la dernière à nouveau |
+| `pwd` | le dossier où elle est |
+| `cd [DOSSIER \| .. \| ~ \| -]` | aller dans un dossier (seul : le dossier personnel ; `-` : celui d'avant) ; `~`, les `$VARIABLES` et les chemins Windows sont compris |
+| `ls [-l] [-a] [CHEMIN...]` | ce qu'il y a : dossiers/, programmes et données chacun dans sa couleur ; `-l` ajoute droits, taille et date ; `-a` montre les fichiers cachés ; jokers : `ls *.csv` |
+| `head [-n N] FICHIER`, `tail [-n N] FICHIER` | ses premières ou dernières lignes (10) ; `head -5 data.csv` aussi |
+| `cat FICHIER` | le fichier entier (2000 lignes au plus) |
+| `mkdir [-p] DOSSIER`, `cp [-r] DE... VERS`, `mv DE... VERS` | un dossier, une copie, un déplacement ou un nouveau nom |
+| `touch FICHIER...` | un fichier vide |
+| `new NOM.ext` | un nouveau fichier de n'importe quel type (`new prix.csv`, `new notes.md`), vide, dans le dossier courant, ouvert dans un onglet pour l'écrire ; `new NOM` : un programme ; `new` seul : un onglet sans nom, que `save NOM.ext` nomme |
+| `rm [-r] CHEMIN...` | supprimé, une fois demandé : `supprimer data.csv ? (o/n)` s'affiche en rouge, et rien ne part sans `o` (ou `oui`, `y`) ; un dossier demande `-r` |
+
+Tab complète les chemins après chacune d'elles (`cd` ne propose que des dossiers).
+
+**Des fichiers de données venus de n'importe quel programme.** `load` lit un CSV écrit par n'importe quel
+programme :
+- en UTF-8, avec ou sans BOM, ou dans l'encodage de Windows ;
+- séparé par des `,`, des `;`, des tabulations ou des `|` ;
+- avec des points ou des virgules décimales (`3,14`), des milliers séparés (`1 234,5`, `1,234.5`) et des pourcentages
+  (`12%`).
+
+Un en-tête qui n'est pas un nom du langage (`Température (°C)`, `CO2 (ppm)`, `2020`) en devient un (`Temperature_C`,
+`CO2_ppm`, `_2020`), et la machine le dit.
+
+**Ce qui a été tapé** est gardé de session en session dans `vm/history.txt`, à côté de la mémoire : Haut et Bas le
+retrouvent, dans la fenêtre comme dans le terminal.
+
+**Un long travail** (un fichier, une nuit, `use`, `run`, beaucoup de ticks) tourne à part. Dans la fenêtre, la ligne
+sous le prompteur devient une roue qui tourne, avec l'avancement (`[████······] 400/1000 lignes`) ; dans le terminal,
+la même chose en début de ligne. La fenêtre reste vivante pendant ce temps.
+
+## Le focus : un réseau dans le réseau
+
+Un programme, un appel, un fichier de données est un réseau dans le réseau. La machine retient, avec sa mémoire, les
+nœuds et les relations que chacun a apportés :
+- un programme utilisé ou exécuté : son nom (`fall`) ;
+- un appel : le réseau et sa première valeur (`circle(small)`) ;
+- un fichier de données : son nom (`falling`) ;
+- la base : `base` ;
+- ce qui a été tapé au prompteur : `typed` ;
+- ce que la machine a trouvé toute seule : `found`.
+
+`focus` en amène un au premier plan :
+- l'image zoome dessus en douceur ;
+- ses nœuds et ses relations se rapprochent ;
+- ce qui le touche reste au deuxième plan : plus petit et plus pâle, avec de petits noms ;
+- le reste s'efface au troisième plan, sans noms.
+
+| commande | abrégé | |
+|---|---|---|
+| `focus` | `fc` | les réseaux dans le réseau, avec ce que chacun contient, et ce qui est regardé maintenant |
+| `focus NOM` | | un programme, un appel, un fichier, la base... |
+| `focus node N [profondeur]` ou `focus N [profondeur]` | | un nœud, ses relations et leurs nœuds, jusqu'à profondeur relations (1) |
+| `focus relation R` | | une relation et ses nœuds |
+| `focus between A B...` ou `focus A B` | | les plus courts chemins qui relient ces nœuds ou relations |
+| `focus all` | | tout à nouveau |
+
+Le focus va tout seul au programme qui vient d'être utilisé ou exécuté, au fichier qui vient d'être chargé, et au
+programme dont l'onglet est choisi dans la fenêtre des programmes. En pas à pas, les relations qui travaillent
+viennent aussi au premier plan. Dans la fenêtre, une pastille par réseau se trouve au-dessus de l'image : un clic
+l'amène au premier plan, comme la commande.
+
+## La ressentir
+
+La machine ressent : sa surprise, son plaisir et son déplaisir (une erreur de type dopamine sur ce qu'elle attendait),
+l'information que chaque relation apporte, son travail passe après passe, ce qu'elle trouve toute seule. Le corps le
+rend perceptible à un humain. Chaque lumière, mouvement et son vient de l'une de ces grandeurs, jamais d'une
+décoration : ce qu'on voit et ce qu'on entend est vrai. Elle est calme par conception, pour que chacun puisse être à
+l'aise avec elle, les personnes autistes comprises :
+- rien ne clignote (bien en dessous des 3 flashs par seconde de la WCAG 2.3.1) ;
+- chaque changement est lent ;
+- le son est grave et doux, il part du silence et il est plafonné ;
+- tout peut être baissé ou éteint.
+
+**Vu** (`senses`, le bouton ◐) :
+
+| ce qui bouge | ce que c'est |
+|---|---|
+| de petites lumières qui courent le long des liens | des messages : les relations qui ont travaillé au dernier tick ou à la dernière passe, qui le disent à leurs nœuds |
+| un halo doux autour d'une relation, plus large quand elle apporte plus | l'information qu'elle apporte (des bits) |
+| une onde lente | une surprise |
+| une lumière un peu plus chaude, ou un peu plus froide | plaisir, déplaisir |
+| rien | elle s'est stabilisée : elle est au repos |
+
+`senses off | calm | present | vivid` règle l'intensité (`calm` par défaut) ; `senses motion off` et `senses colour
+off` éteignent un canal.
+
+**Les moments.** Quand la machine trouve une relation toute seule, l'image le partage avec l'humain. Une carte arrive
+doucement, avec :
+- la loi (`h = 4.90618 * t^2`) ;
+- une phrase (`quand t double, h est multiplié par 4`) ;
+- les points où elle l'a trouvée ;
+- son r².
+
+La même phrase va dans les mots. Une surprise a sa propre carte : à quelle distance de ce que la machine attendait, et
+où. Une carte reste quelques secondes puis s'efface ; un clic la ferme.
+
+**Les couleurs.** Chaque réseau du réseau a sa couleur douce, la même que sa pastille :
+- un territoire sous ses nœuds ;
+- ses liens et ses relations teintés de cette couleur ;
+- ses nœuds simples qui la portent.
+
+La base est ardoise, ce que la machine a trouvé est doré, ce qui a été tapé est lilas. Le réseau en focus rayonne un
+peu plus. L'ambre et le rouge restent réservés à ce qui ne tient pas. Les entrées, sorties, variables et poids gardent
+les couleurs de la légende.
+
+**Les vagues.** L'image bouge doucement avec une houle marine : une vague toutes les dix secondes, chaque point
+tournant sur un petit cercle comme l'eau sous une vague. Avec le son, la houle respire avec lui et monte avec une
+surprise. `senses waves off` l'immobilise.
+
+**Le journal de bord** (`journal`, le bouton ✎) : ce que la machine a vécu, jour après jour, dans des mots qu'un humain
+aime lire :
+- quand elle s'est réveillée, les programmes et les fichiers qu'on lui a donnés ;
+- ce qu'elle a trouvé toute seule : la loi, une phrase, les points où elle l'a trouvée, dessinés ;
+- ce qui l'a surprise ;
+- ce que chaque nuit a gardé ou oublié, avec un résumé de la journée.
+
+Il est gardé avec sa mémoire et lu dans la langue de la machine. `journal today`, `journal 20`, et `journal MOTS` pour
+chercher ; dans la fenêtre, il s'ouvre dans une fenêtre à lui, avec une ligne de recherche.
+
+**Entendu** (`ambient`, le bouton ♪) : un son lent et doux, presque new age, de ce que ressent la machine, en temps
+réel, avec une longue réverbération.
+
+| ambiance | |
+|---|---|
+| `pad` (nappe) | une voix pour chaque relation qui apporte de l'information, accordée sur les harmoniques d'une note. Une relation qui tient est juste ; une qui ne tient pas bat contre les autres, et ce battement est son désaccord (un battement par seconde pour environ un sigma) |
+| `engine` (moteur) | un bourdon grave, comme un moteur au repos : sa pulsation suit à quel point la machine travaille ; une rugosité vient quand ses relations ne tiennent pas |
+| `wind` (souffle) | un souffle : il monte quand la machine travaille ; une surprise est une vague lente |
+
+Dans chacune :
+- le plaisir ouvre les harmoniques aiguës, le déplaisir les referme ;
+- une découverte fait sonner une cloche douce sur un intervalle tiré de sa loi (t² : l'octave) ;
+- une surprise enfle puis s'apaise ;
+- un bourdon grave tient un do, son octave et sa quinte sous tout le reste, comme un tanpura ;
+- chaque réseau du réseau a sa tonalité, avec sa couleur : quand on en regarde un autre, le son glisse vers sa
+  tonalité en quelques secondes. Les tonalités restent graves et accordées entre elles : do, le sol et le la en
+  dessous, ré...
+
+**La table de mixage** (♪ ▾ → table de mixage) : le volume, l'ambiance elle-même, le bourdon, les cloches, la
+réverbération ; chaque curseur s'entend aussitôt, et la commande qu'il représente s'écrit dans les mots : `ambient
+drone 30%`, `ambient reverb 70%`, `ambient bells 50%`, `ambient main 80%`.
+
+`ambient pad`, `ambient 40%`, `ambient off`. Ses choix sont gardés, et le son revient au démarrage suivant s'il avait
+été laissé allumé (en partant du silence). Il faut `sounddevice` pour l'entendre (`pip install sounddevice`, qui apporte ce qu'il faut sous Windows).
+Sans lui, `ambient save FICHIER.wav [SECONDES]` écrit le même son dans un fichier.
+
 ## Le voir travailler
 
-Un tick est une conversation en tours : à chaque tour, les nœuds qui ont appris du nouveau le disent à leurs
+Un tick est une conversation en passes : à chaque passe, les nœuds qui ont appris du nouveau le disent à leurs
 relations, et les relations qui ont appris du nouveau répondent à leurs nœuds, jusqu'à ce que plus rien de nouveau ne
 soit dit ; puis viennent les écritures de `set`. On peut regarder la machine le faire.
 
@@ -442,10 +599,10 @@ grm> use programs/fall.grm
 grm> tick
 grm> put t = 3
 grm> step 3
-  tick 2, tour 1 : au travail : la mesure de t
-  tick 2, tour 2 : au travail : fall ; en mouvement : t 2 -> 3
-  tick 2, tour 3 : aucune relation n'a travaillé ; en mouvement : height 19.62 -> 44.145
-  tick 2 fini en 3 tours
+  tick 2, passe 1 : au travail : la mesure de t
+  tick 2, passe 2 : au travail : fall ; en mouvement : t 2 -> 3
+  tick 2, passe 3 : aucune relation n'a travaillé ; en mouvement : height 19.62 -> 44.145
+  tick 2 fini en 3 passes
 grm> why height
   pourquoi height = 44.145  (± 0.000971 dex)
     100.0%  relation fall: 2 * height = g * t^2
@@ -458,7 +615,7 @@ grm> why height
 | `play [HZ]` | | F8 | l'horloge tourne, HZ ticks par seconde (10, ou la dernière) |
 | `pause` | | F8 | l'horloge s'arrête |
 | `tick` | `t` | F10 | un tick entier |
-| `step [n]` | `st` | F11 | n tours, un à la fois : qui a travaillé, qui a bougé, et la fin de chaque tick avec ses écritures |
+| `step [n]` | `st` | F11 | n passes, une à la fois : qui a travaillé, qui a bougé, et la fin de chaque tick avec ses écritures |
 | `watch NŒUD in BAS .. HAUT [and ...]` | `wt` | | s'arrêter quand la condition devient vraie |
 | `watch NŒUD` | `wt` | | s'arrêter quand sa valeur change |
 | `watch RELATION` | `wt` | | s'arrêter quand elle ne tient plus (à plus de 1 sigma) |
@@ -469,25 +626,32 @@ grm> why height
 - **Un point d'arrêt** arrête l'horloge (la fenêtre se met en pause) et `tick n` (`arrêtée après 3 ticks sur 10`). Il
   s'arrête quand ce qu'il regarde *devient* vrai, change ou cesse de tenir : une condition déjà vraie au moment où on
   le pose n'arrête pas tout de suite. Les points d'arrêt appartiennent à la session, pas à la mémoire.
-- **Dans un tick parcouru pas à pas**, la machine est entre deux tours : `ask` lit les valeurs telles qu'elles sont,
+- **Dans un tick parcouru pas à pas**, la machine est entre deux passes : `ask` lit les valeurs telles qu'elles sont,
   sans la faire tourner ; `tick` (F10) finit le tick, et s'endormir aussi. Dans la fenêtre, les relations qui ont
-  travaillé au dernier tour sont encadrées, les nœuds qui ont bougé sont cerclés, et une ligne sous les boutons dit où
-  en est la machine (`en pause · dans le tick 2, tour 2 · 1 point(s) d'arrêt`).
+  travaillé à la dernière passe sont encadrées, les nœuds qui ont bougé sont cerclés, et une ligne sous les boutons dit où
+  en est la machine (`en pause · pas à pas · dans le tick 2, passe 2 · 1 point(s) d'arrêt`).
 - **`why`** montre les messages que le nœud entend, tels que la machine les a : la valeur d'un nœud est ce qu'en
   disent toutes ses relations, chacune pesée selon sa certitude (les précisions s'additionnent). Chaque message vient
   avec sa part, ce qu'il dit, et ce que la relation a entendu de ses autres nœuds ; une mesure, une écriture du dernier
   tick ou la mémoire des poids sont aussi des messages. Dans un tick parcouru pas à pas, ce que dit déjà une relation
-  et ce que vaut encore le nœud peuvent différer : c'est le tour suivant.
-- Une instruction (`relate`, `observe`...) reconstruit la machine, qui se stabilise aussitôt ; pour voir une entrée
-  traverser le réseau tour par tour, la donner avec `put`.
+  et ce que vaut encore le nœud peuvent différer : c'est la passe suivante.
+- **Pas à pas.** Dès le premier `step` (F11), plus rien ne tourne sauf une passe à la fois, jusqu'à un `tick` (F10)
+  ou `play` (F8) : une nouvelle relation ou une nouvelle mesure est laissée aux passes, où on la voit traverser le
+  réseau (`step 3` après `observe t = 3`, ou après `relate`). `ask`, `why` et `inspect` lisent les valeurs telles
+  qu'elles sont. Une mesure d'un nœud que la machine a déjà (`observe`, `forget`, `put`) est entendue par ce nœud sur
+  place ; un nouveau nœud ou une nouvelle relation reconstruit la machine, depuis ses valeurs de départ. Hors du pas à
+  pas, la machine se stabilise aussitôt, comme avant. La ligne sous les boutons dit `pas à pas`.
+- **Les aides de la machine** sont nommées pour un humain : le nœud qui tient la valeur suivante de `n` (`n__next1`)
+  est `n suivant`, la relation qui la calcule (`set_n_1`) est `set n`, et son texte est le `set` tel qu'il a été
+  écrit. Tab et le menu ne les proposent pas, sauf si leur nom est commencé (`n__`).
 
 ## Le tick
 
 À chaque tick :
 1. Si les entrées ont changé depuis le tick d'avant (ou si une ligne de fichier est donnée), les poids gardent ce
    que les entrées d'avant leur ont appris.
-2. Le réseau se stabilise : chaque nœud et chaque relation qui a entendu quelque chose de nouveau répond, tour après
-   tour, jusqu'à ce que plus rien de nouveau ne soit dit.
+2. Le réseau se stabilise : chaque nœud et chaque relation qui a entendu quelque chose de nouveau répond, passe après
+   passe, jusqu'à ce que plus rien de nouveau ne soit dit.
 3. La machine mesure sa surprise : l'écart de chaque relation qui entend les entrées à tenir, en ses sigmas.
 4. Chaque `set` dont les conditions tiennent est écrit, tous à la fois, à partir des valeurs de l'étape 2.
 
@@ -517,6 +681,10 @@ peuvent s'écrire sur une ligne, séparées par `;`.
 | `clock HZ` | `clk` | des ticks tout seuls (fenêtre) |
 | `play`, `pause`, `step`, `watch`, `unwatch`, `why` | | voir [Le voir travailler](#le-voir-travailler) |
 | `programs`, `read`, `open`, `tab`, `edit`, `save`, `find`, `close`, `new`, `run` | | voir [Les programmes](#les-programmes) |
+| `pwd`, `cd`, `ls`, `head`, `tail`, `cat`, `mkdir`, `cp`, `mv`, `rm` | | voir [Dossiers et fichiers](#dossiers-et-fichiers) |
+| `focus` | `fc` | voir [Le focus](#le-focus--un-réseau-dans-le-réseau) |
+| `senses`, `ambient` | `amb` | voir [La ressentir](#la-ressentir) |
+| `journal [N \| today \| MOTS]` | `jr` | le journal de bord, voir [La ressentir](#la-ressentir) |
 | `help [MOT]` | `h` | les mots de la machine par groupe ; un mot, avec sa forme et un exemple |
 | `help on` / `off` | | le menu des mots pendant la frappe (fenêtre) |
 | `tour [N \| end]` | | une visite guidée, une étape à la fois |
@@ -535,6 +703,18 @@ Au-dessus du prompteur, un menu flotte comme une info-bulle, par-dessus les mots
 les mots de la machine dès la première lettre (avec leurs formes abrégées), puis les noms des nœuds et des relations
 dès la deuxième lettre, quand il n'y en a pas plus de douze. Haut et Bas choisissent, Tab, Entrée ou un clic prend,
 Échap ferme. Le menu peut être désactivé (la case sous le prompteur, ou `help off`) ; la ligne reste.
+
+**La fenêtre** s'ouvre en plein écran. Les séparations entre ses parties ont une poignée ; là où on les laisse est
+gardé pour la fois suivante, avec la langue, dans `vm/settings.json`.
+
+**Comme elle a été laissée, elle revient.** La fenêtre garde pour la fois suivante : le dossier du prompteur, le
+réseau en focus, les onglets de programmes ouverts et celui qui était choisi, le journal s'il était ouvert, le son
+s'il était allumé, l'horloge, les séparations, la langue, les sens et l'aide à la saisie (`vm/settings.json`, à côté
+de la mémoire). Le terminal garde aussi le dossier et le focus.
+
+**Avertissements et erreurs.** Une erreur s'affiche en rouge (`!`) ; un avertissement en ambre (`⚠`) : quelque chose
+à savoir, pas quelque chose de cassé (`⚠ attention : 'pressure' est un nouveau nœud ; vouliez-vous dire
+'air_pressure' ?`).
 
 **Deux langues.** L'interface parle anglais ou français : `lang fr`, `lang en`. La première fois, elle suit la
 langue du système. Les mots de GRML (`node`, `relate`, `observe`...) restent en anglais dans les deux, si bien qu'un

@@ -12,11 +12,13 @@ GROUPS = [
                      "network", "call", "end", "use"]),
     ("running", ["tick", "put", "run", "load", "clock"]),
     ("seeing it work", ["play", "pause", "step", "watch", "unwatch", "why"]),
-    ("looking", ["ask", "outputs", "show", "inspect", "master", "check"]),
-    ("inside", ["mood", "capacity", "prune"]),
+    ("looking", ["ask", "outputs", "show", "inspect", "focus", "master", "check"]),
+    ("inside", ["journal", "mood", "capacity", "prune"]),
     ("programs", ["programs", "read", "open", "tab", "close", "new", "edit", "save", "find"]),
+    ("files", ["clear", "history", "pwd", "cd", "ls", "head", "tail", "cat", "mkdir", "touch", "cp", "mv", "rm"]),
     ("memory", ["sleep", "wake", "blank", "quit"]),
-    ("help", ["help", "tour", "lang", "sound"]),
+    ("feeling it", ["senses", "ambient", "sound"]),
+    ("help", ["help", "tour", "lang"]),
 ]
 
 
@@ -70,6 +72,23 @@ MORE = {
              "RELATION when it no longer holds. The clock pauses, and tick n stops there.",
     "why": "A node's value is what all its relations say of it, each weighted by how sure it is (the precisions add "
            "up). why shows each message, its share, and what that relation heard from its other nodes.",
+    "focus": "A program, a call, a file of data is a network in the network. focus brings one to the front: what touches "
+             "it stays in the second plane, the rest fades into the third, and the picture zooms on it. focus node N "
+             "[depth]: a node and what is around it; focus between A B: the ways that tie them. It goes by itself to "
+             "a program that is used, a file that is loaded, a tab that is chosen.",
+    "cd": "The machine really goes into the folder: use, load, run, open and new start from there; the machine's own "
+          "programs are still found from anywhere. The prompt says where it is.",
+    "rm": "Nothing is deleted before the human has said yes (y / n). A folder: rm -r.",
+    "ambient": "A slow, soft sound made of what the machine feels: its relations that hold are in tune, one that does "
+               "not beats against the others, its pleasure opens the higher harmonics, a discovery rings a bell, a "
+               "surprise swells and settles. engine: a low hum; pad: a voice a relation; wind: a breath. Off unless "
+               "asked for; needs sounddevice to play, ambient save FILE.wav writes it without.",
+    "senses": "Everything the picture shows of what the machine feels is a real quantity: messages going along the "
+              "links (its work), the glow of a relation (the information it brings), a slow ripple (a surprise), a "
+              "warmer or colder light (pleasure, displeasure). calm by default; nothing flashes.",
+    "journal": "What it lived, day after day: when it woke, the programs and files it was given, what it found by "
+               "itself (with the law, a sentence and the points), what surprised it, what each night kept or "
+               "forgot. Kept with its memory; read in the language of the machine.",
     "master": "pygrm's master invariant: the equation the network holds or implies that ties the widest span of "
               "scales.",
     "help": "help on / off: the menu of words while typing (the line of help under the prompt stays).",
@@ -107,6 +126,10 @@ TOUR = [
      "A tick is a conversation in rounds. Set a breakpoint, run, and ask why a value is what it is (F8 play, F10 a "
      "tick, F11 a round in the window):",
      "watch n in 3 .. inf ; tick 10 ; step ; why height"),
+    ("Folders and focus",
+     "It works in folders as a Unix shell does (pwd, cd, ls, head...). And one part of the network can be brought to "
+     "the front, the rest fading behind it:",
+     "pwd ; ls ; focus fall ; focus all"),
     ("Inside",
      "What it feels (pleasure, flourishing), its master equation, what is wrong:",
      "mood ; master ; check"),

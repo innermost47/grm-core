@@ -38,9 +38,10 @@ def writes(net):
     return [(st["source"], st["target"]) for st in net.sets if st["source"] in net.nodes and st["target"] in net.nodes]
 
 
-def layout(net, places, steps=30, size=1.0, pinned=()):
+def layout(net, places, steps=30, size=1.0, pinned=(), front=None):
     """Moves `places` ({("n" | "r", name): [x, y]}) a few steps toward a calm picture of the network; new things
-    appear next to what they are linked to. Returns places (the same dict)."""
+    appear next to what they are linked to. front: the keys looked at (focus): they draw together, the rest makes
+    room around them. Returns places (the same dict)."""
     nodes, relations, links = picture(net)
     keys = [("n", n) for n in nodes] + [("r", r) for r in relations]
     alive = set(keys)
@@ -74,6 +75,8 @@ def layout(net, places, steps=30, size=1.0, pinned=()):
     P = _np.array([places[k] for k in keys], dtype=float)
     E = _np.array([(idx[a], idx[b]) for a, b in pairs], dtype=int).reshape(-1, 2)
     fixed = _np.array([k in pinned for k in keys])
+    member = _np.array([front is not None and k in front for k in keys])
+    together = front is not None and 1 < member.sum() < n
     k_opt = size * math.sqrt(1.0 / n) * 1.6
     temp = 0.05 * size
     for _ in range(steps):
@@ -87,6 +90,14 @@ def layout(net, places, steps=30, size=1.0, pinned=()):
             _np.add.at(F, E[:, 0], -pull)
             _np.add.at(F, E[:, 1], pull)
         F -= P * 0.25 / size                                        # gravity: the whole stays in view
+        if together:                                                # focus: the front draws together, the rest
+            c = P[member].mean(0)                                   # leaves room around it
+            F[member] -= (P[member] - c) * 1.2 / size
+            d = P[~member] - c
+            dist = _np.sqrt((d ** 2).sum(-1)) + 1e-9
+            room = 0.35 * size
+            push = _np.clip(room - dist, 0, None) / dist
+            F[~member] += d * push[:, None] * 2.0 / size
         length = _np.sqrt((F ** 2).sum(-1)) + 1e-12
         step = F / length[:, None] * _np.minimum(length, temp)[:, None]
         step[fixed] = 0.0
@@ -106,100 +117,128 @@ def _fmt(v):
 
 
 def node_card(vm, name):
-    """What a node holds, in words (lines)."""
+    """What a node holds: a table. [str (a heading) | (label, value) (a row)]; table() writes it as text."""
     net, m = vm.net, vm.machine
     spec = net.nodes.get(name, {})
     roles = [tr(r) for r in ("input", "output", "var", "learn", "fixed") if spec.get(r)]
     kind = tr("signed") if spec.get("signed") else tr("positive")
-    lines = [tr("node {name}", name=name) + f"  ({', '.join(roles + [kind])})"]
+    rows = [tr("node {name}", name=shown(net, name)) + f"  ({', '.join(roles + [kind])})"]
     if m is not None and (name in m.index or name in m.fixed):
         try:
             v = m.value_si(name)
             sg = m.sigma(name)
             unit = " SI" if spec.get("dim") else ""
             if spec.get("signed"):
-                lines.append(f"{tr('value')}  {_fmt(v)}{unit}"
-                             + (f"  ± {sg:.3g} (" + tr("its unit inside") + ")" if sg < 1e5 else ""))
+                rows.append((tr("value"), f"{_fmt(v)}{unit}"
+                             + (f"  ± {sg:.3g} (" + tr("its unit inside") + ")" if sg < 1e5 else "")))
             else:
-                lines.append(f"{tr('value')}  {_fmt(v)}{unit}" + (f"  ± {sg:.3g} dex" if sg < 1e5 else ""))
+                rows.append((tr("value"), f"{_fmt(v)}{unit}" + (f"  ± {sg:.3g} dex" if sg < 1e5 else "")))
             if name in m.index:
                 i = m.index[name]
-                lines.append(f"{tr('last move')}  {m.last_move[i]:.3g}"
-                             + ("  (" + tr("moving") + ")" if m.last_move[i] > 1e-9 else ""))
+                rows.append((tr("last move"), f"{m.last_move[i]:.3g}"
+                             + ("  (" + tr("moving") + ")" if m.last_move[i] > 1e-9 else "")))
         except (KeyError, OverflowError, ValueError):
             pass
     if spec.get("dim"):
-        lines.append(f"{tr('dimension')}  [M L T Q K] = [" + " ".join(f"{p:g}" for p in spec["dim"]) + "]")
+        rows.append((tr("dimension"), "[M L T Q K] = [" + " ".join(f"{p:g}" for p in spec["dim"]) + "]"))
     if name in net.measured:
         v, s = net.measured[name]
-        lines.append(f"{tr('measured')}  {_fmt(v)} ± {s:.3g}" + ("" if spec.get("signed") else " dex"))
+        rows.append((tr("measured"), f"{_fmt(v)} ± {s:.3g}" + ("" if spec.get("signed") else " dex")))
     aliases = [a for a, b in net.aliases.items() if b == name]
     inverses = [a for a, b in net.inverses.items() if b == name]
     if aliases:
-        lines.append(f"{tr('also called')}  " + ", ".join(aliases))
+        rows.append((tr("also called"), ", ".join(aliases)))
     if inverses:
-        lines.append(f"{tr('its inverse')}  " + ", ".join(inverses))
+        rows.append((tr("its inverse"), ", ".join(inverses)))
     rels = [r["name"] for r in net.relations if name in net.nodes_of(r)]
-    lines.append(tr("in {n} relation(s)", n=len(rels))
-                 + (": " + ", ".join(rels[:8]) + (" ..." if len(rels) > 8 else "") if rels else ""))
+    rows.append((tr("relations"), (", ".join(shown(net, r) for r in rels[:8]) + (" ..." if len(rels) > 8 else ""))
+                 if rels else tr("none")))
     origin = net.origin["nodes"].get(name, "written")
-    lines.append(f"{tr('comes from')}  {_origin(origin)}")
-    lines.append(f"{tr('use')}  {net.use['nodes'].get(name, mind.NEW_TRACE):.3g}")
+    rows.append((tr("comes from"), _origin(origin)))
+    rows.append((tr("use"), f"{net.use['nodes'].get(name, mind.NEW_TRACE):.3g}"))
     tag = net.mood.get("tags", {}).get(name)
     if tag is not None:
-        lines.append(f"{tr('learned under')}  {tr('pleasure') if tag > 0 else tr('displeasure')} ({tag:+.2f})")
-    return lines
+        rows.append((tr("learned under"), f"{tr('pleasure') if tag > 0 else tr('displeasure')} ({tag:+.2f})"))
+    return rows
 
 
 def relation_card(vm, name):
-    """What a relation holds, in words (lines)."""
+    """What a relation holds: a table, as node_card."""
     net, m = vm.net, vm.machine
     rel = net.relation(name)
     if rel is None:
         return [tr("no relation {name}", name=name)]
     kind = rel.get("kind", "product")
-    lines = [tr("relation {name}", name=name) + f"  ({_kind(kind)})", rel.get("text", "")]
+    rows = [tr("relation {name}", name=shown(net, name)) + f"  ({_kind(kind)})", text_of(net, rel)]
     if kind in ("product", "sum"):
-        lines.append(f"sigma  {rel['sigma']:.3g}" + (" dex" if kind == "product" else ""))
+        rows.append(("sigma", f"{rel['sigma']:.3g}" + (" dex" if kind == "product" else "")))
     if m is not None:
         f = next((f for f in m.factors if f.name == name), None)
         if f is not None:
             if f.kind in ("relation", "nonlinear") and f.w > 0:
                 try:
                     r = m.residual(f)
-                    lines.append(f"{tr('now')}  " + tr("{s} sigma from holding", s=f"{abs(r):.3g}")
-                                 + ("  (" + tr("holds") + ")" if abs(r) < 1 else ""))
+                    rows.append((tr("now"), tr("{s} sigma from holding", s=f"{abs(r):.3g}")
+                                 + ("  (" + tr("holds") + ")" if abs(r) < 1 else "")))
                 except (OverflowError, ValueError, ZeroDivisionError):
                     pass
             if f.watch:
-                lines.append(f"{tr('conditions')}  " + (tr("hold: it acts") if f.active else
-                                                        tr("do not hold: it is silent")))
+                rows.append((tr("conditions"), tr("hold: it acts") if f.active else tr("do not hold: it is silent")))
             if f.swing:
-                lines.append(f"{tr('swings')}  {f.swing}" + (", " + tr("damped") + f" ({f.damp:g})" if f.damp else ""))
+                rows.append((tr("swings"), f"{f.swing}" + (", " + tr("damped") + f" ({f.damp:g})" if f.damp else "")))
     weights = [n for n in net.nodes_of(rel) if net.nodes.get(n, {}).get("learn")]
     if weights and m is not None:
-        lines.append(f"{tr('weights')}  " + ", ".join(f"{w} = {_fmt(m.value_si(w))}" for w in weights
-                                                      if w in m.index))
+        rows.append((tr("weights"), ", ".join(f"{w} = {_fmt(m.value_si(w))}" for w in weights if w in m.index)))
     tension = net.tension.get(name)
     if tension:
-        lines.append(f"{tr('last surprise')}  " + tr("{s} sigma ({n} moments kept)", s=f"{tension[-1]:.3g}",
-                                                     n=len(tension)))
+        rows.append((tr("last surprise"), tr("{s} sigma ({n} moments kept)", s=f"{tension[-1]:.3g}", n=len(tension))))
     found = next((x for x in net.found if x["relation"] == name), None)
     origin = net.origin["relations"].get(name, "written")
     if found:
-        lines.append(f"{tr('comes from')}  " + tr("found by itself at tick {tick}: r² {r2} over {rows} rows",
-                                                  tick=found["tick"], r2=f"{found['r2']:.6f}", rows=found["rows"]))
+        rows.append((tr("comes from"), tr("found by itself at tick {tick}: r² {r2} over {rows} rows",
+                                          tick=found["tick"], r2=f"{found['r2']:.6f}", rows=found["rows"])))
     else:
-        lines.append(f"{tr('comes from')}  {_origin(origin)}")
-    lines.append(f"{tr('use')}  {net.use['relations'].get(name, mind.NEW_TRACE):.3g}")
+        rows.append((tr("comes from"), _origin(origin)))
+    rows.append((tr("use"), f"{net.use['relations'].get(name, mind.NEW_TRACE):.3g}"))
     bits = net.use.get("bits", {}).get(name)
     if bits is not None:
         n_links = len(set(net.nodes_of(rel)))
         rent = mind.price(net) * n_links
-        lines.append(f"{tr('information')}  " + tr("{bits} bits a tick; rent {rent} ({n} links)", bits=f"{bits:.3g}",
-                                                   rent=f"{rent:.3g}", n=n_links)
-                     + ("  (" + (tr("pays its rent") if bits >= rent else tr("does not pay its rent")) + ")"))
-    return lines
+        rows.append((tr("information"), tr("{bits} bits a tick; rent {rent} ({n} links)", bits=f"{bits:.3g}",
+                                           rent=f"{rent:.3g}", n=n_links)
+                     + ("  (" + (tr("pays its rent") if bits >= rent else tr("does not pay its rent")) + ")")))
+    return rows
+
+
+SEP = " │ "       # between the label and the value of a row of a card
+
+
+def table(rows):
+    """A card as lines of text: its headings as they are, its rows in two columns (the label, then the value)."""
+    width = max((len(r[0]) for r in rows if isinstance(r, tuple)), default=0)
+    return [r if isinstance(r, str) else f"{r[0]:<{width}}{SEP}{r[1]}" for r in rows]
+
+
+# ---------------------------------------------------------------------- the machine's own helpers, named for a human
+def shown(net, name):
+    """A name as a human reads it. The helpers a `set` makes are named by what they are: the node that holds the
+    next value of n (n__next1) is "next n", the relation that computes it (set_n_1) is "set n"."""
+    for k, st in enumerate(net.sets):
+        target, source = st["target"], st["source"]
+        if name == source and "__next" in source:
+            return tr("next {name}", name=target)
+        if "__next" in source and name == "set_" + target + "_" + source.rsplit("__next", 1)[1]:
+            return f"set {target}"
+    return name
+
+
+def text_of(net, rel):
+    """The text of a relation as a human wrote it: a `set` is said as it was written."""
+    for st in net.sets:
+        source = st["source"]
+        if "__next" in source and rel["name"] == "set_" + st["target"] + "_" + source.rsplit("__next", 1)[1]:
+            return "set " + (st.get("text") or f"{st['target']} = ...")
+    return rel.get("text", "")
 
 
 def _origin(o):
@@ -208,3 +247,151 @@ def _origin(o):
 
 def _kind(k):
     return tr({"product": "products and powers", "sum": "a sum", "log": "a logarithm", "keep": "a contact"}.get(k, k))
+
+
+# ---------------------------------------------------------------------- focus: a network in the network
+def groups(net):
+    """{name: (nodes, relations)} of the networks in the network, as they are now: those recorded (programs, calls,
+    files, the base, what was typed) and what the machine found by itself. Names gone (forgotten, fused) are left out
+    or followed to the node they became."""
+    alive_rel = {r["name"] for r in net.relations}
+    out = {}
+    recorded = dict(getattr(net, "groups", {}) or {})
+    found_rel = [r for r, o in net.origin["relations"].items() if o == "found"]
+    found_nodes = [n for n, o in net.origin["nodes"].items() if o == "found"]
+    if found_rel or found_nodes:
+        g = recorded.get("found", {"nodes": [], "relations": []})
+        recorded["found"] = {"nodes": list(g["nodes"]) + found_nodes, "relations": list(g["relations"]) + found_rel}
+    for name, g in recorded.items():
+        rels = {r for r in g.get("relations", []) if r in alive_rel}
+        nodes = {net.aliases.get(n, net.inverses.get(n, n)) for n in g.get("nodes", [])}
+        for r in rels:
+            nodes |= set(net.nodes_of(net.relation(r)))
+        nodes = {n for n in nodes if n in net.nodes}
+        if nodes or rels:
+            out[name] = (nodes, rels)
+    return out
+
+
+def neighbours(net):
+    """{key: set of keys} of the picture: a relation and its nodes, a write of a tick and its two nodes."""
+    _, _, links = picture(net)
+    near = {}
+    for r, n in links:
+        near.setdefault(("r", r), set()).add(("n", n))
+        near.setdefault(("n", n), set()).add(("r", r))
+    for a, b in writes(net):
+        near.setdefault(("n", a), set()).add(("n", b))
+        near.setdefault(("n", b), set()).add(("n", a))
+    return near
+
+
+def focus_keys(net, spec):
+    """What a focus brings to the front: the set of keys ("n" | "r", name), or None for everything.
+        ("group", NAME)              the nodes and relations of a program, a call, a file, the base...
+        ("node", NAME, DEPTH)        a node, its relations and their nodes, DEPTH relations away (1)
+        ("relation", NAME)           a relation and its nodes
+        ("between", A, B, ...)       the shortest ways that tie these nodes or relations to each other"""
+    if not spec:
+        return None
+    kind, args = spec[0], spec[1:]
+    if kind == "group":
+        g = groups(net).get(args[0])
+        if g is None:
+            return set()
+        return {("n", n) for n in g[0]} | {("r", r) for r in g[1]}
+    near = neighbours(net)
+    if kind == "node":
+        name = net.aliases.get(args[0], args[0])
+        depth = int(args[1]) if len(args) > 1 else 1
+        keys, edge = {("n", name)}, {("n", name)}
+        for _ in range(2 * depth):                      # a relation away is two steps: to it, then to its nodes
+            edge = {k for e in edge for k in near.get(e, ())} - keys
+            keys |= edge
+        return keys
+    if kind == "relation":
+        return {("r", args[0])} | near.get(("r", args[0]), set())
+    if kind == "between":
+        ends = [("n", net.aliases.get(a, a)) if a in net.nodes or a in net.aliases else ("r", a) for a in args]
+        keys = set(ends)
+        for i, a in enumerate(ends):
+            for b in ends[i + 1:]:
+                keys |= _way(near, a, b)
+        return keys
+    return None
+
+
+def _way(near, a, b):
+    """The keys on the shortest ways from a to b (all of them, if there are several of the same length)."""
+    from collections import deque
+    dist = {a: 0}
+    q = deque([a])
+    while q:
+        k = q.popleft()
+        for o in near.get(k, ()):
+            if o not in dist:
+                dist[o] = dist[k] + 1
+                q.append(o)
+    if b not in dist:
+        return set()
+    # walk back from b through every key one step nearer to a
+    keys, edge = {b}, {b}
+    while edge:
+        edge = {o for k in edge for o in near.get(k, ()) if dist.get(o, -1) == dist[k] - 1}
+        keys |= edge
+    return keys
+
+
+def planes(net, front):
+    """{key: 1 | 2 | 3}: the front (1), what touches it (2), the rest (3). Without a front, everything is 1."""
+    nodes, relations, _ = picture(net)
+    keys = [("n", n) for n in nodes] + [("r", r) for r in relations]
+    if front is None:
+        return {k: 1 for k in keys}
+    near = neighbours(net)
+    second = {o for k in front for o in near.get(k, ())} - front
+    return {k: 1 if k in front else 2 if k in second else 3 for k in keys}
+
+
+# ---------------------------------------------------------------------- the colours of the networks in the network
+# soft hues that sit well together on the dark background; amber and red are kept for what does not hold
+PALETTE = ("#5fb3b3", "#e07a5f", "#9d8ec7", "#81b29a", "#6fa8dc", "#e5989b", "#f2cc8f", "#b5c99a", "#c49bbb",
+           "#7fc8d6", "#d4a373", "#a3b4e0")
+SPECIAL = {"base": "#7d8aa3", "found": "#e5c07b", "typed": "#c3b1e1"}
+
+
+def colours(net):
+    """{group: colour}: each network in the network keeps its colour (the order it was born in), the base slate,
+    what it found gold, what was typed lilac."""
+    out, k = {}, 0
+    for name in list(getattr(net, "groups", {}) or {}) + ["found"]:
+        if name in out:
+            continue
+        if name in SPECIAL:
+            out[name] = SPECIAL[name]
+        else:
+            out[name] = PALETTE[k % len(PALETTE)]
+            k += 1
+    return out
+
+
+def home(net, found=None):
+    """{key: group}: the network each node and relation belongs to (the smallest one that holds it)."""
+    found = found if found is not None else groups(net)
+    out = {}
+    for name, (nodes, rels) in sorted(found.items(), key=lambda kv: -(len(kv[1][0]) + len(kv[1][1]))):
+        for n in nodes:
+            out[("n", n)] = name
+        for r in rels:
+            out[("r", r)] = name
+    return out
+
+
+def in_equation(net, text):
+    """An equation as a human writes it: the node that holds the next value of n (n__next1) is n′."""
+    import re
+    for st in net.sets:
+        source = st["source"]
+        if "__next" in source:
+            text = re.sub(rf"(?<![A-Za-z0-9_]){re.escape(source)}(?![A-Za-z0-9_])", st["target"] + "′", text)
+    return text
