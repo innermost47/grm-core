@@ -8,15 +8,13 @@
 # units, where c, hbar, G and kB are 1: written below, they are the SI values of its own units of length, time,
 # mass and temperature.
 #
-# S x Equant = Estock is not written. The master equation the machine brings up (pygrm's master invariant, every node
-# eliminated but the two farthest apart and the constants) is, over 175 decades:
-#     S · Equant^2 = hbar c^5 / (4 pi G)          (from planck × -1, floor × 2, quantum × 2, entropy × 1)
-# and among the other equations it implies, over 122 decades:
-#     Estock · Equant = hbar c^5 / (4 pi G)
-# The same right side: S · Equant^2 = Estock · Equant, that is S · Equant = Estock.
+# S x Equant = Estock is not written. The master equation the machine brings up (pygrm >= 0.5.0, its master
+# invariant over pairs and triples of nodes, every other node eliminated) is S · Equant · Estock^-1 = 1, over 175
+# decades, from the seven relations: every constant cancels. vm/test_universe_unbiased.py checks it seven ways (G
+# measured, nothing fixed, distractors, neutral names, another H0, and a wrong relation that must not give it).
 
 # the constants of the universe: exact by definition (SI 2019), and G (CODATA 2018, measured to 0.0022 %, held
-# here as the constant it is: a master equation keeps the constants and eliminates everything else)
+# here as a constant)
 node c = 299792458 fixed [0 1 -1 0 0]               # m/s
 node hbar = 1.054571817e-34 fixed [1 2 -1 0 0]      # J s
 node kB = 1.380649e-23 fixed [1 2 -2 0 -1]          # J/K

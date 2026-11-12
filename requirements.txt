@@ -1,4 +1,4 @@
-pygrm>=0.1.0      # the GRM engine (pip install pygrm)
+pygrm>=0.5.0      # the GRM engine (pip install pygrm)
 numpy>=1.24
 sounddevice>=0.4   # optional: live sound (WAV export works without it)
 matplotlib>=3.5   # optional: the figures of equation/

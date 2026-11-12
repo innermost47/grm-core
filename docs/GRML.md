@@ -429,7 +429,7 @@ known one, a network that does not settle, relations that contradict each other.
 | `vm/programs/fibonacci.grm` | the writes of a tick, all at once |
 | `vm/programs/thermostat.grm` | choices, a state, a loop with the outside |
 | `vm/programs/circles.grm` | a network called twice |
-| `vm/programs/universe.grm` | the constants of the universe and the seven relations of the chain: the master equation the machine derives, S · Equant² = ħc⁵/(4πG), over 175 decades (with Estock · Equant = ħc⁵/(4πG): S · Equant = Estock, never written) |
+| `vm/programs/universe.grm` | the constants of the universe and the seven relations of the chain: the master equation the machine brings up is S · Equant = Estock, over 175 decades, never written (pygrm ≥ 0.5.0; `vm/test_universe_unbiased.py` checks it seven ways) |
 | `vm/programs/mean.grm` + `numbers.csv` | learning a mean |
 | `vm/programs/fit.grm` + `measures.csv` | weights that learn together |
 | `vm/programs/double.grm` | a Minsky machine |
