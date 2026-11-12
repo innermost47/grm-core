@@ -99,13 +99,18 @@ a shift of their log, signed ones by a scale.
 
 A new way of programming needs help at hand, so the machine gives it where the typing is:
 - **`help`** lists every word by group with a few words each; **`help WORD`** gives its form, what it is and an
-  example (`help relate`); **`tour`** is a guided tour in ten steps, each with a line to type.
+  example (`help relate`); **`tour`** is a guided tour in eleven steps, each with a line to type.
 - **Short forms**: every statement and command has one (`rel` relate, `obs` observe, `inp` input, `t` tick, `ins`
   inspect...), and **`+/-`** can be written for `±`, which is not on every keyboard. Several statements or commands
   go on one line, separated by `;`.
-- **Under the prompt** (window), a line says what is being typed: the word, a few words on it, its form. Under it, a
-  menu of words from the first letter (and of nodes and relations from the second, when they are few); Up and Down
-  choose, Tab or Enter takes, Esc closes. The menu is optional (a box under it, or `help on` / `help off`).
+- **Under the prompt** (window), a line says what is being typed: the word, a few words on it, its form (always two
+  lines, so the prompt never moves). Above the prompt, a menu of words floats like a tooltip: words from the first
+  letter, nodes and relations from the second, when they are few; Up and Down choose, Tab, Enter or a click takes,
+  Esc closes. The menu is optional (a box under the prompt, or `help on` / `help off`).
+- **Seeing it work**: ▶ / ⏸ (`play`, `pause`, F8), a tick (F10), a round (`step`, F11): each round says which
+  relations worked and which nodes moved, and the window frames them. `watch` sets breakpoints (a condition that
+  becomes true, a node that changes, a relation that stops holding): the clock pauses there, `tick n` stops there.
+  `why NODE` shows what makes its value: the messages it hears, their share, and what each relation heard.
 - **Programs** are files of statements with a header (`#! name`, `#! does`, `#! try`): `programs` lists them with
   what they do and what they take and give (read from the program itself), `read NAME` shows one here, `new NAME`
   starts one from a template. In the window, `open NAME` opens it in a programs window of its own, a tab per program,
@@ -300,6 +305,7 @@ The only part that is not the network: what a human uses to talk to it and to pe
 - `editor.py`: the colours of a line of GRML, what Tab completes, what each word is (its form, a few words, an
   example, its short form), the line of help and the menu under the prompt, the banner.
 - `guide.py`: `help` and `tour`.
+- `debug.py`: seeing it work: a round at a time, watches, `why`.
 - `programs.py`: where programs are, their header, the template of a new one.
 - `i18n.py`, `fr.py`: the two languages (every text the machine says is an English template; `fr.py` gives it in
   French), and the settings kept next to the memory.
@@ -316,4 +322,6 @@ The only part that is not the network: what a human uses to talk to it and to pe
   equation now and before, traces and forgetting, pleasure and displeasure, curiosity, what it feels remembered;
   short forms and `+/-`, the programs and their headers, `help` on every word, every line of the tour run, the French
   catalogue whole (every text the machine may say, with the same fields), the language switched and remembered, the
-  line and the menu under the prompt.
+  line under the prompt and the menu above it; a tick a round at a time (the same values as a whole tick), a tick
+  stepped into finished by `tick` and by sleep, watches on a condition, a node and a relation, `play` and `pause`,
+  `why`, all of it in French too.

@@ -66,9 +66,14 @@ def tr(template, **values):
     return text
 
 
+def colon():
+    """A colon as the language writes it (French puts a space before it)."""
+    return " : " if _lang == "fr" else ": "
+
+
 def label(word):
     """A word followed by its colon, as each language writes it ("error: ", "erreur : ")."""
-    return tr(word) + (" : " if _lang == "fr" else ": ")
+    return tr(word) + colon()
 
 
 # ---------------------------------------------------------------------- settings (language, typing help)

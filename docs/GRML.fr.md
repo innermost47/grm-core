@@ -18,6 +18,7 @@ la langue de l'interface. L'interface, elle, parle français avec `lang fr`.
 - [Référence](#référence) : chaque mot
 - [Ce que la machine fait toute seule](#ce-que-la-machine-fait-toute-seule) : nœuds, relations, fusions
 - [Les programmes](#les-programmes) : les fichiers, leur en-tête, la fenêtre des programmes
+- [Le voir travailler](#le-voir-travailler) : un tour à la fois, les points d'arrêt, pourquoi un nœud a sa valeur
 - [Le tick](#le-tick) : ce qui se passe à chaque battement de l'horloge
 - [Les commandes de la machine](#les-commandes-de-la-machine), son aide et ses deux langues
 - [Pièges](#pièges)
@@ -41,7 +42,7 @@ Personne n'a dit à la machine de diviser : elle a trouvé la vitesse qui fait t
 
 `±` peut s'écrire `+/-` (il n'est pas sur tous les claviers), et chaque mot a une forme abrégée (`obs`, `rel`,
 `t`...) : `obs distance = 100 +/- 1%` est la même ligne. `help` liste les mots, `help MOT` en explique un avec un
-exemple, et `tour` est une visite guidée en dix étapes.
+exemple, et `tour` est une visite guidée en onze étapes.
 
 ## Tutoriel
 
@@ -430,6 +431,56 @@ pendant la frappe, et tout se fait au clavier :
 Une erreur dans un fichier (`use`, `run`) dit le fichier et la ligne ; quand ce fichier est ouvert, sa ligne passe
 en rouge.
 
+## Le voir travailler
+
+Un tick est une conversation en tours : à chaque tour, les nœuds qui ont appris du nouveau le disent à leurs
+relations, et les relations qui ont appris du nouveau répondent à leurs nœuds, jusqu'à ce que plus rien de nouveau ne
+soit dit ; puis viennent les écritures de `set`. On peut regarder la machine le faire.
+
+```
+grm> use programs/fall.grm
+grm> tick
+grm> put t = 3
+grm> step 3
+  tick 2, tour 1 : au travail : la mesure de t
+  tick 2, tour 2 : au travail : fall ; en mouvement : t 2 -> 3
+  tick 2, tour 3 : aucune relation n'a travaillé ; en mouvement : height 19.62 -> 44.145
+  tick 2 fini en 3 tours
+grm> why height
+  pourquoi height = 44.145  (± 0.000971 dex)
+    100.0%  relation fall: 2 * height = g * t^2
+            dit 44.145  (± 0.000971 dex) ; à partir de g = 9.81, t = 3
+            et 1 qui n'en disent presque rien
+```
+
+| commande | abrégé | touche (fenêtre) | |
+|---|---|---|---|
+| `play [HZ]` | | F8 | l'horloge tourne, HZ ticks par seconde (10, ou la dernière) |
+| `pause` | | F8 | l'horloge s'arrête |
+| `tick` | `t` | F10 | un tick entier |
+| `step [n]` | `st` | F11 | n tours, un à la fois : qui a travaillé, qui a bougé, et la fin de chaque tick avec ses écritures |
+| `watch NŒUD in BAS .. HAUT [and ...]` | `wt` | | s'arrêter quand la condition devient vraie |
+| `watch NŒUD` | `wt` | | s'arrêter quand sa valeur change |
+| `watch RELATION` | `wt` | | s'arrêter quand elle ne tient plus (à plus de 1 sigma) |
+| `watch` | | | les points d'arrêt |
+| `unwatch [N \| all]` | `uw` | | retirer un point d'arrêt (all : tous) |
+| `why NŒUD` | | | ce qui fait sa valeur |
+
+- **Un point d'arrêt** arrête l'horloge (la fenêtre se met en pause) et `tick n` (`arrêtée après 3 ticks sur 10`). Il
+  s'arrête quand ce qu'il regarde *devient* vrai, change ou cesse de tenir : une condition déjà vraie au moment où on
+  le pose n'arrête pas tout de suite. Les points d'arrêt appartiennent à la session, pas à la mémoire.
+- **Dans un tick parcouru pas à pas**, la machine est entre deux tours : `ask` lit les valeurs telles qu'elles sont,
+  sans la faire tourner ; `tick` (F10) finit le tick, et s'endormir aussi. Dans la fenêtre, les relations qui ont
+  travaillé au dernier tour sont encadrées, les nœuds qui ont bougé sont cerclés, et une ligne sous les boutons dit où
+  en est la machine (`en pause · dans le tick 2, tour 2 · 1 point(s) d'arrêt`).
+- **`why`** montre les messages que le nœud entend, tels que la machine les a : la valeur d'un nœud est ce qu'en
+  disent toutes ses relations, chacune pesée selon sa certitude (les précisions s'additionnent). Chaque message vient
+  avec sa part, ce qu'il dit, et ce que la relation a entendu de ses autres nœuds ; une mesure, une écriture du dernier
+  tick ou la mémoire des poids sont aussi des messages. Dans un tick parcouru pas à pas, ce que dit déjà une relation
+  et ce que vaut encore le nœud peuvent différer : c'est le tour suivant.
+- Une instruction (`relate`, `observe`...) reconstruit la machine, qui se stabilise aussitôt ; pour voir une entrée
+  traverser le réseau tour par tour, la donner avec `put`.
+
 ## Le tick
 
 À chaque tick :
@@ -464,9 +515,10 @@ peuvent s'écrire sur une ligne, séparées par `;`.
 | `blank` | | tout oublier |
 | `sound on` / `off` | | une voix par sortie |
 | `clock HZ` | `clk` | des ticks tout seuls (fenêtre) |
+| `play`, `pause`, `step`, `watch`, `unwatch`, `why` | | voir [Le voir travailler](#le-voir-travailler) |
 | `programs`, `read`, `open`, `tab`, `edit`, `save`, `find`, `close`, `new`, `run` | | voir [Les programmes](#les-programmes) |
 | `help [MOT]` | `h` | les mots de la machine par groupe ; un mot, avec sa forme et un exemple |
-| `help on` / `off` | | le menu des mots sous le prompteur, pendant la frappe (fenêtre) |
+| `help on` / `off` | | le menu des mots pendant la frappe (fenêtre) |
 | `tour [N \| end]` | | une visite guidée, une étape à la fois |
 | `lang fr` / `lang en` | | la langue de l'interface |
 | `quit` | `q` | la nuit : fusions, relations trouvées, oubli, puis le sommeil dans `vm/memory.json` |
@@ -478,10 +530,11 @@ qui se contredisent.
 
 **L'aide pendant la frappe (fenêtre).** Sous le prompteur, une ligne dit ce qui est en train d'être tapé : le mot, ce
 qu'il est en quelques mots, et sa forme (`rel = relate — une relation : produits, puissances, sommes   relate NAME:
-left = right [+/- sigma] [when ...]`). En dessous, un menu : les mots de la machine dès la première lettre tapée
-(avec leurs formes abrégées), puis les noms des nœuds et des relations dès la deuxième lettre, quand il n'y en a pas
-plus de douze. Haut et Bas choisissent, Tab ou Entrée prend, Échap ferme. Le menu peut être désactivé (la case en
-dessous, ou `help off`) ; la ligne reste.
+left = right [+/- sigma] [when ...]`) ; elle prend toujours deux lignes, si bien que le prompteur ne bouge jamais.
+Au-dessus du prompteur, un menu flotte comme une info-bulle, par-dessus les mots, sous le mot en train d'être tapé :
+les mots de la machine dès la première lettre (avec leurs formes abrégées), puis les noms des nœuds et des relations
+dès la deuxième lettre, quand il n'y en a pas plus de douze. Haut et Bas choisissent, Tab, Entrée ou un clic prend,
+Échap ferme. Le menu peut être désactivé (la case sous le prompteur, ou `help off`) ; la ligne reste.
 
 **Deux langues.** L'interface parle anglais ou français : `lang fr`, `lang en`. La première fois, elle suit la
 langue du système. Les mots de GRML (`node`, `relate`, `observe`...) restent en anglais dans les deux, si bien qu'un

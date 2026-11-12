@@ -120,6 +120,7 @@ BG, PANEL, INK, DIM, LINE = "#0e1016", "#14161a", "#c8ccd4", "#7d838d", "#4b525e
 ROLE_COLOURS = {"input": "#5fa8d3", "output": "#ffb347", "var": "#c792ea", "learn": "#a3be8c",
                 "fixed": "#7d838d", None: "#d0d4dc"}
 HOLDS, STRAINED, BROKEN = "#56606e", "#e5c07b", "#e06c75"
+WORKED = "#7fdbca"     # a relation that worked in the last round (stepping a round at a time)
 
 
 def _role(spec):
@@ -276,6 +277,8 @@ class NetworkView:
                         except (OverflowError, ValueError, ZeroDivisionError):
                             strain[f.name] = float("inf")
             moving = {m.var_names[i] for i, d in enumerate(m.last_move) if d > 1e-9}
+        # stepping a round at a time: the relations that worked in the last round
+        worked = ({m.factors[f].name for f in getattr(m, "busy", ())} if m is not None and vm.in_tick() else set())
         few = len(net.nodes) <= 80
         # the links first, under everything
         for r in net.relations:
@@ -304,6 +307,8 @@ class NetworkView:
                 continue
             x, y = self.to_screen(rp)
             colour = self.colour(strain.get(r["name"]))
+            if r["name"] in worked:
+                c.create_rectangle(x - 10, y - 10, x + 10, y + 10, outline=WORKED, width=2)
             item = c.create_rectangle(x - 5, y - 5, x + 5, y + 5, fill=colour, outline="#0b0d12")
             self.items[item] = ("r", r["name"])
             if few or net.origin["relations"].get(r["name"]) != "base":
@@ -380,16 +385,20 @@ class NetworkView:
 
 class Editor:
     """The line the human types: coloured as it is typed, Tab completes, Up and Down go back through what was
-    typed. Under it, a line of help (what is being typed) and, when the typing help is on, a menu of words: Up and
-    Down choose, Tab or Enter take, Esc closes."""
+    typed. Under it, a line of help (what is being typed); when the typing help is on, a menu of words floats above
+    it, like a tooltip, so that nothing under or around the prompt moves: Up and Down choose, Tab, Enter or a click
+    take, Esc closes."""
 
-    def __init__(self, text, words, complete, log, hint=None, menu=None, suggest=None, helping=lambda: True):
+    def __init__(self, text, words, complete, log, hint=None, menu=None, suggest=None, helping=lambda: True,
+                 popup=None):
         self.t = text
         self.words = words
         self.complete_at = complete
         self.log = log
         self.hint_label = hint
         self.menu = menu
+        self.popup = popup          # the floating window that holds the menu
+        self.shown = False
         self.suggest = suggest
         self.helping = helping
         self.items = []             # what the menu shows: [(word, a few words)]
@@ -400,6 +409,9 @@ class Editor:
         text.bind("<Up>", lambda e: self.move(-1) if self.menu_open() else self.back(-1))
         text.bind("<Down>", lambda e: self.move(1) if self.menu_open() else self.back(1))
         text.bind("<Escape>", lambda e: self.close_menu() if self.menu_open() else self.set(""))
+        text.bind("<FocusOut>", lambda e: self.close_menu())
+        if menu is not None:
+            menu.bind("<Button-1>", self.on_click)      # taken at once: the focus never leaves the prompt
 
     def get(self):
         return self.t.get("1.0", "end-1c").replace("\n", " ")
@@ -458,20 +470,45 @@ class Editor:
             return
         self.menu.delete(0, "end")
         width = max(len(w) for w, _ in self.items)
-        for w, what in self.items:
-            self.menu.insert("end", f" {w:<{width}}  {what}")
-        self.menu.configure(height=min(6, len(self.items)))
-        if not self.menu.winfo_ismapped():
-            self.menu.pack(fill="x", padx=8, pady=(0, 4), after=self.hint_label)
+        rows = [f" {w:<{width}}  {what} " for w, what in self.items]
+        for r in rows:
+            self.menu.insert("end", r)
+        self.menu.configure(height=min(8, len(rows)), width=min(70, max(len(r) for r in rows)))
         self.menu.selection_clear(0, "end")
+        self.place()
+
+    def place(self):
+        """The menu floats just above the prompt, its left edge under the word being typed."""
+        if self.popup is None:
+            return
+        start, _ = self.complete_at(self.get(), self.cursor())
+        box = self.t.bbox(f"1.0+{start}c")
+        x = self.t.winfo_rootx() + (box[0] if box else 0)
+        self.popup.update_idletasks()
+        y = self.t.winfo_rooty() - self.popup.winfo_reqheight() - 2
+        right = self.t.winfo_toplevel().winfo_rootx() + self.t.winfo_toplevel().winfo_width()
+        x = max(self.t.winfo_rootx(), min(x, right - self.popup.winfo_reqwidth()))
+        self.popup.geometry(f"+{x}+{max(0, y)}")
+        if not self.shown:
+            self.popup.deiconify()
+            self.shown = True
+        self.popup.lift()
 
     def menu_open(self):
-        return self.menu is not None and self.menu.winfo_ismapped() and self.items
+        return self.menu is not None and self.shown and bool(self.items)
 
     def close_menu(self):
-        if self.menu is not None and self.menu.winfo_ismapped():
-            self.menu.pack_forget()
+        if self.popup is not None and self.shown:
+            self.popup.withdraw()
+        self.shown = False
         self.items = []
+        return "break"
+
+    def on_click(self, e):
+        i = self.menu.nearest(e.y)
+        if 0 <= i < len(self.items):
+            self.take(self.items[i][0])
+        self.t.focus_set()
         return "break"
 
     def move(self, k):
@@ -941,13 +978,20 @@ def window(vm, Shell, script=None):
     line.pack(fill="x", padx=8, pady=(0, 2))
     # under the prompt: a line of help (what is being typed), the menu of words (when the typing help is on), and the
     # box that turns it on or off
-    hint = tk.Label(left, text="", anchor="w", bg=BG, fg="#8b919c", font=("Consolas", 9))
+    # the line of help always takes two lines, so that the prompt above it never moves
+    hint = tk.Label(left, text="", anchor="nw", bg=BG, fg="#8b919c", font=("Consolas", 9), height=2)
     hint.pack(fill="x", padx=10, pady=(0, 2))
     hint.configure(justify="left")
     hint.bind("<Configure>", lambda e: hint.configure(wraplength=max(200, e.width - 4)))
-    menu = tk.Listbox(left, height=6, bg="#1b1e24", fg="#c8ccd4", selectbackground="#3e4451",
+    # the menu of words: a tooltip floating above the prompt, outside the layout
+    popup = tk.Toplevel(root)
+    popup.withdraw()
+    popup.overrideredirect(True)
+    popup.configure(bg="#3e4451")
+    menu = tk.Listbox(popup, height=6, bg="#1b1e24", fg="#c8ccd4", selectbackground="#3e4451",
                       selectforeground="#ffffff", font=("Consolas", 9), borderwidth=0, highlightthickness=0,
-                      activestyle="none")
+                      activestyle="none", takefocus=0)
+    menu.pack(padx=1, pady=1)
     options = tk.Frame(left, bg=BG)
     options.pack(fill="x", padx=8, pady=(0, 6))
     helping = tk.BooleanVar(value=True)
@@ -968,6 +1012,20 @@ def window(vm, Shell, script=None):
     middle = tk.Frame(panes, bg=BG)
     top = tk.Frame(middle, bg=BG)
     top.pack(fill="x", padx=8, pady=(8, 0))
+    # seeing it work: play / pause, a tick, a round; what it is doing now
+    controls = tk.Frame(top, bg=BG)
+    controls.pack(side="top", fill="x", pady=(0, 6))
+
+    def button(cmd):
+        return tk.Button(controls, command=cmd, bg=PANEL, fg=INK, activebackground="#3e4451", activeforeground=INK,
+                         font=("DejaVu Sans Mono", 9), relief="flat", borderwidth=0, padx=8, pady=2, takefocus=0)
+    play_button = button(lambda: act("pause" if shell.clock > 0 else "play"))
+    tick_button = button(lambda: act("tick"))
+    round_button = button(lambda: act("step"))
+    for b in (play_button, tick_button, round_button):
+        b.pack(side="left", padx=(0, 4))
+    doing = tk.Label(top, text="", anchor="w", bg=BG, fg=DIM, font=("Consolas", 9))
+    doing.pack(side="top", fill="x", pady=(0, 4))
     master_text = tk.Label(top, text="", anchor="w", justify="left", bg=BG, fg="#e6e8ec", font=("Consolas", 10),
                            wraplength=520)
     master_text.pack(side="top", fill="x")
@@ -1004,7 +1062,8 @@ def window(vm, Shell, script=None):
                               networks=vm.net.networks, base=shell.base)
     helping.set(bool(shell.settings.get("help", True)))
     ed = Editor(line, words, lambda ln, cur: shell._complete(ln, cur), log, hint=hint, menu=menu, suggest=suggest,
-                helping=helping.get)
+                helping=helping.get, popup=popup)
+    root.bind("<Configure>", lambda e: ed.close_menu() if e.widget is root else None)   # the window moves: it closes
 
     def help_toggled(on=None):
         if on is not None:
@@ -1020,9 +1079,37 @@ def window(vm, Shell, script=None):
 
     def relabel():
         """The window's words, in the language of the machine."""
-        help_box.configure(text=" " + tr("typing help (a menu of words under the prompt)"))
+        help_box.configure(text=" " + tr("typing help (a menu of words while typing)"))
         root.title(tr("GRM machine"))
+        tick_button.configure(text="⏭ " + tr("tick") + "  F10")
+        round_button.configure(text="↘ " + tr("round") + "  F11")
+        show_doing()
         ed.show_hint()
+
+    def show_doing():
+        """The play button and what the machine is doing: playing or paused, in a tick, its watches."""
+        playing = shell.clock > 0
+        play_button.configure(text=("⏸ " + tr("pause") if playing else "▶ " + tr("play")) + "  F8")
+        parts = [tr("playing at {hz} Hz", hz=f"{shell.clock:g}") if playing else tr("paused")]
+        m = vm.machine
+        if vm.in_tick() and m is not None:
+            parts.append(tr("in tick {tick}, round {round}", tick=m.ticks + 1, round=m.rounds - m._tick["r0"]))
+        if vm.watches:
+            parts.append(tr("{n} watch(es)", n=len(vm.watches)))
+        doing.configure(text="  ·  ".join(parts))
+
+    def act(typed):
+        """A button or a key: said as if typed, so that it shows in the words."""
+        log.write(f"grm> {typed}\n")
+        shell.onecmd(typed)
+        relabel()
+        draw(steps=20)
+        line.focus_set()
+        return "break"
+
+    root.bind("<F8>", lambda e: act("pause" if shell.clock > 0 else "play"))
+    root.bind("<F10>", lambda e: act("tick"))
+    root.bind("<F11>", lambda e: act("step"))
     relabel()
     log.write(shell.intro + "\n")
     state = {"master_at": 0.0, "master_key": None}
@@ -1150,6 +1237,9 @@ def window(vm, Shell, script=None):
                 log.write("  ! " + diagnose.internal(e) + "\n")
                 shell.clock = 0.0
             shell.say_events()
+            if vm.stopped:                   # a watch was met: the clock pauses there
+                shell.do_pause("")
+                show_doing()
             if shell.sound:
                 play(sound_of(vm.history))
             draw(steps=3)

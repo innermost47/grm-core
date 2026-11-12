@@ -112,7 +112,7 @@ FR = {
     "the tour is over (tour 1: again)": "la visite est finie (tour 1 : à nouveau)",
     "type a statement or a command (Tab completes; help; tour: a guided tour)":
         "tapez une instruction ou une commande (Tab complète ; help ; tour : une visite guidée)",
-    "typing help (a menu of words under the prompt)": "aide à la saisie (un menu de mots sous le prompteur)",
+    "typing help (a menu of words while typing)": "aide à la saisie (un menu de mots pendant la frappe)",
     "typing help off": "aide à la saisie désactivée",
     "typing help on": "aide à la saisie activée",
     "for example": "par exemple",
@@ -142,7 +142,6 @@ FR = {
     "a weight: it keeps what it learns": "un poids : il garde ce qu'il apprend",
     "an input, given at each moment": "une entrée, donnée à chaque instant",
     "an output: shown, drawn, heard": "une sortie : affichée, dessinée, entendue",
-    "n ticks (Enter alone: one)": "n ticks (Entrée seule : un)",
     "give an input its value": "donner sa valeur à une entrée",
     "a file (no file: the open tab)": "un fichier (sans fichier : l'onglet ouvert)",
     "data row by row: it learns": "des données ligne par ligne : il apprend",
@@ -455,4 +454,77 @@ FR = {
     "{bits} bits a tick; rent {rent} ({n} links)": "{bits} bits par tick ; loyer {rent} ({n} liens)",
     "pays its rent": "paie son loyer",
     "does not pay its rent": "ne paie pas son loyer",
+    # ---------------------------------------------------------------- seeing it work (debug.py)
+    "seeing it work": "le voir travailler",
+    "the clock runs (F8: play / pause)": "l'horloge tourne (F8 : lecture / pause)",
+    "the clock stops": "l'horloge s'arrête",
+    "n rounds, one at a time (F11)": "n tours, un à la fois (F11)",
+    "n ticks (Enter alone, F10: one)": "n ticks (Entrée seule, F10 : un)",
+    "stop when it is met": "s'arrêter quand c'est atteint",
+    "take a watch away": "retirer un point d'arrêt",
+    "what makes its value": "ce qui fait sa valeur",
+    "A tick is a few rounds: in each, the nodes that heard something new tell their relations, and the relations "
+    "that heard something new answer. step shows that conversation, round after round: who worked, who moved, and "
+    "the writes at the end of the tick.":
+        "Un tick, c'est quelques tours : à chacun, les nœuds qui ont appris du nouveau le disent à leurs relations, "
+        "et les relations qui ont appris du nouveau répondent. step montre cette conversation, tour après tour : qui "
+        "a travaillé, qui a bougé, et les écritures à la fin du tick.",
+    "A breakpoint. NODE in LO .. HIGH stops when the condition becomes true, NODE when its value changes, RELATION "
+    "when it no longer holds. The clock pauses, and tick n stops there.":
+        "Un point d'arrêt. NŒUD in BAS .. HAUT s'arrête quand la condition devient vraie, NŒUD quand sa valeur "
+        "change, RELATION quand elle ne tient plus. L'horloge se met en pause, et tick n s'arrête là.",
+    "A node's value is what all its relations say of it, each weighted by how sure it is (the precisions add up). "
+    "why shows each message, its share, and what that relation heard from its other nodes.":
+        "La valeur d'un nœud est ce qu'en disent toutes ses relations, chacune pesée selon sa certitude (les "
+        "précisions s'additionnent). why montre chaque message, sa part, et ce que cette relation a entendu de ses "
+        "autres nœuds.",
+    "Step by step": "Pas à pas",
+    "A tick is a conversation in rounds. Set a breakpoint, run, and ask why a value is what it is (F8 play, F10 a "
+    "tick, F11 a round in the window):":
+        "Un tick est une conversation en tours. Posez un point d'arrêt, lancez, et demandez pourquoi une valeur est "
+        "ce qu'elle est (dans la fenêtre : F8 lecture, F10 un tick, F11 un tour) :",
+    "stops when it becomes true": "s'arrête quand elle devient vraie",
+    "stops when it changes": "s'arrête quand il change",
+    "stops when it no longer holds": "s'arrête quand elle ne tient plus",
+    "no watch (watch NODE in LO .. HIGH, watch NODE, watch RELATION)":
+        "aucun point d'arrêt (watch NŒUD in BAS .. HAUT, watch NŒUD, watch RELATION)",
+    "watch {k}: {text} ({what})": "point d'arrêt {k} : {text} ({what})",
+    "{n} watch(es) taken away": "{n} point(s) d'arrêt retiré(s)",
+    "no watch {k} (watch: the list)": "pas de point d'arrêt {k} (watch : la liste)",
+    "watch taken away: {text}": "point d'arrêt retiré : {text}",
+    "watch: {text} (tick {tick})": "point d'arrêt : {text} (tick {tick})",
+    "watch: {name} changed, {a} -> {b} (tick {tick})": "point d'arrêt : {name} a changé, {a} -> {b} (tick {tick})",
+    "watch: {name} no longer holds (tick {tick})": "point d'arrêt : {name} ne tient plus (tick {tick})",
+    "stopped after {done} of {n} ticks (now {tick})": "arrêtée après {done} ticks sur {n} (maintenant {tick})",
+    "tick {tick}, round {round}": "tick {tick}, tour {round}",
+    "{names} worked": "au travail : {names}",
+    "; ": " ; ",
+    "no relation worked": "aucune relation n'a travaillé",
+    "moved: {moved}": "en mouvement : {moved}",
+    "tick {tick} done in {rounds} rounds": "tick {tick} fini en {rounds} tours",
+    "written: {writes}": "écrit : {writes}",
+    "the measurement of {name}": "la mesure de {name}",
+    "the weights' memory": "la mémoire des poids",
+    "why {name} = {value}": "pourquoi {name} = {value}",
+    "says {value}": "dit {value}",
+    "from {heard}": "à partir de {heard}",
+    "and {n} that say almost nothing of it": "et {n} qui n'en disent presque rien",
+    "nothing says anything of it yet": "rien n'en dit encore quoi que ce soit",
+    "written at the last tick: {text}": "écrit au dernier tick : {text}",
+    "measured: {value}": "mesuré : {value}",
+    "its starting value (nothing measured: a weak hold)": "sa valeur de départ (rien de mesuré : une tenue faible)",
+    "what the weights learned together ({names})": "ce que les poids ont appris ensemble ({names})",
+    "through its signed twin, from {names}": "par son jumeau signé, à partir de {names}",
+    "contact": "contact",
+    "{name} = {value}: fixed, it does not move": "{name} = {value} : fixe, il ne bouge pas",
+    "{name} is {other}^-1: why {other}": "{name} est {other}^-1 : why {other}",
+    # the window's controls
+    "play": "lecture",
+    "pause": "pause",
+    "tick": "tick",
+    "round": "tour",
+    "playing at {hz} Hz": "en marche à {hz} Hz",
+    "paused": "en pause",
+    "in tick {tick}, round {round}": "dans le tick {tick}, tour {round}",
+    "{n} watch(es)": "{n} point(s) d'arrêt",
 }

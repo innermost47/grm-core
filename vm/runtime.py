@@ -731,11 +731,24 @@ class Machine:
         Learning: when the inputs have changed since the last tick (a key, a number, a row of a file; or learn=True),
         every weight first keeps what it believed with the inputs before (its prior becomes that belief), then
         hears the new ones. So each set of inputs is counted once, and what the weights have learned stays."""
+        self.begin_tick(learn)
+        self.run(max_rounds)
+        return self.end_tick()
+
+    def begin_tick(self, learn=False):
+        """The start of a tick: when the inputs have changed, the weights keep what the inputs before taught them.
+        Then rounds (run, or one at a time: round), then end_tick."""
         seen = {n: self.net.measured.get(n) for n, sp in self.net.nodes.items() if sp.get("input")}
         new = learn or seen != getattr(self, "_seen", None)
         if new and getattr(self, "_heard", False):
             self.fold()              # the inputs before are kept by the weights, then the new ones are heard
-        self.run(max_rounds)
+        self._tick = {"new": new, "seen": seen}
+
+    def end_tick(self):
+        """The end of a tick: its surprise, then every `set` whose conditions hold writes its variable."""
+        t = getattr(self, "_tick", None) or {"new": False, "seen": getattr(self, "_seen", None)}
+        self._tick = None
+        new, seen = t["new"], t["seen"]
         self.settled = self.quiet    # whether it settled in the rounds it was given (before the writes below)
         if new:
             self.last_surprise = self.surprise()

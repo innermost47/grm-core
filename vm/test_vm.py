@@ -944,7 +944,7 @@ def said_texts():
     import language
     found |= {what for _, what, _ in editor.DOCS.values()} | set(guide.MORE.values())
     found |= {t for title, text, _ in guide.TOUR for t in (title, text)} | {g for g, _ in guide.GROUPS}
-    found |= set(language.ROLES.values())
+    found |= set(language.ROLES.values()) | set(grm_vm.WATCH_KINDS.values())
     return found
 
 
@@ -1014,3 +1014,120 @@ def test_a_colon_as_each_language_writes_it():
     i18n.set_lang("fr")
     assert i18n.label("error") == "erreur : "
     assert guide.word("relate")[0].endswith("(abrégé : rel) — une relation : produits, puissances, sommes")
+
+
+# ---------------------------------------------------------------------- seeing it work: rounds, watches, why
+import debug   # noqa: E402
+
+
+def test_a_tick_a_round_at_a_time():
+    vm = example("fall")
+    vm.tick()
+    vm.put("t", 3)
+    report = vm.step(2)
+    assert [r.get("round") for r in report] == [1, 2] and vm.in_tick()
+    name, a, b = report[1]["moved"][0]
+    assert "fall" in report[1]["worked"] and name == "t" and (a, b) == pytest.approx((2, 3))
+    assert vm.get("height") == pytest.approx(19.62, rel=1e-6)        # in a tick: read as it is, without running
+    report = vm.step()                                                # the last round, then the end of the tick
+    assert report[0]["round"] == 3 and report[0]["moved"][0][0] == "height"
+    assert report[1]["done"] == {} and report[1]["rounds"] == 3 and not vm.in_tick()
+    assert vm.get("height") == pytest.approx(9.81 * 9 / 2, rel=1e-6)
+    # the same machine ticked whole gives the same values
+    other = example("fall")
+    other.tick()
+    other.put("t", 3)
+    other.tick()
+    assert other.get("height") == pytest.approx(vm.get("height"), rel=1e-12)
+
+
+def test_a_tick_stepped_into_is_finished_by_tick_and_by_sleep(tmp_path):
+    vm = example("fall")
+    vm.tick()
+    vm.put("t", 3)
+    vm.step()
+    assert vm.in_tick()
+    t = vm.machine.ticks
+    vm.tick()
+    assert not vm.in_tick() and vm.machine.ticks == t + 1
+    assert vm.get("height") == pytest.approx(44.145, rel=1e-4)
+    vm.put("t", 2)
+    vm.step()
+    vm.memory = str(tmp_path / "m.json")
+    vm.sleep()
+    assert not vm.in_tick()
+
+
+def test_step_says_who_worked_and_who_moved():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("use programs/fit.grm ; put x = 2 ; put y = 9 ; st 4")
+    said = "\n".join(out)
+    assert "tick 1, round 2: model worked" in said and "the weights' memory worked" in said
+    assert "tick 1 done in 3 rounds" in said
+
+
+def test_watch_stops_the_ticks():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("var n = 0 ; set n = n + 1 ; watch n in 3 .. inf ; tick 10")
+    assert vm.get("n") == 3 and any("stopped after 3 of 10 ticks" in s for s in out)
+    assert any("watch: n in 3 .. inf (tick 3)" in s for s in out)
+    out.clear()
+    sh.onecmd("tick 5")                                   # already true: it does not stop again
+    assert vm.get("n") == 8 and not vm.stopped
+    sh.onecmd("watch n ; tick 5")                         # a change stops at once
+    assert vm.get("n") == 9 and vm.stopped
+    sh.onecmd("unwatch 1 ; watch")
+    assert vm.watches[0].kind == "change" and "1: n " in out[-1]
+    sh.onecmd("unwatch all")
+    assert vm.watches == []
+
+
+def test_watch_a_relation_that_stops_holding():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("input x ; input y ; relate r: y = 2 * x +/- 0.01 ; put x = 1 ; put y = 2 ; tick ; watch r")
+    sh.onecmd("put y = 3 ; tick 3")
+    assert vm.stopped and "r no longer holds" in vm.stopped[0]
+    sh.onecmd("watch nothing_here")
+    assert out[-1].startswith("  ?")
+
+
+def test_why_a_node_has_its_value():
+    vm = example("fall")
+    lines = debug.why(vm, "height")
+    assert lines[0].startswith("why height = 19.62")
+    assert "100.0%  relation fall: 2 * height = g * t^2" in lines[1] and "from g = 9.81, t = 2" in lines[2]
+    assert "measured: 9.81" in debug.why(vm, "g")[1]
+    vm = grm_vm.VM(memory=None, blank=True)
+    vm.say("var n = 0")
+    vm.say("set n = n + 1")
+    vm.tick(2)
+    assert "written at the last tick: set n = n + 1" in debug.why(vm, "n")[1]
+    vm.say("node c = 3 fixed")
+    assert "fixed" in debug.why(vm, "c")[0]
+    sh, out = shell_of(vm)
+    sh.onecmd("use programs/fall.grm ; why heigt")
+    assert out[-1].startswith("  ?") and "height" in out[-1]
+
+
+def test_seeing_it_work_in_french():
+    i18n.set_lang("fr")
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("var n = 0 ; set n = n + 1 ; wt n in 2 .. inf ; t 5 ; why n")
+    said = "\n".join(out)
+    assert "point d'arrêt : n in 2 .. inf (tick 2)" in said and "arrêtée après 2 ticks sur 5" in said
+    assert "pourquoi n = 2" in said and "écrit au dernier tick" in said
+
+
+def test_play_and_pause():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("play")
+    assert sh.clock == 10 and "playing at 10 Hz" in out[-1]
+    sh.onecmd("clock 4 ; pause")
+    assert sh.clock == 0 and vm.clock_hz == 0 and out[-1].strip() == "paused"
+    sh.onecmd("play")                                     # again at the last clock that ran
+    assert sh.clock == 4

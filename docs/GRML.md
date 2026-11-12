@@ -14,6 +14,7 @@ here is what the language does.
 - [Reference](#reference): every word
 - [What the machine does by itself](#what-the-machine-does-by-itself): nodes, relations, fusions
 - [Programs](#programs): files, their header, the programs window
+- [Seeing it work](#seeing-it-work): a round at a time, watches, why a node has its value
 - [The tick](#the-tick): what happens at each beat of the clock
 - [The machine's commands](#the-machines-commands), its help and its two languages
 - [Pitfalls](#pitfalls)
@@ -36,7 +37,7 @@ Nothing told the machine to divide: it found the speed that makes the relation h
 
 `±` can be written `+/-` (it is not on every keyboard), and every word has a short form (`obs`, `rel`, `t`...):
 `obs distance = 100 +/- 1%` is the same line. `help` lists the words, `help WORD` explains one with an example, and
-`tour` is a guided tour of ten steps. `lang fr` puts the machine's interface in French (the words of the language stay
+`tour` is a guided tour of eleven steps. `lang fr` puts the machine's interface in French (the words of the language stay
 English, so a program runs anywhere).
 
 ## Tutorial
@@ -415,6 +416,56 @@ and everything is done from the keyboard:
 
 An error in a file (`use`, `run`) says the file and the line; when that file is open, its line turns red.
 
+## Seeing it work
+
+A tick is a conversation in rounds: in each round, the nodes that heard something new tell their relations, and the
+relations that heard something new answer their nodes, until nothing new is said; then the writes of `set`. The
+machine can be watched doing it.
+
+```
+grm> use programs/fall.grm
+grm> tick
+grm> put t = 3
+grm> step 3
+  tick 2, round 1: the measurement of t worked
+  tick 2, round 2: fall worked; moved: t 2 -> 3
+  tick 2, round 3: no relation worked; moved: height 19.62 -> 44.145
+  tick 2 done in 3 rounds
+grm> why height
+  why height = 44.145  (± 0.000971 dex)
+    100.0%  relation fall: 2 * height = g * t^2
+            says 44.145  (± 0.000971 dex); from g = 9.81, t = 3
+            and 1 that say almost nothing of it
+```
+
+| command | short | key (window) | |
+|---|---|---|---|
+| `play [HZ]` | | F8 | the clock runs, HZ ticks a second (10, or the last one) |
+| `pause` | | F8 | the clock stops |
+| `tick` | `t` | F10 | one whole tick |
+| `step [n]` | `st` | F11 | n rounds, one at a time: who worked, who moved, and the end of each tick with its writes |
+| `watch NODE in LO .. HIGH [and ...]` | `wt` | | stop when the condition becomes true |
+| `watch NODE` | `wt` | | stop when its value changes |
+| `watch RELATION` | `wt` | | stop when it no longer holds (more than 1 sigma from it) |
+| `watch` | | | the watches |
+| `unwatch [N \| all]` | `uw` | | take a watch away (all: every one) |
+| `why NODE` | | | what makes its value |
+
+- **A watch** stops the clock (the window pauses) and `tick n` (`stopped after 3 of 10 ticks`). It stops when what it
+  looks at *becomes* true, changes or stops holding: a condition already true when it is set does not stop at once.
+  Watches belong to the session, not to the memory.
+- **In a tick stepped into**, the machine is between two rounds: `ask` reads the values as they are, without running
+  it; `tick` (F10) finishes the tick, and so does going to sleep. In the window, the relations that worked in the last
+  round are framed, the nodes that moved are ringed, and a line under the buttons says where the machine is (`paused
+  · in tick 2, round 2 · 1 watch`).
+- **`why`** shows the messages the node hears, as the machine has them: a node's value is what all its relations say
+  of it, each weighted by how sure it is (the precisions add up). Each message comes with its share, what it says,
+  and what the relation heard from its other nodes; a measurement, a write of the last tick or the weights' memory are
+  messages too. In a tick stepped into, what a relation already says and what the node still is can differ: that is
+  the next round.
+- A statement (`relate`, `observe`...) rebuilds the machine, which settles at once; to see an input go through the
+  network round by round, give it with `put`.
+
 ## The tick
 
 At each tick:
@@ -449,9 +500,10 @@ written on one line, separated by `;`.
 | `blank` | | forget everything |
 | `sound on` / `off` | | a voice per output |
 | `clock HZ` | `clk` | ticks by themselves (window) |
+| `play`, `pause`, `step`, `watch`, `unwatch`, `why` | | see [Seeing it work](#seeing-it-work) |
 | `programs`, `read`, `open`, `tab`, `edit`, `save`, `find`, `close`, `new`, `run` | | see [Programs](#programs) |
 | `help [WORD]` | `h` | the words of the machine by group; one word, with its form and an example |
-| `help on` / `off` | | the menu of words under the prompt, while typing (window) |
+| `help on` / `off` | | the menu of words while typing (window) |
 | `tour [N \| end]` | | a guided tour, a step at a time |
 | `lang fr` / `lang en` | | the language of the interface |
 | `quit` | `q` | the night: fusions, relations found, forgetting, then sleep in `vm/memory.json` |
@@ -462,9 +514,11 @@ like a known one, a network that does not settle, relations that contradict each
 
 **Help while typing (window).** Under the prompt, one line says what is being typed: the word, what it is in a few
 words, and its form (`rel = relate — a relation: products, powers, sums   relate NAME: left = right [+/- sigma]
-[when ...]`). Under it, a menu: the words of the machine from the first letter typed (with their short forms), then
-the names of nodes and relations from the second letter, when there are no more than twelve of them. Up and Down
-choose, Tab or Enter takes, Esc closes. The menu can be turned off (the box under it, or `help off`); the line stays.
+[when ...]`); it always takes two lines, so the prompt never moves. Above the prompt, a menu floats like a tooltip,
+over the words, under the word being typed: the words of the machine from the first letter typed (with their short
+forms), then the names of nodes and relations from the second letter, when there are no more than twelve of them. Up
+and Down choose, Tab, Enter or a click takes, Esc closes. The menu can be turned off (the box under the prompt, or
+`help off`); the line stays.
 
 **Two languages.** The interface speaks English or French: `lang fr`, `lang en`. The first time, it follows the
 language of the system. The words of GRML (`node`, `relate`, `observe`...) stay English in both, so a program written

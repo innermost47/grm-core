@@ -666,7 +666,7 @@ def _set(net, rest, base):
         spec = net.nodes[target]
         net.nodes[source] = {"guess": spec["guess"], "fixed": False, "signed": spec.get("signed", False)}
         _relate(net, f"set_{target}_{k}: {source} = {expr}")
-    net.sets.append({"target": target, "source": source, "when": conds})
+    net.sets.append({"target": target, "source": source, "when": conds, "text": " ".join(rest.split())})
     return tr("at each tick {target} <- {expr}", target=target, expr=expr) + (f" when {when.strip()}" if conds else "")
 
 

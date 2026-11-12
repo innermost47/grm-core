@@ -11,6 +11,7 @@ GROUPS = [
     ("the network", ["node", "relate", "observe", "forget", "keep", "var", "set", "learn", "input", "output", "fuse",
                      "network", "call", "end", "use"]),
     ("running", ["tick", "put", "run", "load", "clock"]),
+    ("seeing it work", ["play", "pause", "step", "watch", "unwatch", "why"]),
     ("looking", ["ask", "outputs", "show", "inspect", "master", "check"]),
     ("inside", ["mood", "capacity", "prune"]),
     ("programs", ["programs", "read", "open", "tab", "close", "new", "edit", "save", "find"]),
@@ -62,6 +63,13 @@ MORE = {
     "open": "Opens a program in the programs window, a tab per program. tab N to go to one, edit to write in it, "
             "Ctrl+F to search, F5 to run it.",
     "edit": "The tab can be written; Ctrl+S saves, F5 runs it (an error turns its line red), Esc comes back here.",
+    "step": "A tick is a few rounds: in each, the nodes that heard something new tell their relations, and the "
+            "relations that heard something new answer. step shows that conversation, round after round: who worked, "
+            "who moved, and the writes at the end of the tick.",
+    "watch": "A breakpoint. NODE in LO .. HIGH stops when the condition becomes true, NODE when its value changes, "
+             "RELATION when it no longer holds. The clock pauses, and tick n stops there.",
+    "why": "A node's value is what all its relations say of it, each weighted by how sure it is (the precisions add "
+           "up). why shows each message, its share, and what that relation heard from its other nodes.",
     "master": "pygrm's master invariant: the equation the network holds or implies that ties the widest span of "
               "scales.",
     "help": "help on / off: the menu of words while typing (the line of help under the prompt stays).",
@@ -95,6 +103,10 @@ TOUR = [
     ("Programs",
      "Programs are files of statements. List them, open one in a tab (tab N to change), run it (F5 in its tab):",
      "programs ; open fall"),
+    ("Step by step",
+     "A tick is a conversation in rounds. Set a breakpoint, run, and ask why a value is what it is (F8 play, F10 a "
+     "tick, F11 a round in the window):",
+     "watch n in 3 .. inf ; tick 10 ; step ; why height"),
     ("Inside",
      "What it feels (pleasure, flourishing), its master equation, what is wrong:",
      "mood ; master ; check"),

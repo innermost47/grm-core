@@ -1066,10 +1066,12 @@ only its body: the inputs measured, the clock's ticks, the outputs turned into w
 with the words (coloured, Tab completes), the network itself drawn (the mouse over a node or a relation shows what it
 holds; a relation far from holding turns red), the master equation, a panel of values, bars and curves, and a voice
 per output (its pitch where its value stands, its loudness how much it has just moved). Help is where the typing is:
-`help WORD`, a guided `tour`, a line of help and a menu of words under the prompt, a short form for every word (`rel`,
+`help WORD`, a guided `tour`, a line of help under the prompt and a menu of words floating above it, a short form for every word (`rel`,
 `obs`, `t`...) and `+/-` for `±`; programs carry a header that says what they do (`programs` lists them) and open in
 a window of their own, a tab each, edited, run and searched from the keyboard. The interface speaks English or French
-(`lang fr`; the words of GRML stay English, so a program runs anywhere: [docs/GRML.fr.md](docs/GRML.fr.md)). Details
+(`lang fr`; the words of GRML stay English, so a program runs anywhere: [docs/GRML.fr.md](docs/GRML.fr.md)). It can be
+watched at work: played and paused, a tick or a round at a time (who worked, who moved), stopped at breakpoints
+(`watch`), and asked `why` a node has its value (the messages it hears, and their share). Details
 and limits: [vm/README.md](vm/README.md).
 
 ![The GRM machine's window: the words, the network itself (the mouse over a relation it found), the master equation, the outputs and what it feels](docs/grm_vm_window.png)

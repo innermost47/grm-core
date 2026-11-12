@@ -35,6 +35,7 @@ import guide   # noqa: E402
 import i18n   # noqa: E402
 import programs   # noqa: E402
 from i18n import label, tr   # noqa: E402
+import debug   # noqa: E402
 import diagnose   # noqa: E402
 import editor   # noqa: E402
 import graph   # noqa: E402
@@ -84,6 +85,8 @@ class VM:
         self._reported = set()      # relations already said to be far from holding
         self.clock_hz = 0.0         # the clock the body runs it at (0: only on Enter)
         self._loading = False
+        self.watches = []           # breakpoints (debug.Watch): the clock stops when one is met
+        self.stopped = []           # what the last tick or step stopped on
         if not blank and memory and os.path.exists(memory):
             try:
                 self.machine = Machine.wake(memory)
@@ -142,48 +145,107 @@ class VM:
 
     def get(self, name):
         m = self.m()
-        m.run(5000)              # what it says once it has heard everything new
+        if not self.in_tick():
+            m.run(5000)          # what it says once it has heard everything new (in a tick stepped a round at a
+                                 # time: what it says now)
         self._read.add(name)
         return m.value_si(name)
 
     def outputs(self):
         return [n for n, s in self.net.nodes.items() if s.get("output")]
 
+    def in_tick(self):
+        """Whether a tick has been started a round at a time (step) and not finished."""
+        return self.machine is not None and getattr(self.machine, "_tick", None) is not None
+
+    def _begin(self, m, learn=False):
+        m.last_surprise = {}
+        m.begin_tick(learn)
+        m._tick["r0"] = m.rounds
+        m._tick["learn"] = learn
+
     def tick(self, n=1, learn=False, max_rounds=2000):
+        """n ticks (a tick stepped into is finished first). Stops early when a watch is met (self.stopped)."""
         writes = {}
+        self.stopped = []
         for _ in range(n):
             m = self.m()
-            m.last_surprise = {}
-            r0 = m.rounds
-            writes = m.tick(max_rounds, learn=learn)
-            settled = m.settled
-            mind.measure(self.net, m.rounds - r0, self.clock_hz)
-            for o in self.outputs():
-                self.remember(o, self.get(o))
-            z = list(m.last_surprise.values())
-            surprise = None
-            if z:   # how far the inputs were from what the network expected of them (rms, in sigmas)
-                surprise = math.sqrt(sum(v * v for v in z) / len(z))
-                self.remember("surprise", surprise)
-            # what it has seen, kept for what it finds by itself: the inputs of each new moment, and how far each
-            # relation was from holding then
-            row = {k: self.net.measured[k][0] for k, sp in self.net.nodes.items()
-                   if sp.get("input") and k in self.net.measured}
-            if row and (learn or row != getattr(self, "_last_row", None)):
-                self._last_row = row
-                self.net.rows.append(row)
-                del self.net.rows[:-ROWS]
-                for rel, r in m.last_surprise.items():
-                    h = self.net.tension.setdefault(rel, [])
-                    h.append(r)
-                    del h[:-ROWS]
-            # what is wrong is said (and felt: an error is displeasure)
-            problems = diagnose.machine(m, settled, self._reported)
-            if any(p.startswith("error") for p in problems):
-                mind.reward(self.net, -0.5)
-            self.events += problems
-            # what it feels and keeps, and what it does by itself to flourish
-            self.events += mind.after_tick(self, surprise, explore=not self._loading)
+            if not self.in_tick():
+                self._begin(m, learn)
+            m.run(max(1, max_rounds - (m.rounds - m._tick["r0"])))
+            writes = self._finish(m)
+            if self.watches and self.machine is not None:
+                self.machine.run(5000)       # what the writes change, settled, before the watches look
+            if self._stop():
+                break
+        return writes
+
+    def step(self, n=1):
+        """n rounds, one at a time: [{"tick", "round", "moved", "worked"} | {"tick", "done", "rounds"}]. A tick
+        begins when needed and ends (with its writes) when nothing new is said. Stops early when a watch is met."""
+        report = []
+        self.stopped = []
+        for _ in range(n):
+            m = self.m()
+            if not self.in_tick():
+                self._begin(m)
+            if not m.quiet:
+                before = set(m.dirty_nodes)
+                was = {i: m.x[i] for i in before}
+                fresh = set(m.dirty_factors)
+                m.round()
+                moved, worked = debug.round_report(m, before, m.busy, was, fresh)
+                report.append({"tick": m.ticks, "round": m.rounds - m._tick["r0"], "moved": moved,
+                               "worked": worked})
+            if m.quiet:
+                rounds = m.rounds - m._tick["r0"]
+                writes = self._finish(m, settle=False)
+                report.append({"tick": m.ticks, "done": writes, "rounds": rounds})
+            if self._stop():
+                break
+        return report
+
+    def _stop(self):
+        said = debug.check(self)
+        if said:
+            self.stopped = said
+            self.events += said
+        return bool(said)
+
+    def _finish(self, m, settle=True):
+        """The end of a tick: its writes, then what the machine keeps, says and feels of it. settle=False (stepping a
+        round at a time): the outputs are read as they are, and what the writes change is left to the rounds of the
+        next tick, where it can be seen."""
+        r0, learn = m._tick["r0"], m._tick.get("learn", False)
+        writes = m.end_tick()
+        settled = m.settled
+        mind.measure(self.net, m.rounds - r0, self.clock_hz)
+        for o in self.outputs():
+            self.remember(o, self.get(o) if settle else m.value_si(o))
+        z = list(m.last_surprise.values())
+        surprise = None
+        if z:   # how far the inputs were from what the network expected of them (rms, in sigmas)
+            surprise = math.sqrt(sum(v * v for v in z) / len(z))
+            self.remember("surprise", surprise)
+        # what it has seen, kept for what it finds by itself: the inputs of each new moment, and how far each
+        # relation was from holding then
+        row = {k: self.net.measured[k][0] for k, sp in self.net.nodes.items()
+               if sp.get("input") and k in self.net.measured}
+        if row and (learn or row != getattr(self, "_last_row", None)):
+            self._last_row = row
+            self.net.rows.append(row)
+            del self.net.rows[:-ROWS]
+            for rel, r in m.last_surprise.items():
+                h = self.net.tension.setdefault(rel, [])
+                h.append(r)
+                del h[:-ROWS]
+        # what is wrong is said (and felt: an error is displeasure)
+        problems = diagnose.machine(m, settled, self._reported)
+        if any(p.startswith(label("error")) for p in problems):
+            mind.reward(self.net, -0.5)
+        self.events += problems
+        # what it feels and keeps, and what it does by itself to flourish
+        self.events += mind.after_tick(self, surprise, explore=not self._loading)
         return writes
 
     def remember(self, name, v):
@@ -609,6 +671,8 @@ class VM:
         """night: the end of a session. The weights' memory loosens a little before it is written (room to learn
         again the next day)."""
         done = []
+        if self.in_tick():                   # a tick stepped into is finished before it sleeps
+            self.tick()
         if night:
             done = self.grow()               # at night, the machine puts together what it has seen
             done += mind.prune(self, night=True)   # and forgets what it no longer uses
@@ -638,6 +702,10 @@ class VM:
         return out
 
 
+WATCH_KINDS = {"when": "stops when it becomes true", "change": "stops when it changes",
+               "holds": "stops when it no longer holds"}
+
+
 class Shell(cmd.Cmd):
     prompt = "grm> "
     WORDS = ("node", "relate", "observe", "forget", "keep", "network", "call", "use", "end", "var", "set",
@@ -651,6 +719,7 @@ class Shell(cmd.Cmd):
         self.base = HERE
         self.sound = False
         self.clock = 0.0
+        self.last_clock = 0.0       # the last clock that ran (play starts it again)
         self.programs = None        # the programs window (body.py), when there is one
         self.on_help = None         # what the window does when the typing help is turned on or off
         self.tour_at = 0
@@ -761,12 +830,16 @@ class Shell(cmd.Cmd):
             self.usage("tick")
             return
         m = self.vm.m()
-        r0 = m.rounds
+        r0, t0 = m.rounds, m.ticks
         writes = self.vm.tick(n)
+        m = self.vm.m()
+        done = m.ticks - t0
         if n == 1:
             ws = ", ".join(f"{k} = {fmt(v)}" for k, v in writes.items() if "__" not in k)
             self.write("  " + tr("tick {tick}: {rounds} rounds", tick=m.ticks, rounds=m.rounds - r0)
                        + (f"; {ws}" if ws else ""))
+        elif done < n:
+            self.write("  " + tr("stopped after {done} of {n} ticks (now {tick})", done=done, n=n, tick=m.ticks))
         else:
             self.write("  " + tr("{n} ticks (now {tick}): {rounds} rounds", n=n, tick=m.ticks, rounds=m.rounds - r0))
         if self.vm.outputs():
@@ -883,12 +956,92 @@ class Shell(cmd.Cmd):
     def do_clock(self, arg):
         """clock HZ: ticks by themselves, HZ a second (window only; 0: only on Enter)"""
         try:
-            self.clock = max(0.0, float(arg))
+            self._set_clock(max(0.0, float(arg)))
         except ValueError:
             self.usage("clock")
             return
-        self.vm.clock_hz = self.clock
         self.write("  " + tr("clock {hz} Hz", hz=f"{self.clock:g}"))
+
+    def _set_clock(self, hz):
+        self.clock = hz
+        self.vm.clock_hz = hz
+        if hz > 0:
+            self.last_clock = hz
+
+    # --------------------------------------------------------------- seeing it work (debugging)
+    def do_play(self, arg):
+        """play [HZ]: the clock runs (window), HZ ticks a second (10 by default, or the last one); pause stops it"""
+        try:
+            hz = float(arg) if arg.strip() else (self.last_clock or 10.0)
+        except ValueError:
+            self.usage("play")
+            return
+        self._set_clock(max(hz, 0.0))
+        self.write("  " + (tr("playing at {hz} Hz", hz=f"{self.clock:g}") if self.clock > 0 else tr("paused")))
+
+    def do_pause(self, arg):
+        """pause: the clock stops (Enter, tick and step still go on by hand)"""
+        self._set_clock(0.0)
+        self.write("  " + tr("paused"))
+
+    def do_step(self, arg):
+        """step [n]: n rounds of the network, one at a time: who worked, who moved, and the end of each tick"""
+        try:
+            n = int(arg) if arg.strip() else 1
+        except ValueError:
+            self.usage("step")
+            return
+        for line in debug.step_lines(self.vm.step(max(1, n))):
+            self.write("  " + line)
+
+    def do_watch(self, arg):
+        """watch [NODE in LO .. HIGH | NODE | RELATION]: stop the clock (and tick n) when it is met; alone: the list"""
+        text = arg.strip()
+        if not text:
+            if not self.vm.watches:
+                self.write("  " + tr("no watch (watch NODE in LO .. HIGH, watch NODE, watch RELATION)"))
+            for k, w in enumerate(self.vm.watches, 1):
+                self.write(f"  {k}: {w.text}  ({tr(WATCH_KINDS[w.kind])})")
+            return
+        try:
+            w = debug.arm(self.vm, debug.parse(self.vm, text))
+        except TalkError as e:
+            self.write(f"  ? {e}")
+            return
+        self.vm.watches.append(w)
+        self.write("  " + tr("watch {k}: {text} ({what})", k=len(self.vm.watches), text=w.text,
+                             what=tr(WATCH_KINDS[w.kind])))
+
+    def do_unwatch(self, arg):
+        """unwatch [N | all]: take a watch away (all: every one)"""
+        a = arg.strip().lower()
+        if a in ("", "all"):
+            n = len(self.vm.watches)
+            self.vm.watches = []
+            self.write("  " + tr("{n} watch(es) taken away", n=n))
+            return
+        try:
+            w = self.vm.watches.pop(int(a) - 1)
+        except (ValueError, IndexError):
+            self.write("  ? " + tr("no watch {k} (watch: the list)", k=a))
+            return
+        self.write("  " + tr("watch taken away: {text}", text=w.text))
+
+    def do_why(self, arg):
+        """why NODE: why it has its value: what each of its relations says of it, and how much it counts"""
+        name = arg.strip()
+        if not name:
+            self.usage("why")
+            return
+        try:
+            lines = debug.why(self.vm, name)
+        except TalkError as e:
+            like = diagnose.close(name, list(self.vm.net.nodes))
+            self.write("  ? " + (tr("no node {name}; did you mean {like}?", name=name, like=tr(" or ").join(like))
+                                 if like else str(e)))
+            return
+        for line in lines:
+            self.write("  " + line)
 
     # --------------------------------------------------------------- inside
     def do_master(self, arg):

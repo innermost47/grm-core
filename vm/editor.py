@@ -21,7 +21,7 @@ STATEMENTS = ("node", "relate", "observe", "forget", "keep", "network", "call", 
 SHORT_COMMANDS = {
     "t": "tick", "ld": "load", "outs": "outputs", "ins": "inspect", "ms": "master", "chk": "check",
     "cap": "capacity", "clk": "clock", "h": "help", "q": "quit", "progs": "programs", "rd": "read", "o": "open",
-    "ed": "edit", "sv": "save",
+    "ed": "edit", "sv": "save", "st": "step", "wt": "watch", "uw": "unwatch",
 }
 SHORT = dict(SHORT_STATEMENTS, **SHORT_COMMANDS)
 LONG = {v: k for k, v in SHORT.items()}
@@ -52,11 +52,18 @@ DOCS = {
     "output": ("output NAME", "an output: shown, drawn, heard", "output height"),
     "fuse": ("fuse A B [inverse]", "B was A under another name", "fuse period T inverse"),
     # commands: running
-    "tick": ("tick [n]", "n ticks (Enter alone: one)", "tick 10"),
+    "tick": ("tick [n]", "n ticks (Enter alone, F10: one)", "tick 10"),
     "put": ("put NAME = value [+/- sigma]", "give an input its value", "put x = 3"),
     "run": ("run [FILE.grm]", "a file (no file: the open tab)", "run programs/fall.grm"),
     "load": ("load FILE.csv | FILE.json", "data row by row: it learns", "load programs/falling.csv"),
     "clock": ("clock HZ", "ticks by themselves (0: stop)", "clock 10"),
+    # seeing it work
+    "play": ("play [HZ]", "the clock runs (F8: play / pause)", "play 5"),
+    "pause": ("pause", "the clock stops", "pause"),
+    "step": ("step [n]", "n rounds, one at a time (F11)", "step 3"),
+    "watch": ("watch NODE in LO .. HIGH | NODE | RELATION", "stop when it is met", "watch n in 5 .. inf"),
+    "unwatch": ("unwatch [N | all]", "take a watch away", "unwatch 1"),
+    "why": ("why NODE", "what makes its value", "why height"),
     # looking
     "ask": ("ask NODE", "a node's value", "ask height"),
     "outputs": ("outputs", "the outputs and the surprise", "outputs"),
