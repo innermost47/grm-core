@@ -17,6 +17,7 @@ Nothing here decides anything: the network gives its outputs, the body shows and
 """
 import io
 import math
+import os
 import struct
 import time
 import wave
@@ -239,7 +240,8 @@ class NetworkView:
         try:
             lines = (self.graph.node_card if kind == "n" else self.graph.relation_card)(self.vm, name)
         except Exception as ex:  # noqa: BLE001 - the card says why it could not be made
-            lines = [name, f"(cannot read it: {type(ex).__name__}: {ex})"]
+            from i18n import tr
+            lines = [name, "(" + tr("cannot read it: {error}", error=f"{type(ex).__name__}: {ex}") + ")"]
         x, y = self.mouse
         t = self.c.create_text(x + 14, y + 14, text="\n".join(lines), anchor="nw", fill="#e6e8ec",
                                font=("Consolas", 9), tags=("tip",))
@@ -327,21 +329,37 @@ class NetworkView:
                               font=("Consolas", 9))
         # the legend
         h = c.winfo_height()
-        legend = [("input", ROLE_COLOURS["input"]), ("output", ROLE_COLOURS["output"]),
-                  ("var", ROLE_COLOURS["var"]), ("weight", ROLE_COLOURS["learn"]), ("base", "#6b7280")]
-        x = 10
+        from i18n import tr
+        legend = [(tr("input"), ROLE_COLOURS["input"]), (tr("output"), ROLE_COLOURS["output"]),
+                  (tr("var"), ROLE_COLOURS["var"]), (tr("weight"), ROLE_COLOURS["learn"]), (tr("base"), "#6b7280")]
+        x, row = 10, 0
+        right = c.winfo_width() - 10
+
+        def room(x, label):
+            """The next place of the legend: on a new row above when this word would leave the canvas."""
+            nonlocal row
+            if x > 10 and x + 26 + 7 * len(label) > right:
+                row += 1
+                return 10
+            return x
         for label, colour in legend:
+            x = room(x, label)
+            h = c.winfo_height() - 16 * row
             c.create_oval(x, h - 16, x + 8, h - 8, fill=colour, outline="")
-            c.create_text(x + 12, h - 12, text=label, anchor="w", fill=DIM, font=("Consolas", 8))
-            x += 16 + 7 * len(label)
+            t = c.create_text(x + 12, h - 12, text=label, anchor="w", fill=DIM, font=("Consolas", 8))
+            x = c.bbox(t)[2] + 12                    # the width of the word itself, in any language
+        x = room(x, tr("set") + "     ")
+        h = c.winfo_height() - 16 * row
         c.create_line(x, h - 12, x + 14, h - 12, fill="#7e5aa8", dash=(4, 3), arrow="last", arrowshape=(5, 6, 2))
-        c.create_text(x + 18, h - 12, text="set", anchor="w", fill=DIM, font=("Consolas", 8))
-        x += 46
-        for label, colour in (("holds", HOLDS), ("strained", STRAINED), ("does not hold", BROKEN)):
+        t = c.create_text(x + 18, h - 12, text=tr("set"), anchor="w", fill=DIM, font=("Consolas", 8))
+        x = c.bbox(t)[2] + 12
+        for label, colour in ((tr("holds"), HOLDS), (tr("strained"), STRAINED), (tr("does not hold"), BROKEN)):
+            x = room(x, label)
+            h = c.winfo_height() - 16 * row
             c.create_rectangle(x, h - 16, x + 8, h - 8, fill=colour, outline="")
-            c.create_text(x + 12, h - 12, text=label, anchor="w", fill=DIM, font=("Consolas", 8))
-            x += 16 + 7 * len(label)
-        c.create_text(c.winfo_width() - 8, 10, text="drag: move · wheel: zoom · double-click: back", anchor="e",
+            t = c.create_text(x + 12, h - 12, text=label, anchor="w", fill=DIM, font=("Consolas", 8))
+            x = c.bbox(t)[2] + 12                    # the width of the word itself, in any language
+        c.create_text(c.winfo_width() - 8, 10, text=tr("drag: move · wheel: zoom · double-click: back"), anchor="e",
                       fill="#454b56", font=("Consolas", 8))
         if self.hover is not None:
             if self.hover in self.places:
@@ -362,28 +380,39 @@ class NetworkView:
 
 class Editor:
     """The line the human types: coloured as it is typed, Tab completes, Up and Down go back through what was
-    typed."""
+    typed. Under it, a line of help (what is being typed) and, when the typing help is on, a menu of words: Up and
+    Down choose, Tab or Enter take, Esc closes."""
 
-    def __init__(self, text, words, complete, log):
+    def __init__(self, text, words, complete, log, hint=None, menu=None, suggest=None, helping=lambda: True):
         self.t = text
         self.words = words
         self.complete_at = complete
         self.log = log
+        self.hint_label = hint
+        self.menu = menu
+        self.suggest = suggest
+        self.helping = helping
+        self.items = []             # what the menu shows: [(word, a few words)]
         self.past, self.at = [], 0
         self.last_tab = None
-        text.bind("<KeyRelease>", lambda e: self.colour())
+        text.bind("<KeyRelease>", self.on_key)
         text.bind("<Tab>", self.on_tab)
-        text.bind("<Up>", lambda e: self.back(-1))
-        text.bind("<Down>", lambda e: self.back(1))
-        text.bind("<Escape>", lambda e: self.set(""))
+        text.bind("<Up>", lambda e: self.move(-1) if self.menu_open() else self.back(-1))
+        text.bind("<Down>", lambda e: self.move(1) if self.menu_open() else self.back(1))
+        text.bind("<Escape>", lambda e: self.close_menu() if self.menu_open() else self.set(""))
 
     def get(self):
         return self.t.get("1.0", "end-1c").replace("\n", " ")
+
+    def cursor(self):
+        return len(self.t.get("1.0", "insert"))
 
     def set(self, line):
         self.t.delete("1.0", "end")
         self.t.insert("1.0", line)
         self.colour()
+        self.close_menu()
+        self.show_hint()
         return "break"
 
     def colour(self):
@@ -395,10 +424,90 @@ class Editor:
         for a, b, kind in editor.tokens(line, nodes, relations, commands):
             self.t.tag_add(kind, f"1.0+{a}c", f"1.0+{b}c")
 
+    def on_key(self, e):
+        if e.keysym in ("Up", "Down", "Return", "Escape", "Tab"):
+            return
+        self.colour()
+        self.show_hint()
+        self.show_menu()
+
+    # ---- the line of help and the menu
+    def show_hint(self):
+        if self.hint_label is None:
+            return
+        import editor
+        nodes, relations, commands = self.words()
+        try:
+            text = editor.hint(self.get(), self.cursor(), nodes, relations, commands)
+        except Exception:  # noqa: BLE001 - a hint that cannot be made is no hint
+            text = ""
+        self.hint_label.configure(text=text)
+
+    def show_menu(self):
+        if self.menu is None or self.suggest is None:
+            return
+        if not self.helping():
+            self.close_menu()
+            return
+        try:
+            self.items = self.suggest(self.get(), self.cursor())
+        except Exception:  # noqa: BLE001
+            self.items = []
+        if not self.items:
+            self.close_menu()
+            return
+        self.menu.delete(0, "end")
+        width = max(len(w) for w, _ in self.items)
+        for w, what in self.items:
+            self.menu.insert("end", f" {w:<{width}}  {what}")
+        self.menu.configure(height=min(6, len(self.items)))
+        if not self.menu.winfo_ismapped():
+            self.menu.pack(fill="x", padx=8, pady=(0, 4), after=self.hint_label)
+        self.menu.selection_clear(0, "end")
+
+    def menu_open(self):
+        return self.menu is not None and self.menu.winfo_ismapped() and self.items
+
+    def close_menu(self):
+        if self.menu is not None and self.menu.winfo_ismapped():
+            self.menu.pack_forget()
+        self.items = []
+        return "break"
+
+    def move(self, k):
+        sel = self.menu.curselection()
+        i = (sel[0] + k) if sel else (0 if k > 0 else len(self.items) - 1)
+        i = max(0, min(len(self.items) - 1, i))
+        self.menu.selection_clear(0, "end")
+        self.menu.selection_set(i)
+        self.menu.see(i)
+        return "break"
+
+    def chosen(self):
+        """The word chosen in the menu (Up / Down), if any."""
+        if not self.menu_open():
+            return None
+        sel = self.menu.curselection()
+        return self.items[sel[0]][0] if sel else None
+
+    def take(self, word):
+        """The word at the cursor replaced by `word`."""
+        line, cursor = self.get(), self.cursor()
+        start, _ = self.complete_at(line, cursor)
+        new = word + ("" if word.endswith("/") else " ")
+        self.t.delete(f"1.0+{start}c", f"1.0+{cursor}c")
+        self.t.insert(f"1.0+{start}c", new)
+        self.colour()
+        self.close_menu()
+        self.show_hint()
+        return "break"
+
     def on_tab(self, _e=None):
         import editor
+        if self.menu_open():
+            return self.take(self.chosen() or self.items[0][0])
         line = self.get()
-        cursor = len(self.t.get("1.0", "insert"))
+        cursor = self.cursor()
         start, found = self.complete_at(line, cursor)
         if not found:
             return "break"
@@ -415,6 +524,7 @@ class Editor:
         self.t.delete(f"1.0+{start}c", f"1.0+{cursor}c")
         self.t.insert(f"1.0+{start}c", new)
         self.colour()
+        self.show_hint()
         return "break"
 
     def back(self, k):
@@ -427,6 +537,386 @@ class Editor:
         if line.strip() and (not self.past or self.past[-1] != line):
             self.past.append(line)
         self.at = len(self.past)
+
+
+class Programs:
+    """The programs window: a tab per program, coloured, lines numbered; everything with the keyboard.
+        open / tab / close / edit / save / find / run from the prompt;
+        in a tab: Ctrl+S saves, F5 runs, Ctrl+F searches, Ctrl+Tab goes to the next tab, Ctrl+W closes, Esc goes back
+        to the prompt. An error while running turns its line red."""
+
+    def __init__(self, root, shell, words, after_run, back_to_prompt):
+        self.root = root
+        self.shell = shell
+        self.words = words
+        self.after_run = after_run
+        self.back_to_prompt = back_to_prompt
+        self.top = None
+        self.book = None
+        self.pages = []             # [{"path", "frame", "text", "gutter", "search", "edit", "dirty"}]
+
+    # ---- the window
+    def ensure(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from i18n import tr
+        if self.top is not None:
+            if not self.top.winfo_viewable():
+                self.top.deiconify()
+            return
+        self.top = tk.Toplevel(self.root)
+        self.top.title(tr("GRM programs"))
+        self.top.configure(bg=BG)
+        self.root.update_idletasks()
+        x = max(0, self.root.winfo_rootx() + self.root.winfo_width() - 840)
+        self.top.geometry(f"820x760+{x}+{self.root.winfo_rooty() + 30}")
+        self.top.protocol("WM_DELETE_WINDOW", self.top.withdraw)
+        style = ttk.Style(self.top)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure("GRM.TNotebook", background=BG, borderwidth=0)
+        style.configure("GRM.TNotebook.Tab", background=PANEL, foreground=DIM, padding=(10, 4))
+        style.map("GRM.TNotebook.Tab", background=[("selected", "#262a33")], foreground=[("selected", "#e6e8ec")])
+        self.book = ttk.Notebook(self.top, style="GRM.TNotebook")
+        self.book.pack(fill="both", expand=True)
+        self.status = tk.Label(self.top, text="", anchor="w", bg=BG, fg=DIM, font=("Consolas", 9))
+        self.status.pack(fill="x", padx=6, pady=(0, 4))
+        self.say_status()
+
+    def say_status(self, text=None):
+        from i18n import tr
+        if self.top is None:
+            return
+        self.status.configure(text=text or tr("tab N · edit · Ctrl+S save · F5 run · Ctrl+F find · Ctrl+Tab next · "
+                                              "Esc back to the prompt"))
+
+    def page(self, i=None):
+        if not self.pages:
+            return None
+        if i is None:
+            try:
+                i = self.book.index(self.book.select())
+            except Exception:  # noqa: BLE001
+                return None
+        return self.pages[i] if 0 <= i < len(self.pages) else None
+
+    def current(self):
+        return self.page()
+
+    def tabs(self):
+        return [(i + 1, os.path.basename(p["path"])) for i, p in enumerate(self.pages)]
+
+    def title(self, p):
+        return os.path.basename(p["path"]) + (" *" if p["dirty"] else "") + (" ✎" if p["edit"] else "")
+
+    # ---- open, close, go to
+    def open(self, path, edit=False):
+        import tkinter as tk
+        self.ensure()
+        path = os.path.abspath(path)
+        for i, p in enumerate(self.pages):
+            if p["path"] == path:
+                self.book.select(i)
+                if edit:
+                    self.edit()
+                return i + 1
+        frame = tk.Frame(self.book, bg=PANEL)
+        body = tk.Frame(frame, bg=PANEL)
+        body.pack(fill="both", expand=True)
+        gutter = tk.Text(body, width=5, bg="#121419", fg="#4b525e", font=("Consolas", 10), borderwidth=0,
+                         state="disabled", takefocus=0, padx=4)
+        gutter.pack(side="left", fill="y")
+        bar = tk.Scrollbar(body)
+        bar.pack(side="right", fill="y")
+        text = tk.Text(body, bg=PANEL, fg=INK, insertbackground="#e6e8ec", font=("Consolas", 10), borderwidth=0,
+                       wrap="none", undo=True, padx=6)
+        text.pack(side="left", fill="both", expand=True)
+
+        def scrolled(a, b):
+            bar.set(a, b)
+            gutter.yview_moveto(a)
+        text.configure(yscrollcommand=scrolled)
+        bar.configure(command=lambda *a: (text.yview(*a), gutter.yview(*a)))
+        search = tk.Entry(frame, bg="#1b1e24", fg="#e6e8ec", insertbackground="#e6e8ec", font=("Consolas", 10),
+                          borderwidth=0)
+        import editor
+        for kind, colour in editor.COLOURS.items():
+            text.tag_configure(kind, foreground=colour)
+        text.tag_configure("header", foreground="#7fdbca")
+        text.tag_configure("found", background="#5c4a00")
+        text.tag_configure("here", background="#9a7b00")
+        text.tag_configure("error", background="#4a1e24")
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        text.insert("1.0", content)
+        text.edit_reset()
+        p = {"path": path, "frame": frame, "text": text, "gutter": gutter, "search": search, "edit": False,
+             "dirty": False}
+        self.pages.append(p)
+        self.book.add(frame, text=self.title(p))
+        self.book.select(len(self.pages) - 1)
+        self.colour_all(p)
+        self.number(p)
+        text.configure(state="disabled")
+        text.bind("<Control-s>", lambda e: self.key_save())
+        text.bind("<F5>", lambda e: self.key_run())
+        text.bind("<Control-f>", lambda e: self.open_search())
+        text.bind("<Control-w>", lambda e: (self.shell.do_close(""), "break")[1])
+        text.bind("<Control-Tab>", lambda e: self.next_tab())
+        text.bind("<Escape>", lambda e: self.escape())
+        text.bind("<KeyRelease>", lambda e: self.typed(p, e))
+        search.bind("<KeyRelease>", lambda e: self.search_typed(e))
+        search.bind("<Return>", lambda e: self.next_found(1))
+        search.bind("<Shift-Return>", lambda e: self.next_found(-1))
+        search.bind("<Escape>", lambda e: self.close_search())
+        self.top.bind("<Control-Tab>", lambda e: self.next_tab())
+        if edit:
+            self.edit()
+        return len(self.pages)
+
+    def select(self, what):
+        if not self.pages:
+            return False
+        i = None
+        if what.isdigit():
+            i = int(what) - 1
+        else:
+            for k, p in enumerate(self.pages):
+                name = os.path.basename(p["path"])
+                if what in (name, os.path.splitext(name)[0]):
+                    i = k
+                    break
+        if i is None or not 0 <= i < len(self.pages):
+            return False
+        self.ensure()
+        self.book.select(i)
+        return True
+
+    def next_tab(self):
+        if self.pages:
+            i = (self.book.index(self.book.select()) + 1) % len(self.pages)
+            self.book.select(i)
+            self.pages[i]["text"].focus_set()
+        return "break"
+
+    def close(self, what=None):
+        from i18n import tr
+        if not self.pages:
+            return None
+        if what and not self.select(what):
+            return tr("no tab {tab}", tab=what)
+        p = self.page()
+        name = os.path.basename(p["path"])
+        unsaved = p["dirty"]
+        i = self.pages.index(p)
+        self.book.forget(i)
+        self.pages.pop(i)
+        return tr("closed {name}", name=name) + (" (" + tr("not saved") + ")" if unsaved else "")
+
+    # ---- writing
+    def edit(self):
+        p = self.page()
+        if p is None:
+            return False
+        p["edit"] = True
+        p["text"].configure(state="normal")
+        p["text"].focus_set()
+        self.book.tab(self.pages.index(p), text=self.title(p))
+        return True
+
+    def escape(self):
+        if self.page() and self.page()["search"].winfo_ismapped():
+            return self.close_search()
+        self.back_to_prompt()
+        return "break"
+
+    def typed(self, p, e):
+        if not p["edit"] or e.keysym in ("Control_L", "Control_R", "Escape", "F5"):
+            return
+        if not p["dirty"] and p["text"].edit_modified():
+            p["dirty"] = True
+            self.book.tab(self.pages.index(p), text=self.title(p))
+        line = int(p["text"].index("insert").split(".")[0])
+        self.colour_line(p, line)
+        if e.keysym in ("Return", "BackSpace", "Delete") or e.state & 0x4:
+            self.colour_all(p)
+            self.number(p)
+        p["text"].tag_remove("error", "1.0", "end")
+
+    def number(self, p):
+        n = int(p["text"].index("end-1c").split(".")[0])
+        g = p["gutter"]
+        g.configure(state="normal")
+        g.delete("1.0", "end")
+        g.insert("1.0", "\n".join(f"{i:>4}" for i in range(1, n + 1)))
+        g.configure(state="disabled")
+        g.yview_moveto(p["text"].yview()[0])
+
+    def colour_line(self, p, ln):
+        import editor
+        t = p["text"]
+        for kind in list(editor.COLOURS) + ["header"]:
+            t.tag_remove(kind, f"{ln}.0", f"{ln}.end")
+        line = t.get(f"{ln}.0", f"{ln}.end")
+        if line.lstrip().startswith("#!"):
+            t.tag_add("header", f"{ln}.0", f"{ln}.end")
+            return
+        nodes, relations, commands = self.words()
+        for a, b, kind in editor.tokens(line, nodes, relations, commands):
+            t.tag_add(kind, f"{ln}.{a}", f"{ln}.{b}")
+
+    def colour_all(self, p):
+        n = int(p["text"].index("end-1c").split(".")[0])
+        for ln in range(1, n + 1):
+            self.colour_line(p, ln)
+
+    def save(self, path=None):
+        from i18n import tr
+        p = self.page()
+        if p is None:
+            return None
+        if path:
+            if not path.endswith(".grm"):
+                path += ".grm"
+            if not os.path.isabs(path) and os.path.dirname(path) == "":
+                path = os.path.join(os.path.dirname(p["path"]), path)
+            p["path"] = os.path.abspath(path)
+        with open(p["path"], "w", encoding="utf-8") as f:
+            f.write(p["text"].get("1.0", "end-1c") + "\n")
+        p["dirty"] = False
+        p["text"].edit_modified(False)
+        self.book.tab(self.pages.index(p), text=self.title(p))
+        return tr("saved {path}", path=p["path"])
+
+    def key_save(self):
+        said = self.save()
+        if said:
+            self.shell.write("  " + said)
+            self.say_status(said)
+        return "break"
+
+    # ---- running
+    def run_current(self):
+        """The tab's statements, line by line (as `use` would say them). An error stops it and turns its line red."""
+        from i18n import tr
+        from language import TalkError
+        p = self.page()
+        if p is None:
+            return
+        t = p["text"]
+        t.tag_remove("error", "1.0", "end")
+        lines = t.get("1.0", "end-1c").splitlines()
+        base = os.path.dirname(p["path"])
+        name = os.path.basename(p["path"])
+        self.shell.write(f"grm> run {name}")
+        said = 0
+        for i, line in enumerate(lines, 1):
+            try:
+                out = self.shell.vm.say(line, base)
+            except TalkError as e:
+                self.shell.write("  ? " + tr("in {file}, line {n}: {line}", file=name, n=i, line=line.strip()))
+                self.shell.write(f"    {e}")
+                self.mark_line(p, i)
+                break
+            if out:
+                said += 1
+        else:
+            self.shell.write("  " + tr("ran {name}: {n} statements", name=name, n=said))
+        self.shell.say_events()
+        self.after_run()
+
+    def key_run(self):
+        self.run_current()
+        return "break"
+
+    def mark_line(self, p, n):
+        t = p["text"]
+        t.tag_add("error", f"{n}.0", f"{n}.end+1c")
+        t.see(f"{n}.0")
+        self.book.select(self.pages.index(p))
+
+    def mark_error(self, file, n):
+        """An error in a file (said by `use`): its line red in its tab, if it is open."""
+        for p in self.pages:
+            if os.path.basename(p["path"]) == os.path.basename(file):
+                self.mark_line(p, n)
+                return True
+        return False
+
+    # ---- searching
+    def open_search(self):
+        p = self.page()
+        if p is None:
+            return "break"
+        p["search"].pack(fill="x", padx=6, pady=4)
+        p["search"].focus_set()
+        p["search"].select_range(0, "end")
+        return "break"
+
+    def close_search(self):
+        p = self.page()
+        if p is not None:
+            p["search"].pack_forget()
+            p["text"].tag_remove("found", "1.0", "end")
+            p["text"].tag_remove("here", "1.0", "end")
+            p["text"].focus_set()
+        return "break"
+
+    def search_typed(self, e):
+        if e.keysym in ("Return", "Escape"):
+            return
+        self.find(self.page()["search"].get(), from_bar=True)
+
+    def find(self, term, from_bar=False):
+        """Every place of `term` in the current tab highlighted; the first one shown. Returns how many."""
+        p = self.page()
+        if p is None:
+            return None
+        if not from_bar:
+            p["search"].delete(0, "end")
+            p["search"].insert(0, term)
+            p["search"].pack(fill="x", padx=6, pady=4)
+        t = p["text"]
+        t.tag_remove("found", "1.0", "end")
+        t.tag_remove("here", "1.0", "end")
+        if not term:
+            return 0
+        n, at = 0, "1.0"
+        while True:
+            at = t.search(term, at, stopindex="end", nocase=True)
+            if not at:
+                break
+            end = f"{at}+{len(term)}c"
+            t.tag_add("found", at, end)
+            n += 1
+            at = end
+        p["found_at"] = "1.0"
+        if n:
+            self.next_found(1)
+        return n
+
+    def next_found(self, k):
+        p = self.page()
+        if p is None:
+            return "break"
+        t = p["text"]
+        ranges = t.tag_ranges("found")
+        if not ranges:
+            return "break"
+        starts = [str(ranges[i]) for i in range(0, len(ranges), 2)]
+        here = t.tag_ranges("here")
+        i = 0
+        if here:
+            cur = str(here[0])
+            i = (starts.index(cur) + k) % len(starts) if cur in starts else 0
+        t.tag_remove("here", "1.0", "end")
+        t.tag_add("here", starts[i], ranges[2 * i + 1])
+        t.see(starts[i])
+        if int(starts[i].split(".")[1]) < 60:          # near the start of its line: the line from its start
+            t.xview_moveto(0)
+        return "break"
 
 
 def window(vm, Shell, script=None):
@@ -448,7 +938,22 @@ def window(vm, Shell, script=None):
     text.pack(fill="both", expand=True, padx=8, pady=(8, 4))
     line = tk.Text(left, height=1, bg="#1b1e24", fg="#e6e8ec", insertbackground="#e6e8ec", font=("Consolas", 11),
                    borderwidth=0, wrap="none", undo=True)
-    line.pack(fill="x", padx=8, pady=(0, 8))
+    line.pack(fill="x", padx=8, pady=(0, 2))
+    # under the prompt: a line of help (what is being typed), the menu of words (when the typing help is on), and the
+    # box that turns it on or off
+    hint = tk.Label(left, text="", anchor="w", bg=BG, fg="#8b919c", font=("Consolas", 9))
+    hint.pack(fill="x", padx=10, pady=(0, 2))
+    hint.configure(justify="left")
+    hint.bind("<Configure>", lambda e: hint.configure(wraplength=max(200, e.width - 4)))
+    menu = tk.Listbox(left, height=6, bg="#1b1e24", fg="#c8ccd4", selectbackground="#3e4451",
+                      selectforeground="#ffffff", font=("Consolas", 9), borderwidth=0, highlightthickness=0,
+                      activestyle="none")
+    options = tk.Frame(left, bg=BG)
+    options.pack(fill="x", padx=8, pady=(0, 6))
+    helping = tk.BooleanVar(value=True)
+    help_box = tk.Checkbutton(options, variable=helping, bg=BG, fg=DIM, selectcolor=PANEL, activebackground=BG,
+                              activeforeground=INK, font=("Consolas", 9), borderwidth=0, highlightthickness=0)
+    help_box.pack(side="left")
     for widget in (text, line):
         for kind, colour in editor.COLOURS.items():
             widget.tag_configure(kind, foreground=colour)
@@ -474,8 +979,8 @@ def window(vm, Shell, script=None):
                    troughcolor=PANEL, highlightthickness=0, borderwidth=0, showvalue=True, font=("Consolas", 8),
                    sliderlength=14, width=8)
     ago.pack(side="left", padx=6)
-    tk.Label(row, text="(0: now; the last 240 ticks are kept)", bg=BG, fg="#454b56",
-             font=("Consolas", 8)).pack(side="left")
+    ago_note = tk.Label(row, text="", bg=BG, fg="#454b56", font=("Consolas", 8))
+    ago_note.pack(side="left")
     canvas = tk.Canvas(middle, bg=BG, highlightthickness=0)
     canvas.pack(fill="both", expand=True, padx=8, pady=8)
     panes.add(middle, minsize=360, width=560)
@@ -490,8 +995,35 @@ def window(vm, Shell, script=None):
 
     log = _Log(text, words)
     shell = Shell(vm, out=log)
+    from i18n import tr
     view = NetworkView(canvas, vm)
-    ed = Editor(line, words, lambda ln, cur: shell._complete(ln, cur), log)
+
+    def suggest(ln, cur):
+        nodes, relations, commands = words()
+        return editor.suggest(ln, cur, nodes=nodes, relations=relations, commands=commands,
+                              networks=vm.net.networks, base=shell.base)
+    helping.set(bool(shell.settings.get("help", True)))
+    ed = Editor(line, words, lambda ln, cur: shell._complete(ln, cur), log, hint=hint, menu=menu, suggest=suggest,
+                helping=helping.get)
+
+    def help_toggled(on=None):
+        if on is not None:
+            helping.set(on)
+        shell.settings["help"] = bool(helping.get())
+        shell.save_settings()
+        if not helping.get():
+            ed.close_menu()
+    help_box.configure(command=help_toggled)
+    shell.on_help = help_toggled
+    shell.programs = Programs(root, shell, words, after_run=lambda: draw(steps=20),
+                              back_to_prompt=lambda: (root.focus_force(), line.focus_set()))
+
+    def relabel():
+        """The window's words, in the language of the machine."""
+        help_box.configure(text=" " + tr("typing help (a menu of words under the prompt)"))
+        root.title(tr("GRM machine"))
+        ed.show_hint()
+    relabel()
     log.write(shell.intro + "\n")
     state = {"master_at": 0.0, "master_key": None}
 
@@ -504,14 +1036,17 @@ def window(vm, Shell, script=None):
         try:
             res = mind.master(vm, n)
         except Exception as e:  # noqa: BLE001
-            res = {"text": f"cannot compute it: {type(e).__name__}: {e}"}
-        when = "now" if n == 0 else f"t - {n}"
-        tick = f", tick {res['tick']}" if res.get("tick") is not None else ""
+            res = {"text": tr("cannot compute it: {error}", error=f"{type(e).__name__}: {e}")}
+        when = tr("now") if n == 0 else f"t - {n}"
+        tick = ", " + tr("tick {tick}", tick=res["tick"]) if res.get("tick") is not None else ""
         extra = ""
         if "span" in res:
-            extra = f"\n{res['span']:.3g} decades of scale, residual {res['residual']:.2g}{res['unit']}" + (
-                ", implied by the network" if res.get("derived") else "")
-        master_text.configure(text=f"master equation ({when}{tick}):  {res['text']}{extra}")
+            extra = "\n" + tr("{span} decades of scale, residual {residual}", span=f"{res['span']:.3g}",
+                               residual=f"{res['residual']:.2g}{res['unit']}") + (
+                ", " + tr("implied by the network") if res.get("derived") else "")
+        master_text.configure(text=tr("master equation ({when}{tick})", when=when, tick=tick) + f":  {res['text']}"
+                              + extra)
+        ago_note.configure(text=tr("(0: now; 240 ticks kept)"))
 
     ago.configure(command=lambda _v: show_master(force=True))
 
@@ -529,19 +1064,22 @@ def window(vm, Shell, script=None):
         panel.delete("all")
         md = mind.mood(vm.net)
         mind.flourishing(vm.net)
-        panel.create_text(12, 14, text="inside", anchor="w", fill=DIM, font=("Consolas", 10))
-        bar(36, f"pleasure     {md['dopamine']:+.2f}", md["dopamine"])
-        bar(54, f"flourishing  {md['flourishing']:.2f}", md["flourishing"])
-        bar(72, f"progress     {md['progress']:+.2f}", md["progress"])
+        panel.create_text(12, 14, text=tr("inside"), anchor="w", fill=DIM, font=("Consolas", 10))
+        names = [tr("pleasure"), tr("flourishing"), tr("progress")]
+        w = max(len(n) for n in names) + 2                 # the longest word of the language sets the column
+        bar(36, f"{names[0]:<{w}}{md['dopamine']:+.2f}", md["dopamine"])
+        bar(54, f"{names[1]:<{w}}{md['flourishing']:.2f}", md["flourishing"])
+        bar(72, f"{names[2]:<{w}}{md['progress']:+.2f}", md["progress"])
         cap = mind.capacity(vm.net)
-        limit = "by hand" if vm.net.capacity else f"host: {vm.net.host.get('limit', '?')}"
-        panel.create_text(12, 90, text=f"links {mind.links(vm.net)} of {cap} ({limit})", anchor="w", fill=DIM,
-                          font=("Consolas", 9))
-        panel.create_text(12, 106, text=f"rent {mind.price(vm.net):.2g} bit a link a tick", anchor="w", fill=DIM,
-                          font=("Consolas", 9))
-        panel.create_text(12, 134, text="outputs", anchor="w", fill=DIM, font=("Consolas", 10))
+        limit = tr("by hand") if vm.net.capacity else tr("host: {limit}", limit=tr(vm.net.host.get("limit", "?")))
+        panel.create_text(12, 90, text=tr("links {n} of {cap} ({limit})", n=mind.links(vm.net), cap=cap,
+                                          limit=limit), anchor="w", fill=DIM, font=("Consolas", 9))
+        panel.create_text(12, 106, text=tr("rent {p} bit a link a tick", p=f"{mind.price(vm.net):.2g}"), anchor="w",
+                          fill=DIM, font=("Consolas", 9))
+        panel.create_text(12, 134, text=tr("outputs"), anchor="w", fill=DIM, font=("Consolas", 10))
         y = 158
         names = vm.outputs() + (["surprise"] if vm.history.get("surprise") else [])
+        shown = {"surprise": tr("surprise")}
         for name in names:
             try:
                 h = list(vm.history.get(name) or [vm.get(name)])
@@ -549,7 +1087,8 @@ def window(vm, Shell, script=None):
                 continue
             v = h[-1]
             size = max(abs(x) for x in h) or 1.0
-            panel.create_text(12, y, text=f"{name} = {v:.6g}", anchor="w", fill="#e6e8ec", font=("Consolas", 11))
+            panel.create_text(12, y, text=f"{shown.get(name, name)} = {v:.6g}", anchor="w", fill="#e6e8ec",
+                              font=("Consolas", 11))
             mid = 160
             panel.create_line(mid, y + 10, mid, y + 22, fill=LINE)
             if v >= 0:
@@ -569,7 +1108,8 @@ def window(vm, Shell, script=None):
         m = vm.machine
         if m is not None:
             panel.create_text(12, panel.winfo_height() - 12,
-                              text=f"tick {m.ticks}   {m.processors()} processors   round {m.rounds}",
+                              text=tr("tick {tick}   {p} processors   round {round}", tick=m.ticks,
+                                      p=m.processors(), round=m.rounds),
                               anchor="w", fill=DIM, font=("Consolas", 9))
 
     def draw(steps=6):
@@ -582,6 +1122,10 @@ def window(vm, Shell, script=None):
             log.write("  ! " + diagnose.internal(e) + "\n")
 
     def enter(_e=None):
+        word = ed.chosen()
+        if word is not None:                 # a word chosen in the menu: taken, not run
+            return ed.take(word)
+        ed.close_menu()
         typed = ed.get()
         ed.remember(typed)
         ed.set("")
@@ -589,6 +1133,7 @@ def window(vm, Shell, script=None):
         if shell.onecmd(typed):
             root.destroy()
             return "break"
+        relabel()
         draw(steps=20)
         return "break"
 

@@ -1,3 +1,6 @@
+#! name: hello
+#! does: hello: two measurements, one relation, the third quantity found
+#! try: use programs/hello.grm ; ask speed
 # Hello, GRML: two measurements and one relation. The network finds the third quantity.
 #     use programs/hello.grm ; ask speed
 observe distance = 100 ± 1%     # m (a positive quantity: solved in log10)

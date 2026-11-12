@@ -1,3 +1,6 @@
+#! name: thermostat
+#! does: a loop and a choice: a room, a heater, a thermostat
+#! try: use programs/thermostat.grm ; tick 60 ; outputs
 # A loop and a choice: a room, a heater, a thermostat with a dead band (it heats under 19, stops above 21).
 #     use programs/thermostat.grm ; tick 60 ; outputs
 input outside = 5          # degrees C

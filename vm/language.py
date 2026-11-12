@@ -48,6 +48,8 @@ import math
 import os
 import re
 
+from i18n import label, tr
+
 DEFAULT_RELATION_SIGMA = 1e-9     # dex: a product relation written without "±" is exact
 DEFAULT_SUM_SIGMA = 1e-9          # in the relation's unit: a sum relation written without "±" is exact
 DEFAULT_MEASURE_SIGMA = 0.01      # dex
@@ -118,7 +120,7 @@ class Network:
 
 
 class TalkError(Exception):
-    pass
+    located = False          # already says the file and line it comes from
 
 
 _NUMBER = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"
@@ -142,7 +144,7 @@ def _number(text):
             return float(eval(t, {"__builtins__": {}}, {}))
         except Exception:  # noqa: BLE001
             pass
-    raise TalkError(f"not a number: '{text}'")
+    raise TalkError(tr("not a number: '{text}'", text=text))
 
 
 def _sigma(text, default):
@@ -162,7 +164,7 @@ def parse_side(text, signed_ok=False):
     the coefficient is returned as a number instead of its log."""
     text = text.strip()
     if not text:
-        raise TalkError("an empty side of a relation")
+        raise TalkError(tr("an empty side of a relation"))
     terms, log_const, coef = {}, 0.0, 1.0
     parts = re.split(r"\s*([*/])\s*", text)
     sign = 1.0
@@ -181,12 +183,12 @@ def parse_side(text, signed_ok=False):
                 coef *= value ** power
             else:
                 if value <= 0:
-                    raise TalkError(f"a product relation multiplies positive quantities: '{base}'")
+                    raise TalkError(tr("a product relation multiplies positive quantities: '{base}'", base=base))
                 log_const += power * math.log10(value)
         elif re.fullmatch(_NAME, base):
             terms[base] = terms.get(base, 0.0) + power
         else:
-            raise TalkError(f"cannot read '{part}'")
+            raise TalkError(tr("cannot read '{part}'", part=part))
         sign = 1.0
     return terms, (coef if signed_ok else log_const)
 
@@ -216,7 +218,7 @@ def _conditions(net, when):
         for c in re.split(r"\s+and\s+", when.strip()):
             cm = re.fullmatch(rf"({_NAME})\s+in\s+(\S+)\s*\.\.\s*(\S+)", c.strip())
             if not cm:
-                raise TalkError(f"cannot read the condition '{c}' (node in lo .. hi)")
+                raise TalkError(tr("cannot read the condition '{c}' (node in lo .. hi)", c=c))
             conds.append((cm.group(1), _number(cm.group(2)), _number(cm.group(3))))
             net.nodes.setdefault(cm.group(1), {"guess": 0.0, "fixed": False, "signed": True})
     return conds
@@ -229,7 +231,7 @@ def _dim(text):
         return None, text
     parts = m.group(1).replace(",", " ").split()
     if len(parts) != 5:
-        raise TalkError("a dimension is [M L T Q K]: five powers")
+        raise TalkError(tr("a dimension is [M L T Q K]: five powers"))
     return [float(p) for p in parts], text[:m.start()].strip()
 
 
@@ -266,7 +268,7 @@ def _relate(net, rest):
     body, _, when = body.partition(" when ")
     body, _, sig = body.partition("±")
     if "=" not in body:
-        raise TalkError("relate NAME: left = right [± sigma] [when node in lo .. hi and ...]")
+        raise TalkError(tr("relate NAME: left = right [+/- sigma] [when node in lo .. hi and ...]"))
     conds = _conditions(net, when)
     lg = re.fullmatch(rf"\s*({_NAME})\s*=\s*ln\(\s*({_NAME})\s*\)\s*", body)
     if lg:                       # the converter of exponentials: L = ln(y), y positive (in log), L signed
@@ -274,11 +276,12 @@ def _relate(net, rest):
         net.nodes.setdefault(L, {"guess": 0.0, "fixed": False, "signed": True})
         net.nodes.setdefault(y, {"guess": 1.0, "fixed": False, "signed": False})
         if net.nodes[y].get("signed"):
-            raise TalkError(f"ln({y}): {y} is signed; a logarithm takes a positive quantity")
+            raise TalkError(tr("ln({y}): {y} is signed; a logarithm takes a positive quantity", y=y))
         if not net.nodes[L].get("signed"):
-            raise TalkError(f"{L} = ln({y}): {L} must be signed (a logarithm can be negative)")
+            raise TalkError(tr("{L} = ln({y}): {L} must be signed (a logarithm can be negative)", L=L, y=y))
         net.put({"kind": "log", "name": name, "log": L, "node": y, "text": body.strip(), "when": []})
-        return f"relation {name}: {L} = ln({y}) (the converter between a quantity and its exponent)"
+        return tr("relation {name}: {L} = ln({y}) (the converter between a quantity and its exponent)", name=name, L=L,
+                  y=y)
     left, right = body.split("=", 1)
     if _is_sum(net, left, right):
         terms = []
@@ -288,14 +291,14 @@ def _relate(net, rest):
                 if c != 0.0:
                     terms.append((s0 * s * c, _inverted(net, t)))
         if not any(t for _, t in terms):
-            raise TalkError("a relation needs at least one node")
+            raise TalkError(tr("a relation needs at least one node"))
         for _, t in terms:
             for n in t:
                 net.nodes.setdefault(n, {"guess": 0.0, "fixed": False, "signed": True})
         rel = {"kind": "sum", "name": name, "terms": terms, "sigma": _number(sig) if sig.strip() else DEFAULT_SUM_SIGMA,
                "text": body.strip() + (f" when {when.strip()}" if conds else ""), "when": conds}
         net.put(rel)
-        return f"relation {name} (a sum, kept as a product of exponentials): {rel['text']}"
+        return tr("relation {name} (a sum, kept as a product of exponentials): {text}", name=name, text=rel["text"])
     lt, lc = parse_side(left)
     rt, rc = parse_side(right)
     lt, rt = _inverted(net, lt), _inverted(net, rt)
@@ -304,16 +307,16 @@ def _relate(net, rest):
         terms[n] = terms.get(n, 0.0) - p
     terms = {n: p for n, p in terms.items() if abs(p) > 1e-15}
     if not terms:
-        raise TalkError("a relation needs at least one node")
+        raise TalkError(tr("a relation needs at least one node"))
     for n in terms:
         net.nodes.setdefault(n, {"guess": 1.0, "fixed": False, "signed": False})
         if net.nodes[n].get("signed"):
-            raise TalkError(f"{n} is signed: a product relation needs positive quantities")
+            raise TalkError(tr("{n} is signed: a product relation needs positive quantities", n=n))
     rel = {"kind": "product", "name": name, "terms": terms, "rhs": rc - lc,
            "sigma": _sigma(sig or None, DEFAULT_RELATION_SIGMA),
            "text": body.strip() + (f" when {when.strip()}" if conds else ""), "when": conds}
     net.put(rel)
-    return f"relation {name}: {rel['text']}"
+    return tr("relation {name}: {text}", name=name, text=rel["text"])
 
 
 def _keep(net, rest):
@@ -324,7 +327,7 @@ def _keep(net, rest):
     cond, _, when = body.partition(" when ")
     m = re.fullmatch(rf"\s*({_NAME})\s*(>=|<=)\s*(\S+)\s*", cond)
     if not m:
-        raise TalkError("keep NAME: node >= value [when node in lo .. hi and ...]")
+        raise TalkError(tr("keep NAME: node >= value [when node in lo .. hi and ...]"))
     conds = _conditions(net, when)
     node = m.group(1)
     for n in [node] + [c[0] for c in conds]:
@@ -332,19 +335,36 @@ def _keep(net, rest):
     rel = {"kind": "keep", "name": name, "node": node, "op": m.group(2), "bound": _number(m.group(3)),
            "when": conds, "text": body.strip()}
     net.put(rel)
-    return f"contact {name}: {rel['text']}"
+    return tr("contact {name}: {text}", name=name, text=rel["text"])
+
+
+SHORT = {          # the short forms of the statements (first word of a line only)
+    "nd": "node", "rel": "relate", "obs": "observe", "fgt": "forget", "kp": "keep", "net": "network", "cl": "call",
+    "lrn": "learn", "inp": "input", "out": "output",
+}
+
+
+def normal(line):
+    """A line as the language reads it: a short form at its head made whole, `+/-` written `±` (the sign is not on
+    every keyboard)."""
+    line = line.replace("+/-", "±")
+    head = line.lstrip()
+    word, sep, rest = head.partition(" ")
+    if word.lower() in SHORT:
+        return line[:len(line) - len(head)] + SHORT[word.lower()] + sep + rest
+    return line
 
 
 def statement(net, line, base=None):
     """Reads one statement into the network. Returns a short text of what was done, or None if the line is not a
     statement of the language (a question for the interpreter). base: the folder `use` reads from."""
-    line = line.split("#", 1)[0].rstrip()
+    line = normal(line.split("#", 1)[0].rstrip())
     if net.recording is not None:
         if line.strip().lower() == "end":
             name, params, lines = net.recording
             net.networks[name] = (params, lines)
             net.recording = None
-            return f"network {name}({', '.join(params)}): {len(lines)} lines"
+            return tr("network {name}({params}): {n} lines", name=name, params=", ".join(params), n=len(lines))
         if line.strip():
             net.recording[2].append(line.strip())
         return ""
@@ -366,17 +386,19 @@ def statement(net, line, base=None):
         dim, rest = _dim(rest)
         m = re.fullmatch(rf"({_NAME})\s*(?:=\s*(\S+))?((?:\s+(?:fixed|signed))*)", rest)
         if not m:
-            raise TalkError("node NAME [= value] [fixed] [signed]")
+            raise TalkError(tr("node NAME [= value] [fixed] [signed]"))
         name, value, flags = m.group(1), m.group(2), m.group(3).split()
         old = net.nodes.get(name, {})
         signed = "signed" in flags or old.get("signed", False)
         guess = _number(value) if value else old.get("guess", 0.0 if signed else 1.0)
         if not signed and guess <= 0:
-            raise TalkError("a node is a positive quantity (solved in log10): say `signed` for a signed one")
+            raise TalkError(tr("a node is a positive quantity (solved in log10): say `signed` for a signed one"))
         net.nodes[name] = dict(old, guess=guess, fixed="fixed" in flags, signed=signed)
         if dim is not None:
             net.nodes[name]["dim"] = dim
-        return f"node {name} = {guess:g}" + (" (fixed)" if "fixed" in flags else "") + (" signed" if signed else "")
+        return tr("node {name} = {value}", name=name, value=f"{guess:g}") + (" (" + tr("fixed") + ")" if "fixed" in flags
+                                                                             else "") + (" " + tr("signed") if signed
+                                                                                         else "")
     if word == "relate":
         return _relate(net, rest)
     if word == "keep":
@@ -384,7 +406,7 @@ def statement(net, line, base=None):
     if word == "observe":
         m = re.fullmatch(rf"({_NAME})\s*=\s*([^±]+?)\s*(?:±\s*(.+))?", rest)
         if not m:
-            raise TalkError("observe NAME = value [± 1% | ± 0.004 dex]")
+            raise TalkError(tr("observe NAME = value [+/- 1% | +/- 0.004 dex]"))
         name, value = m.group(1), _number(m.group(2))
         node = net.nodes.get(name)
         if node and node.get("signed"):
@@ -396,30 +418,30 @@ def statement(net, line, base=None):
                 # itself (and never better than a thousandth of a unit)
                 s = _number(sg) if sg else DEFAULT_SIGNED_SIGMA * max(abs(value), 1.0)
             if not s > 0:
-                raise TalkError("a measurement needs a positive sigma")
+                raise TalkError(tr("a measurement needs a positive sigma"))
             net.measured[name] = (value, s)
-            return f"observed {name} = {value:g} ± {s:.3g}"
+            return tr("observed {name} = {value} ± {s}", name=name, value=f"{value:g}", s=f"{s:.3g}")
         if value <= 0:
-            raise TalkError(f"{name} is a positive quantity: say `node {name} signed` first for a signed one")
+            raise TalkError(tr("{name} is a positive quantity: say `node {name} signed` first for a signed one", name=name))
         net.nodes.setdefault(name, {"guess": value, "fixed": False, "signed": False})
         net.measured[name] = (value, _sigma(m.group(3), DEFAULT_MEASURE_SIGMA))
-        return f"observed {name} = {value:g} ± {net.measured[name][1]:.3g} dex"
+        return tr("observed {name} = {value} ± {s} dex", name=name, value=f"{value:g}", s=f"{net.measured[name][1]:.3g}")
     if word == "forget":
         if rest in net.measured:
             del net.measured[rest]
-            return f"forgot the measurement of {rest}"
-        raise TalkError(f"{rest} is not measured")
+            return tr("forgot the measurement of {name}", name=rest)
+        raise TalkError(tr("{name} is not measured", name=rest))
     if word == "network":
         m = re.fullmatch(rf"({_NAME})\s*\(([^)]*)\)", rest)
         if not m:
-            raise TalkError("network NAME(param, param...) ... end")
+            raise TalkError(tr("network NAME(param, param...) ... end"))
         params = [p.strip() for p in m.group(2).split(",") if p.strip()]
         net.recording = (m.group(1), params, [])
         return ""
     if word == "call":
         m = re.fullmatch(rf"({_NAME})\s*\(([^)]*)\)", rest)
         if not m or m.group(1) not in net.networks:
-            raise TalkError(f"call NETWORK(param=value, ...): no network '{rest.split('(')[0].strip()}'")
+            raise TalkError(tr("call NETWORK(param=value, ...): no network '{name}'", name=rest.split("(")[0].strip()))
         params, lines = net.networks[m.group(1)]
         given = {}
         for kv in m.group(2).split(","):
@@ -428,20 +450,20 @@ def statement(net, line, base=None):
                 given[k.strip()] = v.strip()
         missing = [p for p in params if p not in given]
         if missing:
-            raise TalkError(f"call {m.group(1)}: missing {', '.join(missing)}")
+            raise TalkError(tr("call {name}: missing {missing}", name=m.group(1), missing=", ".join(missing)))
         for ln in lines:
             text = ln
             for k, v in given.items():
                 text = text.replace("{" + k + "}", v)
             statement(net, text, base)
         net.calls.append((m.group(1), given))
-        return f"called {m.group(1)}({', '.join(f'{k}={v}' for k, v in given.items())})"
+        return tr("called {name}({given})", name=m.group(1), given=", ".join(f"{k}={v}" for k, v in given.items()))
     if word == "use":
         path = rest
         if base and not os.path.isabs(path) and not os.path.exists(path):
             path = os.path.join(base, path)
         if not os.path.exists(path):
-            raise TalkError(f"no file {rest}")
+            raise TalkError(tr("no file {name}", name=rest))
         count = 0
         with open(path, encoding="utf-8") as f:
             for number, ln in enumerate(f, 1):
@@ -449,10 +471,13 @@ def statement(net, line, base=None):
                     if statement(net, ln, os.path.dirname(os.path.abspath(path))):
                         count += 1
                 except TalkError as e:
-                    if str(e).startswith("in "):      # already located (a file used by this one)
+                    if e.located:      # already located (a file used by this one)
                         raise
-                    raise TalkError(f"in {os.path.basename(path)}, line {number}: {ln.strip()}\n    {e}") from None
-        return f"used {os.path.basename(path)}: {count} statements"
+                    err = TalkError(tr("in {file}, line {n}: {line}", file=os.path.basename(path), n=number,
+                                       line=ln.strip()) + f"\n    {e}")
+                    err.located = True
+                    raise err from None
+        return tr("used {file}: {n} statements", file=os.path.basename(path), n=count)
     return None
 
 
@@ -467,19 +492,21 @@ def fuse(net, keep=None, gone=None, *extra):
     if extra == ("inverse",):
         return _fuse_inverse(net, keep, gone)
     if not keep or not gone or extra:
-        raise TalkError("fuse A B [inverse]: B becomes A (or its inverse)")
+        raise TalkError(tr("fuse A B [inverse]: B becomes A (or its inverse)"))
     for n in (keep, gone):
         if n not in net.nodes:
-            raise TalkError(f"no node {n}")
+            raise TalkError(tr("no node {name}", name=n))
     if keep == gone:
-        return f"{keep} is already one node"
+        return tr("{name} is already one node", name=keep)
     ka, kb = net.nodes[keep], net.nodes[gone]
     if ka.get("signed") and not kb.get("signed"):
-        raise TalkError(f"fuse {keep} {gone}: keep the positive one ({gone}) and fuse the signed one into it")
+        raise TalkError(tr("fuse {keep} {gone}: keep the positive one ({gone}) and fuse the signed one into it", keep=keep,
+                              gone=gone))
     if not ka.get("signed") and kb.get("signed"):
         # a signed node becomes a positive one: it must have been positive, and it cannot be in a product as signed
         if gone in net.measured and net.measured[gone][0] <= 0:
-            raise TalkError(f"fuse {keep} {gone}: {gone} has been {net.measured[gone][0]:g}, {keep} is positive")
+            raise TalkError(tr("fuse {keep} {gone}: {gone} has been {v}, {keep} is positive", keep=keep, gone=gone,
+                              v=f"{net.measured[gone][0]:g}"))
         if gone in net.measured:
             v, sg = net.measured[gone]
             net.measured[gone] = (v, max(sg / (v * math.log(10)), 1e-9))     # its uncertainty, in dex
@@ -527,22 +554,23 @@ def fuse(net, keep=None, gone=None, *extra):
     net.aliases[gone] = keep
     if gone in net.seen:
         net.seen.setdefault(keep, []).extend(net.seen.pop(gone))
-    return f"fused: {gone} is {keep} (one node)"
+    return tr("fused: {gone} is {keep} (one node)", gone=gone, keep=keep)
 
 
 def _fuse_inverse(net, keep, gone):
     for n in (keep, gone):
         if n not in net.nodes:
-            raise TalkError(f"no node {n}")
+            raise TalkError(tr("no node {name}", name=n))
     for n in (keep, gone):
         if n in net.measured and net.measured[n][0] <= 0:
-            raise TalkError(f"fuse {keep} {gone} inverse: {n} has been {net.measured[n][0]:g}: an inverse is positive")
+            raise TalkError(tr("fuse {keep} {gone} inverse: {n} has been {v}: an inverse is positive", keep=keep, gone=gone,
+                              n=n, v=f"{net.measured[n][0]:g}"))
     for r in net.relations:
         if r.get("kind") in ("keep", "log") and gone in net.nodes_of(r):
-            raise TalkError(f"fuse {keep} {gone} inverse: {gone} is in {r['name']}")
+            raise TalkError(tr("fuse {keep} {gone} inverse: {gone} is in {r}", keep=keep, gone=gone, r=r["name"]))
     for st in net.sets:
         if gone in (st["target"], st["source"]) or any(n == gone for n, _, _ in st["when"]):
-            raise TalkError(f"fuse {keep} {gone} inverse: {gone} is written at each tick")
+            raise TalkError(tr("fuse {keep} {gone} inverse: {gone} is written at each tick", keep=keep, gone=gone))
     for name in (keep, gone):                     # an inverse is a positive quantity: solved in log
         spec = net.nodes[name]
         if spec.get("signed"):
@@ -570,7 +598,7 @@ def _fuse_inverse(net, keep, gone):
                 new.append((c, {n: p for n, p in t2.items() if abs(p) > 1e-15}))
             r["terms"] = new
         if "when" in r and any(n == gone for n, _, _ in r["when"]):
-            raise TalkError(f"fuse {keep} {gone} inverse: {gone} is a condition of {r['name']}")
+            raise TalkError(tr("fuse {keep} {gone} inverse: {gone} is a condition of {r}", keep=keep, gone=gone, r=r["name"]))
     if gone in net.measured:
         vb, sb = net.measured.pop(gone)
         if keep in net.measured:
@@ -590,7 +618,7 @@ def _fuse_inverse(net, keep, gone):
             net.inverses[a] = keep
     if gone in net.seen:
         net.seen.setdefault(keep, []).extend(1.0 / v for v in net.seen.pop(gone) if v)
-    return f"fused: {gone} is {keep}^-1 (one node, its inverse included)"
+    return tr("fused: {gone} is {keep}^-1 (one node, its inverse included)", gone=gone, keep=keep)
 
 
 ROLES = {"var": "a variable", "learn": "a weight it learns", "input": "an input", "output": "an output"}
@@ -601,13 +629,13 @@ def _role(net, word, rest):
     dim, rest = _dim(rest)
     m = re.fullmatch(rf"({_NAME})\s*(?:=\s*(\S+))?(\s+positive)?", rest)
     if not m:
-        raise TalkError(f"{word} NAME [= value] [positive] [M L T Q K]")
+        raise TalkError(tr("{word} NAME [= value] [positive] [M L T Q K]", word=word))
     name, value, positive = m.group(1), m.group(2), bool(m.group(3))
     old = net.nodes.get(name, {})
     positive = positive or (name in net.nodes and not old.get("signed", True))
     guess = _number(value) if value else old.get("guess", 1.0 if positive else 0.0)
     if positive and guess <= 0:
-        raise TalkError(f"{name} is positive: its value must be above 0")
+        raise TalkError(tr("{name} is positive: its value must be above 0", name=name))
     spec = dict(old, guess=guess, fixed=False, signed=not positive)
     spec[word] = True
     if dim is not None:
@@ -617,7 +645,7 @@ def _role(net, word, rest):
         net.measured[name] = (guess, VAR_SIGMA if not positive else 1e-6)
     if word == "learn":
         net.measured[name] = (guess, LEARN_PRIOR if not positive else 3.0)
-    return f"{ROLES[word]}: {name} = {guess:g}"
+    return label(ROLES[word]) + f"{name} = {guess:g}"
 
 
 def _set(net, rest, base):
@@ -625,7 +653,7 @@ def _set(net, rest, base):
     body, _, when = rest.partition(" when ")
     m = re.fullmatch(rf"({_NAME})\s*=\s*(.+)", body.strip())
     if not m:
-        raise TalkError("set NAME = expression [when node in lo .. hi and ...]")
+        raise TalkError(tr("set NAME = expression [when node in lo .. hi and ...]"))
     target, expr = m.group(1), m.group(2).strip()
     if target not in net.nodes:
         _role(net, "var", target)
@@ -639,7 +667,7 @@ def _set(net, rest, base):
         net.nodes[source] = {"guess": spec["guess"], "fixed": False, "signed": spec.get("signed", False)}
         _relate(net, f"set_{target}_{k}: {source} = {expr}")
     net.sets.append({"target": target, "source": source, "when": conds})
-    return f"at each tick {target} <- {expr}" + (f" when {when.strip()}" if conds else "")
+    return tr("at each tick {target} <- {expr}", target=target, expr=expr) + (f" when {when.strip()}" if conds else "")
 
 
 def from_store(store, net=None):

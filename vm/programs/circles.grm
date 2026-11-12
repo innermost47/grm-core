@@ -1,3 +1,6 @@
+#! name: circles
+#! does: a network called twice, as a function: two circles and their areas
+#! try: use programs/circles.grm ; ask area_small ; ask area_big
 # A network called twice: a function. Its nodes get the name given at the call.
 #     use programs/circles.grm ; ask area_small ; ask area_big
 network circle(id, radius)

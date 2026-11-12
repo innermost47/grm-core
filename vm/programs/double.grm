@@ -1,3 +1,6 @@
+#! name: double
+#! does: a Minsky machine (Turing complete): it doubles a
+#! try: use programs/double.grm ; tick 20 ; outputs
 # A Minsky machine: two counters and a state, the instructions INC and DEC-or-JUMP-IF-ZERO. Any program of any
 # computer can be written with them (Minsky, 1967): the language of the GRM machine is Turing complete.
 # This one doubles a: b = 2 a. Each `set` writes at the next tick, only when its conditions hold.

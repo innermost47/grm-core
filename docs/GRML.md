@@ -1,5 +1,7 @@
 # GRML: the Global Relational Model Language
 
+*[En français](GRML.fr.md)*
+
 GRML is the language of the GRM machine (`vm/`). A GRML program does not say what to do step by step: it says what
 is tied to what. Quantities are nodes, ties are relations, and the machine finds every value that agrees with all of
 them at once, with its uncertainty. Time, memory, choices and learning are written the same way.
@@ -11,8 +13,9 @@ here is what the language does.
 - [Tutorial](#tutorial): ten steps, from one relation to a machine that learns and remembers
 - [Reference](#reference): every word
 - [What the machine does by itself](#what-the-machine-does-by-itself): nodes, relations, fusions
+- [Programs](#programs): files, their header, the programs window
 - [The tick](#the-tick): what happens at each beat of the clock
-- [The machine's commands](#the-machines-commands)
+- [The machine's commands](#the-machines-commands), its help and its two languages
 - [Pitfalls](#pitfalls)
 - [Limits](#limits)
 
@@ -30,6 +33,11 @@ grm> ask speed
 ```
 
 Nothing told the machine to divide: it found the speed that makes the relation hold.
+
+`±` can be written `+/-` (it is not on every keyboard), and every word has a short form (`obs`, `rel`, `t`...):
+`obs distance = 100 +/- 1%` is the same line. `help` lists the words, `help WORD` explains one with an example, and
+`tour` is a guided tour of ten steps. `lang fr` puts the machine's interface in French (the words of the language stay
+English, so a program runs anywhere).
 
 ## Tutorial
 
@@ -217,6 +225,19 @@ fuses what is one thing under two names and loosens a little what it has learned
 - A name: a letter or `_`, then letters, digits, `_` (`speed`, `r_small`, `M_earth`). Names with `__` or starting with
   `~` are the machine's own (the helper of a `set`, the signed twin of a positive node).
 - A number: `3`, `-2.5`, `6.674e-11`, `pi`, `e`, `tau`, `inf`, and a little arithmetic (`3-0.25`, `2*pi`).
+- `+/-` is `±`, anywhere in a line.
+- The first word of a line can be written short:
+
+  | short | word | short | word |
+  |---|---|---|---|
+  | `nd` | `node` | `cl` | `call` |
+  | `rel` | `relate` | `lrn` | `learn` |
+  | `obs` | `observe` | `inp` | `input` |
+  | `fgt` | `forget` | `out` | `output` |
+  | `kp` | `keep` | `net` | `network` |
+
+  (`var`, `set`, `use`, `end`, `fuse` are short already.) In a file as at the prompt: `rel fall: 2 * height = g *
+  t^2 +/- 0.1%` is `relate fall: 2 * height = g * t^2 ± 0.1%`.
 
 ### Nodes
 
@@ -356,6 +377,44 @@ It also:
 - **tends to flourish**: accuracy (its inputs no longer surprise it) times room (links left), and the progress of its
   learning (`mood`).
 
+## Programs
+
+A program is a file of statements, `NAME.grm`, in `vm/programs/` (or anywhere, given by its path). It may begin with
+a header, lines starting with `#!`:
+
+```
+#! name: fall
+#! does: a fall from rest, with units: the height from g and t
+#! try: use programs/fall.grm ; ask height
+```
+
+`does` (or `about`) says what it does, `try` what to type to see it. What it takes and gives is not written in the
+header: `programs` reads it from the program itself (its `input`, `output` and `network` statements). Without a
+header, its first comment says what it does.
+
+| command | short | |
+|---|---|---|
+| `programs` | `progs` | every program, what it does, its inputs, outputs and networks |
+| `read NAME` | `rd` | the program here, its lines numbered |
+| `run [NAME]` | | run it (no name: the program of the current tab) |
+| `new NAME` | | a new program in `programs/`, from a short template, open to be written |
+
+In the window (`--window`), programs open in a window of their own, a tab per program, coloured as they are typed,
+and everything is done from the keyboard:
+
+| command | short | key, in the programs window | |
+|---|---|---|---|
+| `open NAME` | `o` | | a program in a new tab |
+| `tab N` / `tab NAME` | | Ctrl+Tab: the next one | go to a tab (`tab` alone: the list) |
+| `edit [NAME]` | `ed` | | write in the tab |
+| `save [FILE.grm]` | `sv` | Ctrl+S | save the tab (as FILE) |
+| `run` | | F5 | run the tab, line by line: a line that fails turns red |
+| `find WORDS` | | Ctrl+F, then Enter / Shift+Enter, Esc | search the tab |
+| `close [N \| NAME]` | | Ctrl+W | close a tab |
+| | | Esc | back to the prompt |
+
+An error in a file (`use`, `run`) says the file and the line; when that file is open, its line turns red.
+
 ## The tick
 
 At each tick:
@@ -368,32 +427,48 @@ At each tick:
 
 ## The machine's commands
 
-Typed at the prompt of `python vm/grm_vm.py` (or in the window, `--window`), next to the statements:
+Typed at the prompt of `python vm/grm_vm.py` (or in the window, `--window`), next to the statements. Several can be
+written on one line, separated by `;`.
 
-| command | |
-|---|---|
-| Enter | one tick |
-| `tick [n]` | n ticks |
-| `put NAME = VALUE [± SIGMA]` | an input (in SI if it has a dimension) |
-| `load FILE.csv` / `FILE.json` | data, one row a tick; the weights learn (JSON: records, `{name: [values]}`, `{name: value}`, a grm-core store) |
-| `ask NODE` | its value |
-| `outputs` | the outputs and the surprise |
-| `show` | what the network is |
-| `inspect NAME` | what a node or a relation holds (what the window shows under the mouse) |
-| `master [n]` | the master equation now, or n ticks ago (the last 240 are kept) |
-| `check` | everything that is wrong now |
-| `mood` | pleasure, what it expects, flourishing, progress, links, rent |
-| `capacity [N \| auto]` | the links it may hold (auto: the host's budget); beyond, it forgets what pays the least |
-| `prune` | forget now what a night would forget |
-| `sleep [FILE]`, `wake [FILE]` | memory |
-| `blank` | forget everything |
-| `sound on` / `off` | a voice per output |
-| `clock HZ` | ticks by themselves (window) |
-| `quit` | the night: fusions, relations found, forgetting, then sleep in `vm/memory.json` |
+| command | short | |
+|---|---|---|
+| Enter | | one tick |
+| `tick [n]` | `t` | n ticks |
+| `put NAME = VALUE [± SIGMA]` | | an input (in SI if it has a dimension) |
+| `load FILE.csv` / `FILE.json` | `ld` | data, one row a tick; the weights learn (JSON: records, `{name: [values]}`, `{name: value}`, a grm-core store) |
+| `ask NODE` | | its value |
+| `outputs` | `outs` | the outputs and the surprise |
+| `show` | | what the network is |
+| `inspect NAME` | `ins` | what a node or a relation holds (what the window shows under the mouse) |
+| `master [n]` | `ms` | the master equation now, or n ticks ago (the last 240 are kept) |
+| `check` | `chk` | everything that is wrong now |
+| `mood` | | pleasure, what it expects, flourishing, progress, links, rent |
+| `capacity [N \| auto]` | `cap` | the links it may hold (auto: the host's budget); beyond, it forgets what pays the least |
+| `prune` | | forget now what a night would forget |
+| `sleep [FILE]`, `wake [FILE]` | | memory |
+| `blank` | | forget everything |
+| `sound on` / `off` | | a voice per output |
+| `clock HZ` | `clk` | ticks by themselves (window) |
+| `programs`, `read`, `open`, `tab`, `edit`, `save`, `find`, `close`, `new`, `run` | | see [Programs](#programs) |
+| `help [WORD]` | `h` | the words of the machine by group; one word, with its form and an example |
+| `help on` / `off` | | the menu of words under the prompt, while typing (window) |
+| `tour [N \| end]` | | a guided tour, a step at a time |
+| `lang fr` / `lang en` | | the language of the interface |
+| `quit` | `q` | the night: fusions, relations found, forgetting, then sleep in `vm/memory.json` |
 
-Tab completes (statements, commands, nodes, relations, files, networks); in the window, what is typed is coloured,
-and Up and Down go back through it. Errors are said with where they are: a file's line, a name that looks like a
-known one, a network that does not settle, relations that contradict each other.
+Tab completes (statements, commands, nodes, relations, files, programs, networks); in the window, what is typed is
+coloured, and Up and Down go back through it. Errors are said with where they are: a file's line, a name that looks
+like a known one, a network that does not settle, relations that contradict each other.
+
+**Help while typing (window).** Under the prompt, one line says what is being typed: the word, what it is in a few
+words, and its form (`rel = relate — a relation: products, powers, sums   relate NAME: left = right [+/- sigma]
+[when ...]`). Under it, a menu: the words of the machine from the first letter typed (with their short forms), then
+the names of nodes and relations from the second letter, when there are no more than twelve of them. Up and Down
+choose, Tab or Enter takes, Esc closes. The menu can be turned off (the box under it, or `help off`); the line stays.
+
+**Two languages.** The interface speaks English or French: `lang fr`, `lang en`. The first time, it follows the
+language of the system. The words of GRML (`node`, `relate`, `observe`...) stay English in both, so a program written
+in one runs in the other. The choice, and that of the menu, are kept in `vm/settings.json`, next to the memory.
 
 ## Pitfalls
 
@@ -429,7 +504,7 @@ known one, a network that does not settle, relations that contradict each other.
 | `vm/programs/fibonacci.grm` | the writes of a tick, all at once |
 | `vm/programs/thermostat.grm` | choices, a state, a loop with the outside |
 | `vm/programs/circles.grm` | a network called twice |
-| `vm/programs/universe.grm` | the constants of the universe and the seven relations of the chain: the master equation the machine brings up is S · Equant = Estock, over 175 decades, never written (pygrm ≥ 0.5.0; `vm/test_universe_unbiased.py` checks it seven ways) |
+| `vm/programs/universe.grm` | the constants of the universe and the seven relations of the chain: the master equation the machine brings up is S · Equant = Estock, over 175 decades, never written (pygrm ≥ 0.5.1; `vm/test_universe_unbiased.py` checks it seven ways) |
 | `vm/programs/mean.grm` + `numbers.csv` | learning a mean |
 | `vm/programs/fit.grm` + `measures.csv` | weights that learn together |
 | `vm/programs/double.grm` | a Minsky machine |

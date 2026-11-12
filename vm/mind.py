@@ -56,6 +56,8 @@ import math
 import os
 import time
 
+from i18n import tr
+
 try:
     from pygrm import GlobalRelationalNetwork as _GRM
 except ImportError:  # pragma: no cover - without pygrm there is no master equation
@@ -352,7 +354,8 @@ def after_tick(vm, surprise=None, explore=True):
         md["last_search"] = tick
         found = vm.grow()
         if found:
-            done += [f"curiosity (surprised by {mean_s:.2g} sigma, no longer learning): {line}" for line in found]
+            done += [tr("curiosity (surprised by {s} sigma, no longer learning)", s=f"{mean_s:.2g}") + f": {line}"
+                     for line in found]
     snapshot(vm)
     return done
 
@@ -408,14 +411,14 @@ def _tidy(net):
             d = _defined_node(rel)
             if d and not any(d in net.nodes_of(o) for o in net.relations if o is not rel):
                 _remove_relation(net, rel["name"])
-                gone.append(f"relation {rel['name']}")
+                gone.append(tr("relation {name}", name=rel["name"]))
                 changed = True
         held = {n for r in net.relations for n in net.nodes_of(r)}
         held |= {st["source"] for st in net.sets if st["target"] in held}
         for n in list(net.nodes):
             if n not in held and net.origin["nodes"].get(n) == "found" and not _protected_node(net, n):
                 _remove_node(net, n)
-                gone.append(f"node {n}")
+                gone.append(tr("node {name}", name=n))
                 changed = True
     return gone
 
@@ -436,7 +439,7 @@ def prune(vm, night=False):
             unused = net.use["relations"].get(name, NEW_TRACE) < FADE
             if unused or worth(net, name, p) < 0:
                 _remove_relation(net, name)
-                forgotten.append(name + (" (unused)" if unused else " (it no longer paid its rent)"))
+                forgotten.append(name + " (" + (tr("unused") if unused else tr("it no longer paid its rent")) + ")")
     cap = capacity(net)
     while links(net) > cap:
         rank = {"found": 0, "written": 1}
@@ -446,19 +449,19 @@ def prune(vm, night=False):
                       and not (r["name"].startswith("set_") and any(st["source"] in net.nodes_of(r)
                                                                      for st in net.sets))]
         if not candidates:
-            out.append(f"no room: {links(net)} links for {cap}, and nothing left that may be forgotten")
+            out.append(tr("no room: {n} links for {cap}, and nothing left that may be forgotten", n=links(net), cap=cap))
             break
         p = price(net)
         least = min(candidates, key=lambda r: (rank[net.origin["relations"].get(r["name"], "written")],
                                                worth(net, r["name"], p),
                                                net.use["relations"].get(r["name"], NEW_TRACE)))
         _remove_relation(net, least["name"])
-        forgotten.append(least["name"] + " (no room left)")
+        forgotten.append(least["name"] + " (" + tr("no room left") + ")")
     if forgotten:
         extra = _tidy(net)
         vm.machine = None
-        out.append(f"forgot {len(forgotten)} relation(s): {', '.join(forgotten)}"
-                   + (f" (and {', '.join(extra)})" if extra else ""))
+        out.append(tr("forgot {n} relation(s): {names}", n=len(forgotten), names=", ".join(forgotten))
+                   + (" (" + tr("and {names}", names=", ".join(extra)) + ")" if extra else ""))
     return out
 
 
@@ -569,12 +572,13 @@ def master(vm, ago=0):
     if ago == 0 or not vm.past:
         snapshot(vm)                                  # now: the network as it is at this moment
     if ago < 0 or ago >= len(vm.past):
-        return {"tick": None, "text": f"only the last {len(vm.past)} ticks are kept (t - 0 .. t - {len(vm.past) - 1})"}
+        return {"tick": None, "text": tr("only the last {n} ticks are kept (t - 0 .. t - {last})", n=len(vm.past),
+                                         last=len(vm.past) - 1)}
     pic = vm.past[-1 - ago]
     if pic.get("master") is not None:
         return pic["master"]
     if _GRM is None:
-        return {"tick": pic["tick"], "text": "no master equation without pygrm"}
+        return {"tick": pic["tick"], "text": tr("no master equation without pygrm")}
     vals = pic["values"]
     # a sum whose terms are not all of some size (a counter at 0, a value that is 0 but for rounding) spans no
     # scale: its "span" would only be the rounding's
@@ -586,16 +590,17 @@ def master(vm, ago=0):
                 continue
         rels.append(r)
     if not rels:
-        out = {"tick": pic["tick"], "text": "no relation yet" if not pic["relations"] else
-               "no closed relation found"}
+        out = {"tick": pic["tick"], "text": tr("no relation yet") if not pic["relations"] else
+               tr("no closed relation found")}
     else:
         try:
             g = _GRM(pic["nodes"], rels)
             best = g.extract_master_invariant(vals, display_mode="compact", max_pairs=MAX_PAIRS)
         except Exception as e:  # noqa: BLE001 - say why instead of failing
-            return {"tick": pic["tick"], "text": f"cannot compute it: {type(e).__name__}: {e}", "error": True}
+            return {"tick": pic["tick"], "text": tr("cannot compute it: {error}", error=f"{type(e).__name__}: {e}"),
+                    "error": True}
         if "terms" not in best:
-            out = {"tick": pic["tick"], "text": best.get("equation_text", "no closed relation found")}
+            out = {"tick": pic["tick"], "text": tr("no closed relation found")}
         else:
             given = next((r for r in rels if r.get("type") == "sum" and r["terms"] == best["terms"]
                           and r["K"] == best["rhs"]), None)

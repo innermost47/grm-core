@@ -821,8 +821,196 @@ def test_example_universe_and_its_master_equation():
     S, Eq, Es = vm.get("S"), vm.get("Equant"), vm.get("Estock")
     assert S * Eq / Es == pytest.approx(1, rel=1e-6)          # S Equant = Estock, never written
     import pygrm
-    if tuple(int(x) for x in pygrm.__version__.split(".")[:2]) < (0, 5):
-        pytest.skip("the master equation over triples of nodes needs pygrm >= 0.5.0")
+    if tuple(int(x) for x in pygrm.__version__.split(".")[:3]) < (0, 5, 1):
+        pytest.skip("the master equation over triples of nodes needs pygrm >= 0.5.1")
     res = mind.master(vm)
     assert res["text"] == "Equant · S · Estock^-1 = 1" and res["derived"]
     assert res["span"] == pytest.approx(175, abs=1)
+
+
+# ---------------------------------------------------------------------- short forms, help, programs, two languages
+import ast   # noqa: E402
+import glob   # noqa: E402
+import string   # noqa: E402
+
+import guide   # noqa: E402
+import i18n   # noqa: E402
+import programs   # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def english():
+    """Every test starts in English, whatever the one before it chose."""
+    i18n.set_lang("en")
+    yield
+    i18n.set_lang("en")
+
+
+def test_short_forms_and_plus_minus():
+    a = say(Network(), "nd x = 2\nrel model: y = 3 * x ± 0.1\nobs y = 6 ± 1%")
+    b = say(Network(), "node x = 2\nrelate model: y = 3 * x +/- 0.1\nobserve y = 6 +/- 1%")
+    assert a.relations == b.relations and a.measured == b.measured and set(a.nodes) == set(b.nodes)
+    assert set(editor.SHORT.values()) <= set(editor.DOCS)                    # every short form stands for a word
+    assert len(set(editor.SHORT)) == len(set(editor.SHORT.values()))         # one short form per word
+    assert not set(editor.SHORT) & set(editor.DOCS)                          # and none is a word itself
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("inp x = 2 ; out y ; rel r: y = 3 * x +/- 0.1 ; t 2 ; ins r")
+    assert vm.get("y") == pytest.approx(6, rel=1e-3) and vm.net.nodes["y"].get("output")
+    assert not any(s.startswith(("  ?", "  !")) for s in out)
+    assert any("relation r" in s for s in out)
+
+
+def test_every_program_says_what_it_does():
+    found = programs.listing()
+    assert {p["name"] for p in found} >= {"fall", "circles", "universe", "hello"}
+    for p in found:
+        assert p.get("does") and p.get("try"), p["name"]
+    circles = next(p for p in found if p["name"] == "circles")
+    assert circles["networks"] and not any(o.endswith("_") for o in circles["outputs"])   # not a network's own
+    assert programs.find("fall") == os.path.join(HERE, "programs", "fall.grm")
+    assert programs.find("no_such_program") is None
+
+
+def test_programs_read_and_new(tmp_path):
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("progs")
+    assert any(s.strip().startswith("fall") for s in out)
+    out.clear()
+    sh.onecmd("rd fal")                                                       # a typo: what it looks like
+    assert "fall" in out[-1] and out[-1].startswith("  ?")
+    out.clear()
+    sh.onecmd("read fall")
+    assert any("#! name: fall" in s for s in out)
+    sh.onecmd("open fall")                                                    # no window: said, not a crash
+    assert "--window" in out[-1]
+    (tmp_path / "programs").mkdir()
+    sh.base = str(tmp_path)
+    sh.onecmd("new mine")
+    path = tmp_path / "programs" / "mine.grm"
+    assert path.exists() and programs.header(str(path))["name"] == "mine"
+    sh.onecmd("use programs/mine.grm")                                        # the template runs as it is
+    assert vm.get("y") == pytest.approx(6, rel=1e-2)
+
+
+def test_help_on_every_word():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    grouped = [w for _, words in guide.GROUPS for w in words]
+    assert sorted(grouped) == sorted(editor.DOCS)                             # every word in one group, once
+    for w in editor.DOCS:
+        out.clear()
+        sh.onecmd(f"help {w}")
+        assert out and out[0].strip().startswith(w) and not out[0].startswith("  ?"), w
+    out.clear()
+    sh.onecmd("h rel")                                                        # a short form, of help and of relate
+    assert out[0].strip().startswith("relate")
+    out.clear()
+    sh.onecmd("help relat")
+    assert "relate" in out[0] and out[0].startswith("  ?")
+    out.clear()
+    sh.onecmd("help")
+    assert len(out) > len(editor.DOCS)
+
+
+def test_every_command_of_the_tour_runs():
+    vm = grm_vm.VM(memory=None)                                               # born with its base
+    sh, out = shell_of(vm)
+    for n, (_, _, typed) in enumerate(guide.TOUR, 1):
+        sh.onecmd(f"tour {n}")
+        out.clear()
+        sh.onecmd(typed)
+        wrong = [s for s in out if s.startswith(("  ?", "  !")) and "--window" not in s]
+        assert not wrong, (typed, wrong)
+    assert vm.get("height") == pytest.approx(30, rel=1e-3)
+    sh.onecmd("tour end")
+    assert sh.tour_at == 0
+
+
+def said_texts():
+    """Every text the machine may say: the literal templates of tr(), and those kept in tables."""
+    found = set()
+    for path in glob.glob(os.path.join(HERE, "*.py")):
+        if os.path.basename(path).startswith(("test_", "fr.")):
+            continue
+        with open(path, encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", None) in ("tr", "label") and node.args:
+                a = node.args[0]
+                if isinstance(a, ast.Constant) and isinstance(a.value, str):
+                    found.add(a.value)
+    import language
+    found |= {what for _, what, _ in editor.DOCS.values()} | set(guide.MORE.values())
+    found |= {t for title, text, _ in guide.TOUR for t in (title, text)} | {g for g, _ in guide.GROUPS}
+    found |= set(language.ROLES.values())
+    return found
+
+
+def test_the_french_catalogue_is_whole():
+    from fr import FR
+
+    def fields(s):
+        return sorted(f for _, f, _, _ in string.Formatter().parse(s) if f)
+    texts = said_texts()
+    assert not [t for t in texts if t not in FR]                              # nothing said in English by mistake
+    assert not [t for t in texts if fields(t) != fields(FR[t])]               # the same {fields}
+
+
+def test_language_switch(tmp_path):
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    assert sh.settings_path is None
+    sh.onecmd("lang fr")
+    assert out[-1].strip() == "langue : fr"
+    out.clear()
+    sh.onecmd("relate fall: 2 * height = g * t^2 ; obs g = 9.81 +/- 0.1% ; obs t = 2 ; ask height")
+    assert any("relation fall" in s for s in out) and any("mesuré g" in s for s in out)
+    out.clear()
+    sh.onecmd("help relate")
+    assert "une relation" in out[0]
+    out.clear()
+    sh.onecmd("xyz")
+    assert "n'est pas un mot de la machine" in out[-1]
+    sh.onecmd("lang en")
+    assert not list(tmp_path.iterdir()) and not os.path.exists(os.path.join(HERE, "settings.json"))
+    # with a memory, the choice is kept beside it
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("lang fr ; help off")
+    with open(tmp_path / "settings.json", encoding="utf-8") as f:
+        assert json.load(f) == {"lang": "fr", "help": False}
+    i18n.set_lang("en")
+    sh, out = shell_of(grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True))
+    assert i18n.lang() == "fr" and sh.settings["help"] is False
+
+
+def test_a_located_error_in_french():
+    i18n.set_lang("fr")
+    with pytest.raises(TalkError) as e:
+        say(Network(), "use programs/no_such.grm")
+    assert "pas de fichier" in str(e.value)
+
+
+def test_hint_and_menu_under_the_prompt():
+    assert "tour" in editor.hint("", 0)
+    assert editor.hint("rel", 3).startswith("rel = relate")
+    assert editor.hint("relate a: ", 10).startswith("relate (rel)")
+    assert "word(s)" in editor.hint("ob", 2)
+    menu = dict(editor.suggest("ob", 2, commands=["outputs"]))
+    assert "observe" in menu and menu.get("obs") == "= observe"
+    assert editor.suggest("relate r: h", 11, nodes=["height", "h2"]) == []        # one letter: no names yet
+    assert [w for w, _ in editor.suggest("relate r: he", 12, nodes=["height", "head"])] == ["head", "height"]
+    many = [f"n{i}" for i in range(20)]
+    assert editor.suggest("ask n", 5, nodes=many) == [] and editor.suggest("ask n1", 6, nodes=many) != []
+    assert [w for w, _ in editor.suggest("help rel", 8)] == ["relate"]
+    i18n.set_lang("fr")
+    assert "une relation" in editor.hint("rel", 3)
+
+
+def test_a_colon_as_each_language_writes_it():
+    assert i18n.label("error") == "error: "
+    i18n.set_lang("fr")
+    assert i18n.label("error") == "erreur : "
+    assert guide.word("relate")[0].endswith("(abrégé : rel) — une relation : produits, puissances, sommes")

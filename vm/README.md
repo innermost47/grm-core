@@ -95,6 +95,27 @@ fundamental constants are in how it counts, not in nodes. Every node with a dime
 fall of 2 s at 9.81 m/s² reads 19.62 m; inside, g is 1.8e-51; a position of 4 m is 2.5e35 inside), positive nodes by
 a shift of their log, signed ones by a scale.
 
+## Writing to it: help, short forms, programs, two languages
+
+A new way of programming needs help at hand, so the machine gives it where the typing is:
+- **`help`** lists every word by group with a few words each; **`help WORD`** gives its form, what it is and an
+  example (`help relate`); **`tour`** is a guided tour in ten steps, each with a line to type.
+- **Short forms**: every statement and command has one (`rel` relate, `obs` observe, `inp` input, `t` tick, `ins`
+  inspect...), and **`+/-`** can be written for `±`, which is not on every keyboard. Several statements or commands
+  go on one line, separated by `;`.
+- **Under the prompt** (window), a line says what is being typed: the word, a few words on it, its form. Under it, a
+  menu of words from the first letter (and of nodes and relations from the second, when they are few); Up and Down
+  choose, Tab or Enter takes, Esc closes. The menu is optional (a box under it, or `help on` / `help off`).
+- **Programs** are files of statements with a header (`#! name`, `#! does`, `#! try`): `programs` lists them with
+  what they do and what they take and give (read from the program itself), `read NAME` shows one here, `new NAME`
+  starts one from a template. In the window, `open NAME` opens it in a programs window of its own, a tab per program,
+  coloured as it is typed, run with F5 (a line that fails turns red), saved with Ctrl+S, searched with Ctrl+F, all
+  from the keyboard (`tab N`, `edit`, `save`, `find`, `close`; Esc comes back to the prompt).
+- **Two languages**: `lang fr` / `lang en`. At the first start the machine follows the language of the system. The
+  words of GRML stay English in both, so a program runs anywhere. The choice is kept in `vm/settings.json`.
+
+Everything is in [docs/GRML.md](../docs/GRML.md) ([en français](../docs/GRML.fr.md)).
+
 ## Inspired by the brain
 
 What the machine takes from what is known of the brain, and where:
@@ -193,7 +214,7 @@ pygrm's master invariant (`GlobalRelationalNetwork.extract_master_invariant`): o
 and of those it implies between its farthest scales (pairs and, since pygrm 0.5.0, triples of nodes, every other node
 eliminated), the one that ties the widest span of scales with the smallest residual (merit = span in decades /
 (1 + 10^7 residual); a residual within the precision of exact relations counts as none, and a node that is a pure
-number times another is the same scale). From the seven relations of
+number times another is the same scale, since pygrm 0.5.1). From the seven relations of
 `programs/universe.grm` it brings up S · Equant = Estock over 175 decades, every constant cancelling; how robust that
 is, `test_universe_unbiased.py` says (seven runs: G measured, nothing fixed, distractors, neutral names, another H0,
 and a wrong relation that must not give it). The
@@ -276,7 +297,12 @@ The only part that is not the network: what a human uses to talk to it and to pe
   flourishing and curiosity, the master equation now and at t - n.
 - `diagnose.py`: what can go wrong, said (typos, values that are not numbers, no settling, contradictions, errors of
   the machine).
-- `editor.py`: the colours of a line of GRML, what Tab completes, the banner.
+- `editor.py`: the colours of a line of GRML, what Tab completes, what each word is (its form, a few words, an
+  example, its short form), the line of help and the menu under the prompt, the banner.
+- `guide.py`: `help` and `tour`.
+- `programs.py`: where programs are, their header, the template of a new one.
+- `i18n.py`, `fr.py`: the two languages (every text the machine says is an English template; `fr.py` gives it in
+  French), and the settings kept next to the memory.
 - `graph.py`: where the nodes and relations go on the screen, and what each one holds (what the mouse shows).
 - `base.grm`: the base it is born with.
 - `programs/`: the examples of [docs/GRML.md](../docs/GRML.md) (`hello`, `fall`, `count`, `fibonacci`, `thermostat`,
@@ -287,4 +313,7 @@ The only part that is not the network: what a human uses to talk to it and to pe
   fusion by hand and by itself (and none with a vague node), the base, a night of sleep, sleep and wake (the same run as never
   sleeping), units, the voices, the shell; errors said (a file's line, typos, contradictions, errors of the
   machine), the dimension of the weights it writes, colours and Tab, the picture and what the mouse shows, the master
-  equation now and before, traces and forgetting, pleasure and displeasure, curiosity, what it feels remembered.
+  equation now and before, traces and forgetting, pleasure and displeasure, curiosity, what it feels remembered;
+  short forms and `+/-`, the programs and their headers, `help` on every word, every line of the tour run, the French
+  catalogue whole (every text the machine may say, with the same fields), the language switched and remembered, the
+  line and the menu under the prompt.

@@ -22,6 +22,7 @@ import csv
 import json
 import math
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +31,10 @@ sys.path.insert(0, HERE)
 from language import Network, TalkError, from_store, statement   # noqa: E402
 from runtime import Machine   # noqa: E402
 import body   # noqa: E402
+import guide   # noqa: E402
+import i18n   # noqa: E402
+import programs   # noqa: E402
+from i18n import label, tr   # noqa: E402
 import diagnose   # noqa: E402
 import editor   # noqa: E402
 import graph   # noqa: E402
@@ -83,18 +88,19 @@ class VM:
             try:
                 self.machine = Machine.wake(memory)
                 self.net = self.machine.net
-                self.note = f"woke from {os.path.basename(memory)} (tick {self.machine.ticks})"
+                self.note = tr("woke from {file} (tick {tick})", file=os.path.basename(memory), tick=self.machine.ticks)
                 return
             except Exception as e:  # noqa: BLE001 - an unreadable memory: start from the base, say why
-                self.note = f"{os.path.basename(memory)} not usable ({e}): "
+                self.note = tr("{file} not usable ({error}): ", file=os.path.basename(memory), error=e)
         else:
             self.note = ""
         if not blank and os.path.exists(BASE):
             statement(self.net, "use base.grm", HERE)
             mind.mark(self.net, set(), set(), "base")
-            self.note += f"born with its base ({len(self.net.nodes)} points of the world)"
+            self.note += tr("born with its base ({n} points of the world)", n=len(self.net.nodes))
+            self.born_with_base = True
         else:
-            self.note += "blank"
+            self.note += tr("a blank machine")
 
     # ------------------------------------------------------------------ the network
     def say(self, line, base=None):
@@ -128,7 +134,7 @@ class VM:
             self.say(f"input {name}")
         spec = self.net.nodes[name]
         if not spec.get("signed") and value <= 0:
-            raise TalkError(f"{name} is a positive quantity")
+            raise TalkError(tr("{name} is a positive quantity", name=name))
         self.m().observe(name, value, sigma)
         h = self.net.seen.setdefault(name, [])
         h.append(value)
@@ -203,8 +209,9 @@ class VM:
                 from store import load_grm_network_safely   # noqa: E402
                 _, left_out = from_store(load_grm_network_safely(path), self.net)
                 self.machine = None
-                return f"network loaded: {len(self.net.nodes)} nodes, {len(self.net.relations)} relations" + (
-                    f" ({len(left_out)} left out)" if left_out else "")
+                return tr("network loaded: {nodes} nodes, {relations} relations", nodes=len(self.net.nodes),
+                          relations=len(self.net.relations)) + (
+                    " (" + tr("{n} left out", n=len(left_out)) + ")" if left_out else "")
             if isinstance(data, list):
                 rows = data
             elif isinstance(data, dict) and all(isinstance(v, list) for v in data.values()):
@@ -213,7 +220,7 @@ class VM:
             elif isinstance(data, dict):
                 rows = [data]
             else:
-                raise TalkError("JSON data: a list of records, {name: [values]} or {name: value}")
+                raise TalkError(tr("JSON data: a list of records, {{name: [values]}} or {{name: value}}"))
         weights = [n for n, s in self.net.nodes.items() if s.get("learn")]
         before = {w: self.get(w) for w in weights}
         used = 0
@@ -236,7 +243,7 @@ class VM:
                     used += 1
         finally:
             self._loading = False
-        out = f"{used} rows learned"
+        out = tr("{n} rows learned", n=used)
         for w in weights:
             out += f"\n    {w}: {fmt(before[w])} -> {fmt(self.get(w))}  (± {self.m().sigma(w):.3g})"
         for line in self.grow():
@@ -322,13 +329,14 @@ class VM:
             extra = ""
             mean = rel.get("meaning", {})
             if "period" in mean:
-                extra = f"; an oscillation: period {mean['period']:.4g} moments, {mean['damping']:.4g} left each moment"
+                extra = "; " + tr("an oscillation: period {p} moments, {d} left each moment", p=f"{mean['period']:.4g}",
+                                  d=f"{mean['damping']:.4g}")
             elif "half_life" in mean:
-                extra = f"; a decay: half-life {mean['half_life']:.4g} moments"
+                extra = "; " + tr("a decay: half-life {h} moments", h=f"{mean['half_life']:.4g}")
             elif "doubling" in mean:
-                extra = f"; a growth: doubles in {mean['doubling']:.4g} moments"
-            done.append(f"found by itself: {rel['text']} (relation {name}, r² {rel['r2']:.6f} over {rel['rows']} "
-                        f"rows{extra})")
+                extra = "; " + tr("a growth: doubles in {d} moments", d=f"{mean['doubling']:.4g}")
+            done.append(tr("found by itself: {text} (relation {name}, r² {r2} over {rows} rows{extra})",
+                           text=rel["text"], name=name, r2=f"{rel['r2']:.6f}", rows=rel["rows"], extra=extra))
         return done
 
     def _dimv(self, name):
@@ -478,8 +486,9 @@ class VM:
             rel["text"] += f"  [+ {h}]"
             self.net.tension[rel["name"]] = []
             self.machine = None
-            done.append(f"a node nobody mentioned: {h} = {value:.6g} in {rel['name']} (it kept missing the data on "
-                        f"the same side: {verdict['t']:.1f} sigma over {verdict['rows']} rows)")
+            done.append(tr("a node nobody mentioned: {h} = {value} in {rel} (it kept missing the data on the same side: "
+                           "{t} sigma over {rows} rows)", h=h, value=f"{value:.6g}", rel=rel["name"],
+                           t=f"{verdict['t']:.1f}", rows=verdict["rows"]))
         return done
 
     def _drift(self, rel, drift, res):
@@ -499,8 +508,9 @@ class VM:
         rel["text"] += f"  [+ {h}]"
         self.net.tension[rel["name"]] = []
         self.machine = None
-        return (f"a node nobody mentioned, that changes: {h} in {rel['name']} (its misses followed each other: "
-                f"each one {drift['rho']:.2f} of the one before, over {drift['rows']} rows)")
+        return tr("a node nobody mentioned, that changes: {h} in {rel} (its misses followed each other: each one {rho} "
+                  "of the one before, over {rows} rows)", h=h, rel=rel["name"], rho=f"{drift['rho']:.2f}",
+                  rows=drift["rows"])
 
     def _sum_dim(self, rel):
         """The dimension of a sum relation's terms (that of its first node with one)."""
@@ -526,13 +536,15 @@ class VM:
                 statement(self.net, f"fuse {keep} {gone}" + (" inverse" if inverse else ""))
             except TalkError as e:
                 self.net.fusions.append({"keep": keep, "gone": gone, "why": why, "refused": str(e)})
-                done.append(f"{gone} looks like {keep} ({why}) but stays apart: {e}")
+                done.append(tr("{gone} looks like {keep} ({why}) but stays apart: {error}", gone=gone, keep=keep,
+                               why=tr(why) if isinstance(why, str) else why, error=e))
                 self._refused = getattr(self, "_refused", set()) | {(keep, gone) + (("inverse",) if inverse else ())}
                 continue
             self.net.fusions.append({"keep": keep, "gone": gone, "why": why, "tick": self.net.ticks,
                                      "inverse": inverse})
             self.machine = None
-            done.append(f"fused by itself: {gone} is {keep}" + ("^-1" if inverse else "") + f" ({why})")
+            done.append(tr("fused by itself: {gone} is {keep}", gone=gone, keep=keep) + ("^-1" if inverse else "")
+                        + f" ({tr(why)})")
 
     def _one_fusion(self):
         refused = getattr(self, "_refused", set())
@@ -581,8 +593,8 @@ class VM:
                 if t < MATCH_SIGMA:
                     best.append((t, a))
             if len(best) == 1 and (best[0][1], b) not in refused:
-                return best[0][1], b, f"{mean:.6g} held still, {best[0][1]} is {m.value_si(best[0][1]):.6g}, " \
-                                      f"{best[0][0]:.2g} sigma apart"
+                return best[0][1], b, tr("{mean} held still, {a} is {va}, {t} sigma apart", mean=f"{mean:.6g}",
+                                         a=best[0][1], va=f"{m.value_si(best[0][1]):.6g}", t=f"{best[0][0]:.2g}")
         return None
 
     def _order(self, a, b):
@@ -630,17 +642,35 @@ class Shell(cmd.Cmd):
     prompt = "grm> "
     WORDS = ("node", "relate", "observe", "forget", "keep", "network", "call", "use", "end", "var", "set",
              "learn", "input", "output", "fuse")
+    WINDOW_ONLY = ("open", "tab", "close", "edit", "save", "find")
 
-    def __init__(self, vm, out=None):
+    def __init__(self, vm, out=None, settings=None):
         super().__init__(stdout=out)
         self.vm = vm
         self.write = (lambda t: print(t)) if out is None else (lambda t: out.write(t + "\n"))
         self.base = HERE
         self.sound = False
         self.clock = 0.0
+        self.programs = None        # the programs window (body.py), when there is one
+        self.on_help = None         # what the window does when the typing help is turned on or off
+        self.tour_at = 0
+        # the settings (language, typing help) are remembered next to the memory; a machine without memory (tests)
+        # neither reads nor writes them, and speaks English
+        self.settings_path = settings if settings is not None else (
+            os.path.join(os.path.dirname(os.path.abspath(vm.memory)), "settings.json") if vm.memory else None)
+        self.settings = i18n.load_settings(self.settings_path)
+        if self.settings_path:
+            i18n.set_lang(self.settings.get("lang") or i18n.system_lang())
         enc = getattr(sys.stdout, "encoding", None) if out is None else "utf-8"
-        self.intro = (editor.banner(enc) + f"\n  {vm.note}.\n  Talk to it in its words (var, set, relate, learn, input, "
-                      f"output...); Enter alone = one tick; Tab completes. `help` for the rest.")
+        self.intro = (editor.banner(enc) + "\n  " + tr("{note}.", note=self.note()) + "\n  "
+                      + tr("Talk to it in its words (relate, observe, var, set, learn, input, output...); Enter alone: "
+                           "one tick; Tab completes; help: the words; tour: a guided tour; lang fr / lang en."))
+
+    def note(self):
+        return self.vm.note
+
+    def save_settings(self):
+        i18n.save_settings(self.settings_path, self.settings)
 
     def emptyline(self):
         self.do_tick("")
@@ -648,21 +678,38 @@ class Shell(cmd.Cmd):
     def commands(self):
         return [n[3:] for n in self.get_names() if n.startswith("do_") and n not in ("do_EOF",)]
 
+    def precmd(self, line):
+        """A short form of a command at the head of the line is the whole command."""
+        head, sep, rest = line.strip().partition(" ")
+        if head.lower() in editor.SHORT_COMMANDS:
+            return editor.SHORT_COMMANDS[head.lower()] + sep + rest
+        return line
+
     def default(self, line):
         word = line.split()[0].lower() if line.split() else ""
-        if self.vm.net.recording is not None or word in self.WORDS:
+        if self.vm.net.recording is not None or editor.whole(word) in self.WORDS:
             try:
                 said = self.vm.say(line, self.base)
             except TalkError as e:
                 self.write(f"  ? {e}")
+                self.locate(str(e))
                 mind.reward(self.vm.net, -0.2)
                 return
             if said:
                 self.write(f"  {said}")
             return
-        like = diagnose.close(word, list(self.WORDS) + self.commands())
-        self.write(f"  ? '{word}' is not a word of the machine" + (f"; did you mean {' or '.join(like)}?" if like
-                                                                    else " (help)"))
+        like = diagnose.close(word, list(self.WORDS) + self.commands() + list(editor.SHORT))
+        if like:
+            self.write("  ? " + tr("'{word}' is not a word of the machine; did you mean {like}?", word=word,
+                                   like=tr(" or ").join(like)))
+        else:
+            self.write("  ? " + tr("'{word}' is not a word of the machine (help)", word=word))
+
+    def locate(self, message):
+        """An error in a file: its line turns red in its tab (the programs window)."""
+        m = re.search(r"(?:in|dans) (\S+\.grm), (?:line|ligne) (\d+)", message)
+        if m and self.programs is not None:
+            self.programs.mark_error(m.group(1), int(m.group(2)))
 
     def onecmd(self, line):
         try:
@@ -671,10 +718,10 @@ class Shell(cmd.Cmd):
                 return False
             if ";" in line:
                 for part in line.split(";"):
-                    if part.strip() and self.onecmd(part.strip()):
+                    if part.strip() and self.onecmd(self.precmd(part.strip())):
                         return True
                 return False
-            return super().onecmd(line)
+            return super().onecmd(self.precmd(line))
         except Exception as e:  # noqa: BLE001 - an error of the machine is said, never a crash
             self.write("  ! " + diagnose.internal(e))
             mind.reward(self.vm.net, -0.5)
@@ -684,7 +731,7 @@ class Shell(cmd.Cmd):
 
     def say_events(self):
         for ev in self.vm.pop_events():
-            mark = "!" if ev.startswith(("error", "warning")) else "~"
+            mark = "!" if ev.startswith(("error", "warning", tr("error"), tr("warning"))) else "~"
             self.write(f"  {mark} {ev}")
 
     # --------------------------------------------------------------- Tab (terminal, with readline)
@@ -702,41 +749,53 @@ class Shell(cmd.Cmd):
         cut = begidx - start
         return [f[cut:] for f in found if len(f) >= cut]
 
+    def usage(self, word):
+        self.write("  " + label("usage") + editor.DOCS[word][0])
+
     # --------------------------------------------------------------- running
     def do_tick(self, arg):
         """tick [n]: n ticks of the clock (Enter alone: one)"""
         try:
             n = int(arg) if arg.strip() else 1
         except ValueError:
-            self.write("  tick [n]")
+            self.usage("tick")
             return
         m = self.vm.m()
         r0 = m.rounds
         writes = self.vm.tick(n)
         if n == 1:
             ws = ", ".join(f"{k} = {fmt(v)}" for k, v in writes.items() if "__" not in k)
-            self.write(f"  tick {m.ticks}: {m.rounds - r0} rounds" + (f"; {ws}" if ws else ""))
+            self.write("  " + tr("tick {tick}: {rounds} rounds", tick=m.ticks, rounds=m.rounds - r0)
+                       + (f"; {ws}" if ws else ""))
         else:
-            self.write(f"  {n} ticks (now {m.ticks}): {m.rounds - r0} rounds")
+            self.write("  " + tr("{n} ticks (now {tick}): {rounds} rounds", n=n, tick=m.ticks, rounds=m.rounds - r0))
         if self.vm.outputs():
             self.do_outputs("")
         if self.sound:
             body.play(body.sound_of(self.vm.history))
 
     def do_put(self, arg):
-        """put NAME = VALUE [± sigma]: an input (in SI if the node has a dimension)"""
-        name, _, rest = arg.partition("=")
+        """put NAME = VALUE [+/- sigma]: an input (in SI if the node has a dimension)"""
+        name, _, rest = arg.replace("+/-", "±").partition("=")
         value, _, sig = rest.partition("±")
         try:
             self.vm.put(name.strip(), float(value), float(sig) if sig.strip() else None)
         except (ValueError, TalkError) as e:
-            self.write(f"  ? {e}  (put NAME = value)")
+            self.write(f"  ? {e}")
+            self.usage("put")
             return
         self.write(f"  {name.strip()} <- {value.strip()}")
 
     def do_run(self, arg):
-        """run FILE.grm: says every statement of a file (= use)"""
-        self.default("use " + arg.strip())
+        """run [FILE.grm]: says every statement of a file (= use); no file: the open tab"""
+        if not arg.strip():
+            if self.programs is not None and self.programs.current() is not None:
+                self.programs.run_current()
+            else:
+                self.usage("run")
+            return
+        path = programs.find(arg, self.base) or arg.strip()
+        self.default("use " + path)
 
     def do_load(self, arg):
         """load FILE.csv | FILE.json: data, row by row: the network learns from it"""
@@ -749,18 +808,22 @@ class Shell(cmd.Cmd):
             self.write(f"  ? {e}")
 
     # --------------------------------------------------------------- looking
+    def no_node(self, name, also=()):
+        like = diagnose.close(name, list(self.vm.net.nodes) + list(also))
+        self.write("  ? " + (tr("no node {name}; did you mean {like}?", name=name, like=tr(" or ").join(like)) if like
+                             else tr("no node {name}", name=name)))
+
     def do_ask(self, arg):
         """ask NODE: its value (± what the messages say of its uncertainty)"""
         name = arg.strip()
         if name not in self.vm.net.nodes:
-            like = diagnose.close(name, self.vm.net.nodes)
-            self.write(f"  ? no node {name}" + (f"; did you mean {' or '.join(like)}?" if like else ""))
+            self.no_node(name)
             return
         m = self.vm.m()
         m.run(5000)
         sg = m.sigma(name)
-        unit = "" if self.vm.dim(name) else ""
-        self.write(f"  {name} = {fmt(self.vm.get(name))}{unit}" + (f"  (± {sg:.3g} inside)" if sg < 1e5 else ""))
+        self.write(f"  {name} = {fmt(self.vm.get(name))}" + ("  (± " + tr("{s} inside", s=f"{sg:.3g}") + ")"
+                                                            if sg < 1e5 else ""))
 
     def do_outputs(self, arg):
         """outputs: what the network gives out (and how surprised it was by its last inputs)"""
@@ -768,14 +831,16 @@ class Shell(cmd.Cmd):
             self.write(f"    {o:>12} = {fmt(self.vm.get(o))}")
         h = self.vm.history.get("surprise")
         if h:
-            self.write(f"    {'surprise':>12} = {h[-1]:.3g} sigma (how far the last inputs were from what it expected)")
+            self.write(f"    {tr('surprise'):>12} = " + tr("{s} sigma (how far the last inputs were from what it "
+                                                            "expected)", s=f"{h[-1]:.3g}"))
 
     def do_show(self, arg):
         """show: what the network is"""
         n = self.vm.net
         roles = {r: [k for k, s in n.nodes.items() if s.get(r)] for r in ("var", "learn", "input", "output")}
-        self.write(f"  {len(n.nodes)} nodes, {len(n.relations)} relations, {len(n.sets)} writes at each tick, "
-                   f"{len(n.networks)} networks" + (f" ({', '.join(n.networks)})" if n.networks else ""))
+        self.write("  " + tr("{nodes} nodes, {relations} relations, {sets} writes at each tick, {networks} networks",
+                             nodes=len(n.nodes), relations=len(n.relations), sets=len(n.sets),
+                             networks=len(n.networks)) + (f" ({', '.join(n.networks)})" if n.networks else ""))
         for r, ks in roles.items():
             if ks:
                 self.write(f"    {r}: {', '.join(ks[:20])}" + (" ..." if len(ks) > 20 else ""))
@@ -786,13 +851,14 @@ class Shell(cmd.Cmd):
                 self.write(f"    set {st['target']} <- {st['source']}")
         if self.vm.machine:
             m = self.vm.machine
-            self.write(f"  {m.processors()} processors, tick {m.ticks}, round {m.rounds}")
+            self.write("  " + tr("{p} processors, tick {tick}, round {round}", p=m.processors(), tick=m.ticks,
+                                 round=m.rounds))
 
     # --------------------------------------------------------------- memory
     def do_sleep(self, arg):
         """sleep [FILE.json]: the network and every message to its memory"""
         self.vm.sleep(arg.strip() or None)
-        self.write(f"  asleep in {arg.strip() or self.vm.memory}")
+        self.write("  " + tr("asleep in {path}", path=arg.strip() or self.vm.memory))
 
     def do_wake(self, arg):
         """wake [FILE.json]: back as it was put to sleep"""
@@ -801,28 +867,28 @@ class Shell(cmd.Cmd):
         except (OSError, TalkError, ValueError) as e:
             self.write(f"  ? {e}")
             return
-        self.write(f"  awake at tick {self.vm.machine.ticks}")
+        self.write("  " + tr("awake at tick {tick}", tick=self.vm.machine.ticks))
 
     def do_blank(self, arg):
         """blank: forget everything (the memory file stays until the next sleep)"""
         self.vm.blank()
-        self.write("  blank")
+        self.write("  " + tr("blank"))
 
     # --------------------------------------------------------------- the body
     def do_sound(self, arg):
         """sound on | off: hear the outputs at each tick"""
         self.sound = arg.strip().lower() != "off"
-        self.write(f"  sound {'on' if self.sound else 'off'}")
+        self.write("  " + (tr("sound on") if self.sound else tr("sound off")))
 
     def do_clock(self, arg):
         """clock HZ: ticks by themselves, HZ a second (window only; 0: only on Enter)"""
         try:
             self.clock = max(0.0, float(arg))
         except ValueError:
-            self.write("  clock HZ")
+            self.usage("clock")
             return
         self.vm.clock_hz = self.clock
-        self.write(f"  clock {self.clock:g} Hz")
+        self.write("  " + tr("clock {hz} Hz", hz=f"{self.clock:g}"))
 
     # --------------------------------------------------------------- inside
     def do_master(self, arg):
@@ -830,34 +896,40 @@ class Shell(cmd.Cmd):
         try:
             n = int(arg) if arg.strip() else 0
         except ValueError:
-            self.write("  master [n]")
+            self.usage("master")
             return
         res = mind.master(self.vm, n)
-        when = f"t - {n}" if n else "now"
-        tick = f" (tick {res['tick']})" if res.get("tick") is not None else ""
-        self.write(f"  master equation, {when}{tick}: {res['text']}")
+        when = f"t - {n}" if n else tr("now")
+        tick = " (" + tr("tick {tick}", tick=res["tick"]) + ")" if res.get("tick") is not None else ""
+        self.write("  " + tr("master equation, {when}{tick}: {text}", when=when, tick=tick, text=res["text"]))
         if "span" in res:
-            self.write(f"    ties {res['span']:.3g} decades of scale, residual {res['residual']:.3g}{res['unit']}"
-                       + ("; implied by the network: " + ", ".join(f"{k} × {v:g}" for k, v in res["relations"].items())
-                          if res.get("derived") and res.get("relations") else "; written as one of its relations"))
+            self.write("    " + tr("ties {span} decades of scale, residual {residual}", span=f"{res['span']:.3g}",
+                                   residual=f"{res['residual']:.3g}{res['unit']}")
+                       + ("; " + label("implied by the network")
+                          + ", ".join(f"{k} × {v:g}" for k, v in res["relations"].items())
+                          if res.get("derived") and res.get("relations") else "; " + tr("written as one of its "
+                                                                                       "relations")))
 
     def do_mood(self, arg):
         """mood: its pleasure, what it expects, how it flourishes"""
         md = mind.mood(self.vm.net)
         mind.flourishing(self.vm.net)
         d = md["dopamine"]
-        feel = "pleasure" if d > 0.05 else "displeasure" if d < -0.05 else "calm"
+        feel = tr("pleasure") if d > 0.05 else tr("displeasure") if d < -0.05 else tr("calm")
         exp = md["expected"]
-        self.write(f"    dopamine     {d:+.3f}  ({feel})")
-        self.write(f"    expects      {exp:.3g} sigma of surprise" if exp is not None else
-                   "    expects      nothing yet (no input has surprised it)")
-        self.write(f"    flourishing  {md['flourishing']:.3f}  = sqrt(accuracy {md['accuracy']:.3f} × room "
-                   f"{md['room']:.3f})")
-        self.write(f"    progress     {md['progress']:+.3f}  (how much its surprise is falling)")
+        rows = [(tr("dopamine"), f"{d:+.3f}  ({feel})"),
+                (tr("expects"), tr("{s} sigma of surprise", s=f"{exp:.3g}") if exp is not None else
+                 tr("nothing yet (no input has surprised it)")),
+                (tr("flourishing"), f"{md['flourishing']:.3f}  = sqrt({tr('accuracy')} {md['accuracy']:.3f} × "
+                                    f"{tr('room')} {md['room']:.3f})"),
+                (tr("progress"), f"{md['progress']:+.3f}  (" + tr("how much its surprise is falling") + ")")]
         net = self.vm.net
-        self.write(f"    links        {mind.links(net)} of {mind.capacity(net)}" + ("  (set by hand)" if net.capacity
-                                                                                     else f"  ({self._host_text()})"))
-        self.write(f"    rent         {mind.price(net):.3g} bits per link per tick")
+        rows.append((tr("links"), tr("{n} of {cap}", n=mind.links(net), cap=mind.capacity(net))
+                     + ("  (" + tr("set by hand") + ")" if net.capacity else f"  ({self._host_text()})")))
+        rows.append((tr("rent"), tr("{p} bits per link per tick", p=f"{mind.price(net):.3g}")))
+        w = max(len(k) for k, _ in rows) + 2                # the longest word of the language sets the column
+        for k, v in rows:
+            self.write(f"    {k:<{w}}{v}")
 
     def do_capacity(self, arg):
         """capacity [N | auto]: how many links (synapses) the network may hold (auto: what the host's budget allows);
@@ -869,28 +941,29 @@ class Shell(cmd.Cmd):
             try:
                 net.capacity = max(1, int(float(arg)))
             except ValueError:
-                self.write("  capacity [N | auto]")
+                self.usage("capacity")
                 return
         if arg.strip():
             for line in mind.prune(self.vm):
                 self.write(f"  ~ {line}")
         cap = mind.capacity(net)
-        self.write(f"  {mind.links(net)} links of {cap}" + ("  (set by hand)" if net.capacity else
-                                                            f"  ({self._host_text()})"))
-        self.write(f"  rent: {mind.price(net):.3g} bits per link per tick")
+        self.write("  " + tr("{n} links of {cap}", n=mind.links(net), cap=cap)
+                   + ("  (" + tr("set by hand") + ")" if net.capacity else f"  ({self._host_text()})"))
+        self.write("  " + tr("rent: {p} bits per link per tick", p=f"{mind.price(net):.3g}"))
 
     def _host_text(self):
         h = self.vm.net.host
         caps = h.get("caps") or {}
         if not caps:
-            return f"nothing measured on this host: {mind.CAPACITY} by default"
-        parts = [f"{k} {int(v):,}".replace(",", " ") for k, v in sorted(caps.items())]
-        return "the host's budget: " + ", ".join(parts) + f"; limited by {h.get('limit')}"
+            return tr("nothing measured on this host: {n} by default", n=mind.CAPACITY)
+        parts = [f"{tr(k)} {int(v):,}".replace(",", " ") for k, v in sorted(caps.items())]
+        return tr("the host's budget: {parts}; limited by {limit}", parts=", ".join(parts),
+                  limit=tr(h.get("limit") or ""))
 
     def do_prune(self, arg):
         """prune: forget now what a night would forget (what it found and no longer uses, and beyond capacity)"""
         done = mind.prune(self.vm, night=True)
-        for line in done or ["nothing to forget"]:
+        for line in done or [tr("nothing to forget")]:
             self.write(f"  {line}")
 
     def do_check(self, arg):
@@ -898,7 +971,7 @@ class Shell(cmd.Cmd):
         m = self.vm.m()
         m.run(5000)
         problems = diagnose.machine(m, m.quiet)
-        for p in problems or ["no problem found"]:
+        for p in problems or [tr("no problem found")]:
             self.write(f"  {p}")
 
     def do_inspect(self, arg):
@@ -913,35 +986,190 @@ class Shell(cmd.Cmd):
             lines = graph.relation_card(self.vm, name)
         else:
             like = diagnose.close(name, list(net.nodes) + [r["name"] for r in net.relations])
-            self.write(f"  ? no node or relation {name}" + (f"; did you mean {' or '.join(like)}?" if like else ""))
+            self.write("  ? " + (tr("no node or relation {name}; did you mean {like}?", name=name,
+                                    like=tr(" or ").join(like)) if like else
+                                 tr("no node or relation {name}", name=name)))
             return
         for ln in lines:
             self.write(f"    {ln}")
 
+    # --------------------------------------------------------------- programs
+    def do_programs(self, arg):
+        """programs: the programs and what they do"""
+        found = programs.listing(os.path.join(self.base, "programs"))
+        if not found:
+            self.write("  " + tr("no program in {folder}", folder=os.path.join(self.base, "programs")))
+            return
+        width = max(len(p["name"]) for p in found)
+        for p in found:
+            self.write(f"    {p['name']:<{width}}  {p.get('does', '')}")
+            io = []
+            if p["inputs"]:
+                io.append(label("in") + ", ".join(p["inputs"]))
+            if p["outputs"]:
+                io.append(label("out") + ", ".join(p["outputs"]))
+            if p["networks"]:
+                io.append(label("networks") + ", ".join(p["networks"]))
+            if io:
+                self.write(f"    {'':<{width}}  " + "; ".join(io))
+        self.write("  " + tr("open NAME: in a tab; read NAME: here; run NAME: run it"))
+
+    def _program(self, arg, word):
+        if not arg.strip():
+            self.usage(word)
+            return None
+        path = programs.find(arg, self.base)
+        if path is None:
+            like = diagnose.close(arg.strip(), editor.program_names(self.base))
+            self.write("  ? " + (tr("no program {name}; did you mean {like}?", name=arg.strip(),
+                                    like=tr(" or ").join(like)) if like else
+                                 tr("no program {name} (programs: the list)", name=arg.strip())))
+        return path
+
+    def do_read(self, arg):
+        """read PROGRAM: the program, here, its lines numbered"""
+        path = self._program(arg, "read")
+        if path is None:
+            return
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        self.write(f"  {path}")
+        for i, ln in enumerate(lines, 1):
+            self.write(f"  {i:>4}  {ln}")
+
+    def _window(self, word):
+        if self.programs is None:
+            self.write("  ? " + tr("{word}: in the window only (python vm/grm_vm.py --window); read NAME shows a "
+                                   "program here", word=word))
+            return False
+        return True
+
+    def do_open(self, arg):
+        """open PROGRAM: in a tab of the programs window"""
+        if not self._window("open"):
+            return
+        path = self._program(arg, "open")
+        if path:
+            n = self.programs.open(path)
+            self.write("  " + tr("open in tab {n}: {path}", n=n, path=path))
+
+    def do_tab(self, arg):
+        """tab N | NAME: go to a tab of the programs window"""
+        if not self._window("tab"):
+            return
+        if not arg.strip():
+            self.write("  " + (", ".join(f"{i}: {name}" for i, name in self.programs.tabs()) or tr("no tab open")))
+            return
+        if not self.programs.select(arg.strip()):
+            self.write("  ? " + tr("no tab {tab} (tab: the list)", tab=arg.strip()))
+
+    def do_close(self, arg):
+        """close [N | NAME]: close a tab (the current one)"""
+        if not self._window("close"):
+            return
+        said = self.programs.close(arg.strip() or None)
+        self.write("  " + (said or tr("no tab to close")))
+
+    def do_new(self, arg):
+        """new NAME: a new program in programs/, from a short template, open to be written"""
+        name = arg.strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_\-]*", name or ""):
+            self.usage("new")
+            return
+        path = os.path.join(self.base, "programs", name + ".grm")
+        if os.path.exists(path):
+            self.write("  ? " + tr("{path} already exists: open {name}", path=path, name=name))
+            return
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(programs.template(name))
+        self.write("  " + tr("new program: {path}", path=path))
+        if self.programs is not None:
+            self.programs.open(path, edit=True)
+
+    def do_edit(self, arg):
+        """edit [PROGRAM]: write in a tab (the current one); Ctrl+S saves, F5 runs, Esc comes back here"""
+        if not self._window("edit"):
+            return
+        if arg.strip():
+            path = self._program(arg, "edit")
+            if path is None:
+                return
+            self.programs.open(path, edit=True)
+        elif not self.programs.edit():
+            self.write("  ? " + tr("no tab open: edit NAME"))
+
+    def do_save(self, arg):
+        """save [FILE.grm]: save the current tab (as FILE)"""
+        if not self._window("save"):
+            return
+        said = self.programs.save(arg.strip() or None)
+        self.write("  " + (said or tr("no tab open")))
+
+    def do_find(self, arg):
+        """find WORDS: search the current tab (Ctrl+F there)"""
+        if not self._window("find"):
+            return
+        n = self.programs.find(arg.strip())
+        self.write("  " + tr("{n} found", n=n) if n is not None else "  ? " + tr("no tab open"))
+
+    # --------------------------------------------------------------- help
+    def do_lang(self, arg):
+        """lang fr | en: the language of the machine"""
+        code = arg.strip().lower()
+        if code not in i18n.LANGS:
+            self.write("  " + tr("language: {lang}", lang=i18n.lang()) + "   (lang fr | lang en)")
+            return
+        i18n.set_lang(code)
+        for pic in self.vm.past:                 # the master equations said again, in the new language
+            pic.pop("master", None)
+        self.settings["lang"] = code
+        self.save_settings()
+        self.write("  " + tr("language: {lang}", lang=code))
+
     def do_help(self, arg):
-        if arg:
-            return super().do_help(arg)
-        self.write("""  the network   var x = 0            a variable (held until written again)
-                set x = x + 1 [when s in 0.5 .. 1.5]   written at each tick: loops and choices
-                relate r: y = k * x + c [± 0.5] [when ...]   a relation (products, sums), only while...
-                learn k = 0          a weight: it keeps what it learns (with the weights it shares relations with)
-                fuse A B             B was A under another name: one node (the machine also does it by itself)
-                input x [= v]        output y           node NAME [M L T Q K]
-                network NAME(a, b) ... end      call NAME(a=.., b=..)      use FILE.grm
-  running       Enter: one tick      tick [n]           put NAME = value      load FILE.csv | FILE.json
-  looking       ask NODE             outputs            show               inspect NAME
-                master [n]           check              (the window draws the network itself)
-  inside        mood                 capacity [N]       prune
-  memory        sleep [FILE]         wake [FILE]        blank      (quit puts it to sleep)
-  the body      sound on | off       clock HZ (window)
-                quit""")
+        """help [WORD | on | off]"""
+        w = arg.strip().lower()
+        if w in ("on", "off"):
+            self.settings["help"] = w == "on"
+            self.save_settings()
+            if self.on_help:
+                self.on_help(self.settings["help"])
+            self.write("  " + (tr("typing help on") if w == "on" else tr("typing help off")))
+            return
+        if w:
+            whole = editor.whole(w)
+            if whole not in editor.DOCS:
+                like = diagnose.close(w, list(editor.DOCS) + list(editor.SHORT))
+                self.write("  ? " + (tr("'{word}' is not a word of the machine; did you mean {like}?", word=w,
+                                        like=tr(" or ").join(like)) if like else
+                                     tr("'{word}' is not a word of the machine (help)", word=w)))
+                return
+            for line in guide.word(whole):
+                self.write(line)
+            return
+        for line in guide.overview():
+            self.write(line)
+
+    def do_tour(self, arg):
+        """tour [N | end]: a guided tour, a step at a time"""
+        a = arg.strip().lower()
+        if a in ("end", "stop", "fin"):
+            self.tour_at = 0
+            self.write("  " + tr("the tour is over (tour 1: again)"))
+            return
+        if a.isdigit():
+            self.tour_at = max(1, min(len(guide.TOUR), int(a)))
+        else:
+            self.tour_at = self.tour_at + 1 if self.tour_at < len(guide.TOUR) else 1
+        for line in guide.tour_step(self.tour_at):
+            self.write(line)
 
     def do_quit(self, arg):
         """quit: the machine goes to sleep in its memory"""
         if self.vm.net.nodes and self.vm.memory:
             for line in self.vm.sleep(night=True):
                 self.write(f"  {line}")
-            self.write(f"  asleep in {self.vm.memory}")
+            self.write("  " + tr("asleep in {path}", path=self.vm.memory))
         return True
 
     do_exit = do_quit
@@ -953,6 +1181,8 @@ def main(argv):
         sys.stdout.reconfigure(errors="replace")
     except (AttributeError, ValueError):  # pragma: no cover
         pass
+    # the language first, so that the machine's first words are in it
+    i18n.set_lang(i18n.load_settings(os.path.join(HERE, "settings.json")).get("lang") or i18n.system_lang())
     vm = VM(blank="--blank" in argv)
     argv = [a for a in argv if a != "--blank"]
     if "--window" in argv:

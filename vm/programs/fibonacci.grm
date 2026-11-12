@@ -1,3 +1,6 @@
+#! name: fibonacci
+#! does: Fibonacci: all the writes of a tick at once
+#! try: use programs/fibonacci.grm ; tick 10 ; ask b
 # Fibonacci: all the writes of a tick are made at once, from the values before the tick.
 #     use programs/fibonacci.grm ; tick 10 ; ask b        (89)
 var a = 0

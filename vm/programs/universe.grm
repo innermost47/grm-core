@@ -1,3 +1,6 @@
+#! name: universe
+#! does: the constants of the universe and the seven relations of the chain: the master equation
+#! try: use programs/universe.grm ; tick ; master
 # The constants of the universe and the seven relations of the chain (grm-core README, "The chain the network
 # took"): what the machine makes of them, and the master equation that comes out.
 #
@@ -8,7 +11,7 @@
 # units, where c, hbar, G and kB are 1: written below, they are the SI values of its own units of length, time,
 # mass and temperature.
 #
-# S x Equant = Estock is not written. The master equation the machine brings up (pygrm >= 0.5.0, its master
+# S x Equant = Estock is not written. The master equation the machine brings up (pygrm >= 0.5.1, its master
 # invariant over pairs and triples of nodes, every other node eliminated) is S · Equant · Estock^-1 = 1, over 175
 # decades, from the seven relations: every constant cancels. vm/test_universe_unbiased.py checks it seven ways (G
 # measured, nothing fixed, distractors, neutral names, another H0, and a wrong relation that must not give it).

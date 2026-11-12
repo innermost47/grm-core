@@ -14,6 +14,8 @@ import os
 import re
 import traceback
 
+from i18n import label, tr
+
 NAME = r"[A-Za-z_~][A-Za-z0-9_]*"
 FAR = 5.0          # sigmas: a relation this far from holding once settled is said
 SHOWN = 6          # at most this many of each kind are listed
@@ -34,7 +36,8 @@ def names(net, before, line):
             continue
         like = close(n, old)
         if like:
-            out.append(f"warning: '{n}' is a new node; did you mean {' or '.join(repr(x) for x in like)}?")
+            out.append(label("warning") + tr("'{n}' is a new node; did you mean {like}?", n=n,
+                                                  like=tr(" or ").join(repr(x) for x in like)))
     return out
 
 
@@ -47,8 +50,9 @@ def machine(m, settled=True, reported=None):
     if bad:
         touched = sorted({f.name for f in m.factors if f.kind in ("relation", "nonlinear")
                           and any(not math.isfinite(m.x[i]) for i in f.vars)})
-        out.append(f"error: not a number: {', '.join(bad[:SHOWN])}" + (" ..." if len(bad) > SHOWN else "")
-                   + (f" (in {', '.join(touched[:SHOWN])})" if touched else ""))
+        out.append(label("error") + tr("not a number: {names}", names=", ".join(bad[:SHOWN]))
+                   + (" ..." if len(bad) > SHOWN else "")
+                   + (" (" + tr("in {names}", names=", ".join(touched[:SHOWN])) + ")" if touched else ""))
     if settled and reported is not None:
         reported.discard(" unsettled")
     if not settled and not (reported is not None and " unsettled" in reported):
@@ -57,13 +61,14 @@ def machine(m, settled=True, reported=None):
         moving = sorted(((m.last_move[i], m.var_names[i]) for i in m.dirty_nodes), reverse=True)[:SHOWN]
         swinging = [f.name for f in m.factors if f.kind == "relation" and f.swing >= 4]
         if moving and moving[0][0] > 1e-9:
-            what = "; still moving: " + ", ".join(f"{n} ({d:.2g})" for d, n in moving)
+            what = "; " + tr("still moving: {names}", names=", ".join(f"{n} ({d:.2g})" for d, n in moving))
         else:
-            what = ("; its values stand still but its messages keep growing more certain: exact relations that say "
-                    "the same thing twice around a loop, or contradict each other"
-                    + (f" (around {', '.join(n for _, n in moving)})" if moving else ""))
-        out.append("warning: the network did not settle in the rounds it was given" + what
-                   + (f"; swinging back and forth: {', '.join(swinging[:SHOWN])}" if swinging else ""))
+            what = ("; " + tr("its values stand still but its messages keep growing more certain: exact relations "
+                              "that say the same thing twice around a loop, or contradict each other")
+                    + (" (" + tr("around {names}", names=", ".join(n for _, n in moving)) + ")" if moving else ""))
+        out.append(label("warning") + tr("the network did not settle in the rounds it was given") + what
+                   + ("; " + tr("swinging back and forth: {names}", names=", ".join(swinging[:SHOWN]))
+                      if swinging else ""))
     if not bad:
         # relations that hear inputs or hold weights are far from holding when data surprise them: that is the
         # surprise, shown on its own; here only the program's own relations
@@ -92,8 +97,9 @@ def machine(m, settled=True, reported=None):
         for name, r in sorted(new.items(), key=lambda kv: -abs(kv[1]))[:SHOWN]:
             rel = net.relation(name)
             text = rel["text"] if rel else ""
-            out.append(f"warning: relation {name} does not hold: {abs(r):.3g} sigma ({text}). Two relations that "
-                       f"contradict each other, or data that disagree with it.")
+            out.append(label("warning") + tr("relation {name} does not hold: {s} sigma ({text}). Two relations "
+                                                  "that contradict each other, or data that disagree with it.",
+                                                  name=name, s=f"{abs(r):.3g}", text=text))
     return out
 
 
@@ -103,5 +109,6 @@ def internal(e):
     where = ""
     if tb:
         last = tb[-1]
-        where = f" ({os.path.basename(last.filename)}, line {last.lineno}, in {last.name})"
-    return f"error inside the machine: {type(e).__name__}: {e}{where}"
+        where = " (" + tr("{file}, line {n}, in {name}", file=os.path.basename(last.filename), n=last.lineno,
+                          name=last.name) + ")"
+    return tr("error inside the machine") + f": {type(e).__name__}: {e}{where}"

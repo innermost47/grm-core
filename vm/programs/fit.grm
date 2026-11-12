@@ -1,3 +1,6 @@
+#! name: fit
+#! does: a network that learns a straight line from measures.csv
+#! try: use programs/fit.grm ; load programs/measures.csv ; put x = 10 ; ask y
 # A network that learns: y = k x + c, with k and c weights. Load measures.csv (columns x and y): each row is seen
 # once, and k and c keep what they have learned (they are in the memory at the next session).
 #     use programs/fit.grm ; load programs/measures.csv ; put x = 10 ; ask y

@@ -139,7 +139,7 @@ python equation_wave.py              # the wave of the equation over a cycle (pi
 
 Nothing new was measured. One GRM network holds 199 quantities already known (cosmology, the Planck units, atoms,
 planets, rock, a guitar, a voice), 123 relations and 98 measurements (`data/grm_network_fully_enriched.json`). Solved
-and asked for the invariant that ties the widest span of scales together (pygrm ≥ 0.5.0: the equations the network
+and asked for the invariant that ties the widest span of scales together (pygrm ≥ 0.5.1: the equations the network
 implies between pairs and triples of its nodes, a node that is a pure number times another counted as one scale), it
 brings up, over 175 decades:
 
@@ -1065,8 +1065,12 @@ invariant) can be read now or n ticks ago. Nothing goes wrong in silence: errors
 only its body: the inputs measured, the clock's ticks, the outputs turned into what a human sees and hears: a window
 with the words (coloured, Tab completes), the network itself drawn (the mouse over a node or a relation shows what it
 holds; a relation far from holding turns red), the master equation, a panel of values, bars and curves, and a voice
-per output (its pitch where its value stands, its loudness how much it has just moved). Details and limits:
-[vm/README.md](vm/README.md).
+per output (its pitch where its value stands, its loudness how much it has just moved). Help is where the typing is:
+`help WORD`, a guided `tour`, a line of help and a menu of words under the prompt, a short form for every word (`rel`,
+`obs`, `t`...) and `+/-` for `±`; programs carry a header that says what they do (`programs` lists them) and open in
+a window of their own, a tab each, edited, run and searched from the keyboard. The interface speaks English or French
+(`lang fr`; the words of GRML stay English, so a program runs anywhere: [docs/GRML.fr.md](docs/GRML.fr.md)). Details
+and limits: [vm/README.md](vm/README.md).
 
 ![The GRM machine's window: the words, the network itself (the mouse over a relation it found), the master equation, the outputs and what it feels](docs/grm_vm_window.png)
 

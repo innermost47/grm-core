@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover
     _np = None
 
 import mind
+from i18n import tr
 
 
 def picture(net):
@@ -108,43 +109,45 @@ def node_card(vm, name):
     """What a node holds, in words (lines)."""
     net, m = vm.net, vm.machine
     spec = net.nodes.get(name, {})
-    roles = [r for r in ("input", "output", "var", "learn", "fixed") if spec.get(r)]
-    kind = "signed" if spec.get("signed") else "positive"
-    lines = [f"node {name}  ({', '.join(roles + [kind])})"]
+    roles = [tr(r) for r in ("input", "output", "var", "learn", "fixed") if spec.get(r)]
+    kind = tr("signed") if spec.get("signed") else tr("positive")
+    lines = [tr("node {name}", name=name) + f"  ({', '.join(roles + [kind])})"]
     if m is not None and (name in m.index or name in m.fixed):
         try:
             v = m.value_si(name)
             sg = m.sigma(name)
             unit = " SI" if spec.get("dim") else ""
             if spec.get("signed"):
-                lines.append(f"value  {_fmt(v)}{unit}" + (f"  ± {sg:.3g} (its unit inside)" if sg < 1e5 else ""))
+                lines.append(f"{tr('value')}  {_fmt(v)}{unit}"
+                             + (f"  ± {sg:.3g} (" + tr("its unit inside") + ")" if sg < 1e5 else ""))
             else:
-                lines.append(f"value  {_fmt(v)}{unit}" + (f"  ± {sg:.3g} dex" if sg < 1e5 else ""))
+                lines.append(f"{tr('value')}  {_fmt(v)}{unit}" + (f"  ± {sg:.3g} dex" if sg < 1e5 else ""))
             if name in m.index:
                 i = m.index[name]
-                lines.append(f"last move  {m.last_move[i]:.3g}" + ("  (moving)" if m.last_move[i] > 1e-9 else ""))
+                lines.append(f"{tr('last move')}  {m.last_move[i]:.3g}"
+                             + ("  (" + tr("moving") + ")" if m.last_move[i] > 1e-9 else ""))
         except (KeyError, OverflowError, ValueError):
             pass
     if spec.get("dim"):
-        lines.append("dimension  [M L T Q K] = [" + " ".join(f"{p:g}" for p in spec["dim"]) + "]")
+        lines.append(f"{tr('dimension')}  [M L T Q K] = [" + " ".join(f"{p:g}" for p in spec["dim"]) + "]")
     if name in net.measured:
         v, s = net.measured[name]
-        lines.append(f"measured  {_fmt(v)} ± {s:.3g}" + ("" if spec.get("signed") else " dex"))
+        lines.append(f"{tr('measured')}  {_fmt(v)} ± {s:.3g}" + ("" if spec.get("signed") else " dex"))
     aliases = [a for a, b in net.aliases.items() if b == name]
     inverses = [a for a, b in net.inverses.items() if b == name]
     if aliases:
-        lines.append("also called  " + ", ".join(aliases))
+        lines.append(f"{tr('also called')}  " + ", ".join(aliases))
     if inverses:
-        lines.append("its inverse  " + ", ".join(inverses))
+        lines.append(f"{tr('its inverse')}  " + ", ".join(inverses))
     rels = [r["name"] for r in net.relations if name in net.nodes_of(r)]
-    lines.append(f"in {len(rels)} relation(s)" + (": " + ", ".join(rels[:8]) + (" ..." if len(rels) > 8 else "")
-                                                  if rels else ""))
+    lines.append(tr("in {n} relation(s)", n=len(rels))
+                 + (": " + ", ".join(rels[:8]) + (" ..." if len(rels) > 8 else "") if rels else ""))
     origin = net.origin["nodes"].get(name, "written")
-    lines.append(f"comes from  {_origin(origin)}")
-    lines.append(f"use  {net.use['nodes'].get(name, mind.NEW_TRACE):.3g}")
+    lines.append(f"{tr('comes from')}  {_origin(origin)}")
+    lines.append(f"{tr('use')}  {net.use['nodes'].get(name, mind.NEW_TRACE):.3g}")
     tag = net.mood.get("tags", {}).get(name)
     if tag is not None:
-        lines.append(f"learned under  {'pleasure' if tag > 0 else 'displeasure'} ({tag:+.2f})")
+        lines.append(f"{tr('learned under')}  {tr('pleasure') if tag > 0 else tr('displeasure')} ({tag:+.2f})")
     return lines
 
 
@@ -153,9 +156,9 @@ def relation_card(vm, name):
     net, m = vm.net, vm.machine
     rel = net.relation(name)
     if rel is None:
-        return [f"no relation {name}"]
+        return [tr("no relation {name}", name=name)]
     kind = rel.get("kind", "product")
-    lines = [f"relation {name}  ({_kind(kind)})", rel.get("text", "")]
+    lines = [tr("relation {name}", name=name) + f"  ({_kind(kind)})", rel.get("text", "")]
     if kind in ("product", "sum"):
         lines.append(f"sigma  {rel['sigma']:.3g}" + (" dex" if kind == "product" else ""))
     if m is not None:
@@ -164,39 +167,44 @@ def relation_card(vm, name):
             if f.kind in ("relation", "nonlinear") and f.w > 0:
                 try:
                     r = m.residual(f)
-                    lines.append(f"now  {abs(r):.3g} sigma from holding" + ("  (holds)" if abs(r) < 1 else ""))
+                    lines.append(f"{tr('now')}  " + tr("{s} sigma from holding", s=f"{abs(r):.3g}")
+                                 + ("  (" + tr("holds") + ")" if abs(r) < 1 else ""))
                 except (OverflowError, ValueError, ZeroDivisionError):
                     pass
             if f.watch:
-                lines.append("conditions  " + ("hold: it acts" if f.active else "do not hold: it is silent"))
+                lines.append(f"{tr('conditions')}  " + (tr("hold: it acts") if f.active else
+                                                        tr("do not hold: it is silent")))
             if f.swing:
-                lines.append(f"swings  {f.swing}" + (f", damped ({f.damp:g})" if f.damp else ""))
+                lines.append(f"{tr('swings')}  {f.swing}" + (", " + tr("damped") + f" ({f.damp:g})" if f.damp else ""))
     weights = [n for n in net.nodes_of(rel) if net.nodes.get(n, {}).get("learn")]
     if weights and m is not None:
-        lines.append("weights  " + ", ".join(f"{w} = {_fmt(m.value_si(w))}" for w in weights if w in m.index))
+        lines.append(f"{tr('weights')}  " + ", ".join(f"{w} = {_fmt(m.value_si(w))}" for w in weights
+                                                      if w in m.index))
     tension = net.tension.get(name)
     if tension:
-        lines.append(f"last surprise  {tension[-1]:.3g} sigma ({len(tension)} moments kept)")
+        lines.append(f"{tr('last surprise')}  " + tr("{s} sigma ({n} moments kept)", s=f"{tension[-1]:.3g}",
+                                                     n=len(tension)))
     found = next((x for x in net.found if x["relation"] == name), None)
     origin = net.origin["relations"].get(name, "written")
     if found:
-        lines.append(f"comes from  found by itself at tick {found['tick']}: r² {found['r2']:.6f} over "
-                     f"{found['rows']} rows")
+        lines.append(f"{tr('comes from')}  " + tr("found by itself at tick {tick}: r² {r2} over {rows} rows",
+                                                  tick=found["tick"], r2=f"{found['r2']:.6f}", rows=found["rows"]))
     else:
-        lines.append(f"comes from  {_origin(origin)}")
-    lines.append(f"use  {net.use['relations'].get(name, mind.NEW_TRACE):.3g}")
+        lines.append(f"{tr('comes from')}  {_origin(origin)}")
+    lines.append(f"{tr('use')}  {net.use['relations'].get(name, mind.NEW_TRACE):.3g}")
     bits = net.use.get("bits", {}).get(name)
     if bits is not None:
         n_links = len(set(net.nodes_of(rel)))
         rent = mind.price(net) * n_links
-        lines.append(f"information  {bits:.3g} bits a tick; rent {rent:.3g} ({n_links} links)"
-                     + ("  (pays its rent)" if bits >= rent else "  (does not pay its rent)"))
+        lines.append(f"{tr('information')}  " + tr("{bits} bits a tick; rent {rent} ({n} links)", bits=f"{bits:.3g}",
+                                                   rent=f"{rent:.3g}", n=n_links)
+                     + ("  (" + (tr("pays its rent") if bits >= rent else tr("does not pay its rent")) + ")"))
     return lines
 
 
 def _origin(o):
-    return {"base": "the base it was born with", "written": "written to it", "found": "found by itself"}.get(o, o)
+    return tr({"base": "the base it was born with", "written": "written to it", "found": "found by itself"}.get(o, o))
 
 
 def _kind(k):
-    return {"product": "products and powers", "sum": "a sum", "log": "a logarithm", "keep": "a contact"}.get(k, k)
+    return tr({"product": "products and powers", "sum": "a sum", "log": "a logarithm", "keep": "a contact"}.get(k, k))

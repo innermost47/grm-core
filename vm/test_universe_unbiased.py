@@ -37,7 +37,7 @@ import mind  # noqa: E402
 
 pygrm = pytest.importorskip("pygrm")
 np = pytest.importorskip("numpy")
-NEW_ENOUGH = tuple(int(x) for x in pygrm.__version__.split(".")[:2]) >= (0, 5)
+NEW_ENOUGH = tuple(int(x) for x in pygrm.__version__.split(".")[:3]) >= (0, 5, 1)
 
 TARGET = {"S": 1.0, "Equant": 1.0, "Estock": -1.0}
 VARIANTS = "ABCDEFG"
@@ -140,7 +140,7 @@ def test_a_wrong_relation_does_not_imply_it(runs):
     assert runs["G"]["implied"] is None and abs(math.log10(runs["G"]["ratio"])) > 10
 
 
-@pytest.mark.skipif(not NEW_ENOUGH, reason="needs pygrm >= 0.5.0 (the master invariant over triples)")
+@pytest.mark.skipif(not NEW_ENOUGH, reason="needs pygrm >= 0.5.1 (the master invariant over triples)")
 @pytest.mark.parametrize("name", "ACDEF")
 def test_the_master_equation_brings_it_up(runs, name):
     assert runs[name]["is_target"], runs[name]["master"]
@@ -167,7 +167,7 @@ if __name__ == "__main__":
 README_NETWORK = os.path.join(HERE, "..", "equation", "data", "grm_network_fully_enriched.json")
 
 
-@pytest.mark.skipif(not NEW_ENOUGH, reason="needs pygrm >= 0.5.0")
+@pytest.mark.skipif(not NEW_ENOUGH, reason="needs pygrm >= 0.5.1")
 @pytest.mark.skipif(not os.path.exists(README_NETWORK), reason="the README network is not here")
 def test_the_readme_network_brings_it_up_through_the_seven_relations():
     """The 199 quantities of the README, solved: the master invariant is S x Equant = Estock, and the relations it

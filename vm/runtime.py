@@ -31,6 +31,7 @@ except ImportError:  # pragma: no cover - without pygrm the machine counts in SI
 
 UNITS = "ticks"           # inside, the machine counts in its own units: c = hbar = G = kB = 1 (pygrm.units)
 
+from i18n import tr
 from language import Network, TalkError
 
 LN10 = math.log(10.0)
@@ -101,7 +102,7 @@ class Machine:
         for n, s in net.nodes.items():
             if s["fixed"]:
                 if not s.get("signed") and s["guess"] <= 0:
-                    raise TalkError(f"fixed node {n} must be positive (or signed)")
+                    raise TalkError(tr("fixed node {n} must be positive (or signed)", n=n))
                 self.fixed[n] = s["guess"] / 10 ** self.shift.get(n, 0.0)
         self.index = {}
         self.var_names, self.var_signed, self.start = [], [], []
@@ -177,8 +178,8 @@ class Machine:
                         b -= k
                         continue
                     if len(free) > 1 or abs(t[free[0]] - 1.0) > 1e-12:
-                        raise TalkError(f"relation {r['name']}: a term of a sum holds one free node, to the power 1 "
-                                        f"(give a product its own node: relate p: p = a * b)")
+                        raise TalkError(tr("relation {name}: a term of a sum holds one free node, to the power 1 (give "
+                                           "a product its own node: relate p: p = a * b)", name=r["name"]))
                     n = free[0]
                     i = self.index[n] if self.is_signed(self.index[n]) else twin(n)
                     if i in vars_:
@@ -356,7 +357,7 @@ class Machine:
         """A new measurement (an input: a key, a sensor, the past of the next moment). Wakes only its node."""
         i = self.index.get(name)
         if i is None:
-            raise TalkError(f"{name} is not a free node")
+            raise TalkError(tr("{name} is not a free node", name=name))
         if sigma is None:
             # as the senses do (Weber): what is not said of a signed value is known to a thousandth of it
             sigma = self.net.measured.get(name, (None, 1e-3 * max(abs(value), 1.0) if self.is_signed(i) else 0.01))[1]
@@ -804,7 +805,7 @@ class Machine:
         with open(path, encoding="utf-8") as fh:
             st = json.load(fh)
         if st.get("format") != "grm-talk-sleep-1":
-            raise TalkError(f"{path} is not a sleeping grm network")
+            raise TalkError(tr("{path} is not a sleeping grm network", path=path))
         net = Network()
         net.nodes = st["nodes"]
         net.relations = []
@@ -835,7 +836,7 @@ class Machine:
                 r["when"] = [tuple(w) for w in r["when"]]
         m = Machine(net)
         if len(m.factors) != len(st["factors"]):
-            raise TalkError("the sleeping state does not match its network")
+            raise TalkError(tr("the sleeping state does not match its network"))
         for f, s in zip(m.factors, st["factors"]):
             f.out_lam, f.out_eta, f.in_lam, f.in_eta = s["out_lam"], s["out_eta"], s["in_lam"], s["in_eta"]
             f.coef, f.b, f.w, f.active = s["coef"], s["b"], s["w"], s["active"]
