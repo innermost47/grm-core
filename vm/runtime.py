@@ -252,6 +252,7 @@ class Machine:
         self.rounds = 0
         self.messages = 0
         self.last_move = [0.0] * n
+        self.worked = set()      # the processors that have worked since it was last emptied (mind.py reads it)
 
     def weight_groups(self):
         """Weights that share a relation, together (connected groups)."""
@@ -430,6 +431,7 @@ class Machine:
             fac.swing, fac.damp = 0, 0.0
             fac.trend = [0.0] * len(fac.vars)
         self.busy = woken
+        self.worked.update(woken)
         self.dirty_factors = set()
         self.dirty_nodes = nodes
         self.rounds += 1
@@ -649,12 +651,18 @@ class Machine:
         self.net.links = [{"names": [self.var_names[i] for i in jf.vars], "L": jf.L, "h": jf.h}
                           for jf in self.joints]
 
-    def downscale(self, factor):
+    def downscale(self, factor, per_weight=None):
         """Sleep: every memory of weights loosens a little (its precision times factor, its values kept): room to
-        learn again (inspired by the synaptic homeostasis of sleep)."""
+        learn again (inspired by the synaptic homeostasis of sleep). per_weight: {weight: factor} for the weights
+        that keep more or less of what they learned (tagged by pleasure or displeasure, mind.py); a group of
+        weights takes the mean of its members."""
         for jf in self.joints:
-            jf.L = [[v * factor for v in row] for row in jf.L]
-            jf.h = [v * factor for v in jf.h]
+            k = factor
+            if per_weight:
+                ks = [per_weight.get(self.var_names[i], factor) for i in jf.vars]
+                k = sum(ks) / len(ks)
+            jf.L = [[v * k for v in row] for row in jf.L]
+            jf.h = [v * k for v in jf.h]
             self.dirty_factors.add(self.factors.index(jf))
         self.save_links()
 
@@ -727,6 +735,7 @@ class Machine:
         if new and getattr(self, "_heard", False):
             self.fold()              # the inputs before are kept by the weights, then the new ones are heard
         self.run(max_rounds)
+        self.settled = self.quiet    # whether it settled in the rounds it was given (before the writes below)
         if new:
             self.last_surprise = self.surprise()
         writes = {}
@@ -783,6 +792,8 @@ class Machine:
             "seen_values": getattr(net, "seen", {}), "rows_seen": getattr(net, "rows", []),
             "tension": getattr(net, "tension", {}), "found": getattr(net, "found", []),
             "seen": getattr(self, "_seen", None),
+            "use": getattr(net, "use", {}), "origin": getattr(net, "origin", {}), "mood": getattr(net, "mood", {}),
+            "capacity": getattr(net, "capacity", None),
         }
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(state, fh)
@@ -812,6 +823,10 @@ class Machine:
         net.rows = st.get("rows_seen", [])
         net.tension = st.get("tension", {})
         net.found = st.get("found", [])
+        net.use = st.get("use") or {"nodes": {}, "relations": {}}
+        net.origin = st.get("origin") or {"nodes": {}, "relations": {}}
+        net.mood = st.get("mood") or {}
+        net.capacity = st.get("capacity")
         net.networks = {k: (v[0], v[1]) for k, v in st["networks"].items()}
         net.calls = [tuple(c) for c in st["calls"]]
         net.sets = [dict(x, when=[tuple(w) for w in x["when"]]) for x in st.get("sets", [])]

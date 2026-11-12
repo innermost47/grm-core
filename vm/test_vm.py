@@ -526,3 +526,301 @@ def test_example_wave():
     vm = grm_vm.VM(memory=None, blank=True)
     out = vm.load(os.path.join(HERE, "programs", "wave.csv"))
     assert "an oscillation: period 25 moments" in out
+
+
+# ---------------------------------------------------------------------- what it says when something is wrong
+import editor   # noqa: E402
+import graph   # noqa: E402
+import mind   # noqa: E402
+
+
+def shell_of(vm):
+    out = []
+
+    class W:
+        def write(self, s):
+            out.append(s)
+
+        def flush(self):
+            pass
+    return grm_vm.Shell(vm, out=W()), out
+
+
+def test_an_error_in_a_file_says_where(tmp_path):
+    p = tmp_path / "bad.grm"
+    p.write_text("node a = 2\nrelate r: a = b\nobserve a = -3\n", encoding="utf-8")
+    with pytest.raises(TalkError) as e:
+        say(Network(), f"use {p}")
+    assert "bad.grm, line 3" in str(e.value) and "observe a = -3" in str(e.value)
+
+
+def test_a_typo_is_said():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    sh.onecmd("use programs/fall.grm")
+    sh.onecmd("relate oops: heigt = g * t")
+    assert any("'heigt' is a new node; did you mean 'height'" in s for s in out)
+    sh.onecmd("tikc")
+    assert any("did you mean tick" in s for s in out)
+    sh.onecmd("ask heigth")
+    assert any("no node heigth; did you mean" in s and "'height'" not in s and "height" in s for s in out)
+
+
+def test_an_error_inside_the_machine_is_said_not_a_crash():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+
+    def broken(arg):
+        return 1 / 0
+    sh.do_broken = broken
+    assert sh.onecmd("broken") is False
+    assert any("error inside the machine: ZeroDivisionError" in s and "line" in s for s in out)
+    assert vm.net.mood["dopamine"] < 0                       # and it is felt: displeasure
+
+
+def test_contradiction_is_said():
+    vm = grm_vm.VM(memory=None, blank=True)
+    for line in ["relate a: x = 2 * y", "relate b: x = 3 * y", "observe y = 1"]:
+        vm.say(line)
+    vm.tick(max_rounds=300)
+    said = " ".join(vm.pop_events())
+    assert "did not settle" in said and "relation a does not hold" in said and "relation b does not hold" in said
+    vm.tick(max_rounds=300)
+    assert not any("does not hold" in s for s in vm.pop_events())        # said once, not at every tick
+
+
+def test_found_weights_carry_the_dimension_that_balances_them(tmp_path):
+    pytest.importorskip("pygrm.discover")
+    vm = example("fall")
+    vm.load(os.path.join(HERE, "programs", "falling.csv"))
+    assert vm.net.nodes["K_1"]["dim"] == [0, 0, -2, 0, 0]
+    assert 1 < vm.get("t") < 4                      # it was pushed to 1e-29 s by a relation without dimension
+    assert vm.get("K_1") == pytest.approx(4.906, rel=1e-3)
+
+
+# ---------------------------------------------------------------------- writing to it
+def test_colours_of_a_line():
+    kinds = {kind for _, _, kind in editor.tokens("relate r: y = 2 * x ± 1% when s in 0 .. 1  # why",
+                                                   nodes=["x", "y", "s"], commands=["tick"])}
+    assert {"statement", "node", "number", "sigma", "keyword", "range", "comment", "new"} <= kinds
+    assert editor.tokens("tick 3", commands=["tick"])[0][2] == "command"
+    assert editor.tokens("node a; ask a", nodes=["a"], commands=["ask"])[-2][2] == "command"   # after ;
+
+
+def test_tab_completes():
+    assert editor.complete("ins", 3, commands=["inspect", "input", "tick"]) == (0, ["inspect"])
+    assert editor.complete("in", 2, commands=["inspect", "tick"])[1] == ["input", "inspect"]
+    assert editor.complete("relate r: hei", 13, nodes=["height", "g"]) == (10, ["height"])
+    assert "programs/fall.grm" in editor.complete("use programs/fa", 15, base=HERE)[1]
+    assert "programs/falling.csv" in editor.complete("load programs/fa", 16, base=HERE)[1]
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, _ = shell_of(vm)
+    vm.say("node height")
+    assert sh.completedefault("hei", "ask hei", 4, 7) == ["height"]
+
+
+def test_banner():
+    assert "the Global Relational Model machine" in editor.banner("utf-8")
+    assert editor.banner("ascii") == editor.BANNER_ASCII
+
+
+# ---------------------------------------------------------------------- the network seen
+def test_picture_and_cards():
+    vm = example("fall")
+    vm.get("height")
+    places = graph.layout(vm.net, {}, steps=40)
+    assert set(places) == {("n", n) for n in vm.net.nodes} | {("r", "fall")}
+    assert all(math.isfinite(v) for p in places.values() for v in p)
+    card = "\n".join(graph.node_card(vm, "height"))
+    assert "value  19.62" in card and "[0 1 0 0 0]" in card and "fall" in card
+    card = "\n".join(graph.relation_card(vm, "fall"))
+    assert "2 * height = g * t^2" in card and "(holds)" in card
+
+
+# ---------------------------------------------------------------------- what it feels and keeps
+def test_master_equation_now_and_before():
+    pytest.importorskip("pygrm")
+    vm = example("fall")
+    now = mind.master(vm)
+    assert now["text"] == "height · g^-1 · t^-2 = 0.5" and now["residual"] < 1e-9
+    vm.say("relate run: distance = height * 3")
+    vm.say("observe distance = 58.86")
+    vm.tick(3)
+    assert "distance" in mind.master(vm)["text"] or "height" in mind.master(vm)["text"]
+    before = mind.master(vm, 2)
+    assert before["tick"] == vm.net.ticks - 2
+    assert "only the last" in mind.master(vm, 10_000)["text"]
+
+
+def test_traces_fade_and_what_works_is_kept():
+    vm = example("double")
+    vm.tick(5)
+    use = vm.net.use["relations"]
+    worked = [r for r in use if use[r] > mind.NEW_TRACE]
+    assert worked                                         # the relations that computed gained
+    old = dict(use)
+    vm.net.relations.append({"kind": "product", "name": "idle", "terms": {"q": 1.0}, "rhs": 0.0, "sigma": 1e-9,
+                             "text": "q = 1", "when": []})
+    vm.net.nodes["q"] = {"guess": 1.0, "fixed": False, "signed": False}
+    vm.machine = None
+    vm.tick(1)                                            # rebuilt: everything works once
+    first = vm.net.use["relations"]["idle"]
+    vm.tick(3)
+    assert vm.net.use["relations"]["idle"] < first                       # then nothing uses it: it fades
+    assert all(vm.net.use["relations"][r] > 0 for r in old)
+
+
+def test_no_room_it_forgets_the_least_used_never_the_base():
+    pytest.importorskip("pygrm.discover")
+    vm = grm_vm.VM(memory=None)                                  # born with its base
+    base_links = mind.links(vm.net)
+    vm.load(os.path.join(HERE, "programs", "falling.csv"))
+    assert vm.net.relation("found_1") and "K_1" in vm.net.nodes
+    sh, out = shell_of(vm)
+    sh.onecmd(f"capacity {base_links}")
+    assert vm.net.relation("found_1") is None and "K_1" not in vm.net.nodes
+    assert all(vm.net.relation(r) for r, o in vm.net.origin["relations"].items() if o == "base")
+    assert any("forgot 1 relation(s)" in s for s in out)
+    sh.onecmd("capacity 1")
+    assert mind.links(vm.net) == base_links and any("no room" in s for s in out)
+
+
+def test_at_night_what_it_found_and_no_longer_uses_is_forgotten(tmp_path):
+    pytest.importorskip("pygrm.discover")
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True)
+    vm.load(os.path.join(HERE, "programs", "falling.csv"))
+    vm.net.use["relations"]["found_1"] = mind.FADE / 2
+    done = vm.sleep(night=True)
+    assert any("forgot" in d and "found_1" in d for d in done) and "K_1" not in vm.net.nodes
+
+
+def test_pleasure_and_displeasure():
+    vm = grm_vm.VM(memory=None, blank=True)
+    for line in ["input x", "input y", "relate model: y = 2 * x ± 0.1"]:
+        vm.say(line)
+    for x in range(1, 6):                      # it gets used to a surprise of about 3 sigma
+        vm.put("x", float(x))
+        vm.put("y", 2 * x + 0.3)
+        vm.tick()
+    vm.put("x", 6.0)
+    vm.put("y", 12.0)                          # less surprised than it expected: pleasure
+    vm.tick()
+    assert vm.net.mood["dopamine"] > 0.3
+    for _ in range(10):
+        vm.tick()                              # nothing new: back to calm
+    assert abs(vm.net.mood["dopamine"]) < 0.05
+    vm.put("x", 7.0)
+    vm.put("y", 20.0)                          # far more surprised than it expected: displeasure
+    vm.tick()
+    assert vm.net.mood["dopamine"] < -0.3
+
+
+def test_finding_something_is_a_pleasure_and_what_learned_under_it_keeps_more_at_night():
+    pytest.importorskip("pygrm.discover")
+    vm = grm_vm.VM(memory=None, blank=True)
+    vm.load(os.path.join(HERE, "programs", "falling.csv"))
+    assert vm.net.mood["dopamine"] >= 0.5                     # a burst: it found h = K t^2
+    vm.net.mood["tags"] = {"K_1": 1.0, "other": -1.0}
+    k = mind.night_factors(vm.net, grm_vm.NIGHT)
+    assert k["K_1"] == pytest.approx(1.0) and k["other"] == pytest.approx(0.6)
+    s0 = vm.m().sigma("K_1")
+    vm.m().downscale(grm_vm.NIGHT, {"K_1": 1.0})
+    vm.m().run(5000)
+    assert vm.m().sigma("K_1") == pytest.approx(s0, rel=1e-6)    # rewarded: nothing loosened
+
+
+def test_flourishing_and_curiosity():
+    pytest.importorskip("pygrm.discover")
+    rng = random.Random(5)
+    vm = grm_vm.VM(memory=None, blank=True)
+    for line in ["input x", "input y", "relate model: y = 2 * x ± 0.1"]:
+        vm.say(line)
+    found = []
+    for _ in range(80):                                      # something is missing: y = 2 x + 5
+        x = rng.uniform(-3, 3)
+        vm.put("x", x)
+        vm.put("y", 2 * x + 5 + rng.gauss(0, 0.1))
+        vm.tick()
+        found += [e for e in vm.pop_events() if e.startswith("curiosity")]
+    assert found and "hidden_1" in found[0]                  # it went looking by itself, without a night
+    md = vm.net.mood
+    assert 0 <= md["flourishing"] <= 1 and md["room"] > 0.99
+    vm.net.mood["surprises"] = [10.0] * 20 + [1.0] * 20
+    mind.flourishing(vm.net)
+    assert vm.net.mood["progress"] > 0.5 and vm.net.mood["accuracy"] == pytest.approx(0.5)
+
+
+def test_what_it_feels_is_remembered(tmp_path):
+    pytest.importorskip("pygrm.discover")
+    mem = str(tmp_path / "m.json")
+    vm = grm_vm.VM(memory=mem, blank=True)
+    vm.load(os.path.join(HERE, "programs", "falling.csv"))
+    vm.net.capacity = 500
+    vm.sleep()
+    again = grm_vm.VM(memory=mem)
+    assert again.net.capacity == 500
+    assert again.net.origin["relations"]["found_1"] == "found"
+    assert again.net.use["relations"]["found_1"] == vm.net.use["relations"]["found_1"]
+    assert again.net.mood["dopamine"] == vm.net.mood["dopamine"]
+
+
+def test_inside_commands():
+    vm = example("fall")
+    sh, out = shell_of(vm)
+    for c in ("mood", "master", "master 0", "check", "inspect height", "inspect fall", "prune", "capacity"):
+        sh.onecmd(c)
+    text = "\n".join(out)
+    for piece in ("dopamine", "master equation, now", "no problem found", "node height", "relation fall",
+                  "nothing to forget", "links of", "the host's budget", "rent"):
+        assert piece in text, piece
+
+
+def test_the_host_sets_the_room():
+    vm = example("fall")
+    vm.tick(3)
+    cap = mind.capacity(vm.net)
+    assert cap >= mind.MIN_CAPACITY and set(vm.net.host["caps"]) <= {"time", "memory"}
+    vm.clock_hz = 1000.0                                        # a faster clock: less time a tick, less room
+    vm.tick()
+    assert vm.net.host["caps"]["time"] < cap * 0.2 or vm.net.host["limit"] == "memory"
+    vm.net.capacity = 123                                       # by hand
+    assert mind.capacity(vm.net) == 123
+    sh, out = shell_of(vm)
+    sh.onecmd("capacity auto")
+    assert vm.net.capacity is None and any("the host's budget" in s for s in out)
+
+
+def test_information_in_bits_and_the_rent():
+    vm = example("fall")
+    vm.tick(2)
+    alone = vm.net.use["bits"]["fall"]
+    assert alone > 10                                    # it alone fixes height: many bits
+    vm.say("relate echo: 2 * height = g * t^2")
+    vm.tick(120)                                         # (what a relation brings is followed as it goes)
+    bits = vm.net.use["bits"]
+    assert bits["echo"] < 2 and bits["fall"] < 2         # each says what the other says: an echo brings little
+    assert mind.price(vm.net) < 1e-3                     # an empty network charges almost nothing
+    vm.net.capacity = mind.links(vm.net)                 # full: the rent rises
+    assert mind.price(vm.net) > 1
+    assert mind.worth(vm.net, "echo") < 0
+
+
+def test_at_night_what_does_not_pay_its_rent_is_forgotten(tmp_path):
+    pytest.importorskip("pygrm.discover")
+    vm = grm_vm.VM(memory=str(tmp_path / "m.json"), blank=True)
+    vm.load(os.path.join(HERE, "programs", "falling.csv"))
+    vm.net.use["bits"]["found_1"] = 1e-6                 # it brings nothing any more
+    vm.net.capacity = mind.links(vm.net) * 2             # half full: a rent of 0.1 bit per link and tick
+    done = vm.sleep(night=True)
+    assert any("found_1 (it no longer paid its rent)" in d for d in done)
+
+
+def test_example_universe_and_its_master_equation():
+    pytest.importorskip("pygrm")
+    vm = example("universe")
+    S, Eq, Es = vm.get("S"), vm.get("Equant"), vm.get("Estock")
+    assert S * Eq / Es == pytest.approx(1, rel=1e-6)          # S Equant = Estock, never written
+    res = mind.master(vm)
+    assert res["text"] == "Equant^2 · S · c^-5 · hbar^-1 · G = 0.0795775" and res["derived"]
+    assert res["span"] == pytest.approx(175, abs=1)
+    assert res["relations"] == {"planck": -1.0, "floor": 2.0, "quantum": 2.0, "entropy": 1.0}

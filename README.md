@@ -1023,7 +1023,7 @@ machine below.
 
 ```bash
 python vm/grm_vm.py               # in the terminal
-python vm/grm_vm.py --window      # in a window: the outputs shown and heard
+python vm/grm_vm.py --window      # in a window: the network drawn, the outputs shown and heard
 ```
 
 A virtual machine that is one GRM network, and nothing else: the network is the program, the memory and the
@@ -1044,11 +1044,22 @@ h = 4.90 t²; given a damped wave, it finds its period and carries it on) and ma
 keeps missing something, a constant or a hidden variable with its own law (pygrm 0.3.0, `pygrm.discover`); the user
 is told, not asked. Its nodes are held as the brain seems to hold quantities: magnitudes in log with relative
 uncertainties, the inverse as the same node, and, for the human, every output as two opposed channels. Inside, it counts in its own units, where c, ħ, G and k_B are 1 (pygrm.units "ticks"): the constants are in
-how it counts, not in nodes. Python is only its body: the inputs measured, the clock's ticks, the outputs turned into
-what a human sees (a panel of values, bars and curves) and hears (a voice per output: its pitch where its value
-stands, its loudness how much it has just moved). Details and limits: [vm/README.md](vm/README.md).
+how it counts, not in nodes. It feels and forgets as a brain does, as closely as is known: pleasure and displeasure (a
+dopamine-like prediction error on its surprise; finding something is a burst of pleasure, an error one of
+displeasure) tag what has just worked, which is kept longer and keeps more of its precision through the night; every
+node and relation carries a trace of its use that fades when nothing uses it, and pays a rent in bits against the
+information it brings (a price that rises as room runs out); its room is an energy budget given by the host (the time
+a tick may take, the memory available), and what pays the least is forgotten first (never its base); it tends to flourish (learning progress, and accuracy times room left) and,
+surprised and no longer learning, goes looking for what it misses by itself. Its master equation (pygrm's master
+invariant) can be read now or n ticks ago. Nothing goes wrong in silence: errors are said with their line, typos
+(`heigt` next to `height`), contradictions and networks that do not settle, errors of the machine itself. Python is
+only its body: the inputs measured, the clock's ticks, the outputs turned into what a human sees and hears: a window
+with the words (coloured, Tab completes), the network itself drawn (the mouse over a node or a relation shows what it
+holds; a relation far from holding turns red), the master equation, a panel of values, bars and curves, and a voice
+per output (its pitch where its value stands, its loudness how much it has just moved). Details and limits:
+[vm/README.md](vm/README.md).
 
-![The GRM machine's panel of outputs: a Minsky machine doubling 5, a line learned from 100 rows, then a row it did not expect](docs/grm_vm_panel.png)
+![The GRM machine's window: the words, the network itself (the mouse over a relation it found), the master equation, the outputs and what it feels](docs/grm_vm_window.png)
 
 ## Status and limits
 - **Work in progress**: names, defaults and interfaces may change.

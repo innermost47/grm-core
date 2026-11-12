@@ -80,6 +80,13 @@ class Network:
         self.rows = []         # the inputs of each moment seen (what the machine finds relations in)
         self.tension = {}      # how far each relation was from holding, moment after moment (in its sigmas)
         self.found = []        # the relations it found by itself
+        # mind.py: what the machine feels and keeps
+        self.use = {"nodes": {}, "relations": {}}      # how much each node and relation has worked lately (traces)
+        self.origin = {"nodes": {}, "relations": {}}   # where each one comes from: base, written, found
+        self.mood = {}         # its neuromodulators, its flourishing
+        self.capacity = None   # how many links (synapses) it may hold (None: what the host's budget allows)
+        self.host = {}         # what the host gives (measured each session, not remembered: another host, another
+                               # budget)
 
     def relation(self, name):
         for r in self.relations:
@@ -437,9 +444,14 @@ def statement(net, line, base=None):
             raise TalkError(f"no file {rest}")
         count = 0
         with open(path, encoding="utf-8") as f:
-            for ln in f:
-                if statement(net, ln, os.path.dirname(os.path.abspath(path))):
-                    count += 1
+            for number, ln in enumerate(f, 1):
+                try:
+                    if statement(net, ln, os.path.dirname(os.path.abspath(path))):
+                        count += 1
+                except TalkError as e:
+                    if str(e).startswith("in "):      # already located (a file used by this one)
+                        raise
+                    raise TalkError(f"in {os.path.basename(path)}, line {number}: {ln.strip()}\n    {e}") from None
         return f"used {os.path.basename(path)}: {count} statements"
     return None
 

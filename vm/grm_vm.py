@@ -7,6 +7,7 @@ drivers that are its body (keyboard and files in, screen and sound out for a hum
     python vm/grm_vm.py --window         the machine in a window: the outputs shown and heard
     python vm/grm_vm.py --blank          start from a blank network (the memory is not read)
     python vm/grm_vm.py -c "use programs/double.grm; tick 20; outputs"
+    python vm/grm_vm.py --window -c "use programs/fall.grm"     the window, with commands said at the start
 
 The machine starts blank, or from its memory (vm/memory.json) if it has one, and puts itself to sleep there when it
 stops: the next session goes on from where this one ended. Everything it does comes from the network (vm/language.py
@@ -21,9 +22,7 @@ import csv
 import json
 import math
 import os
-import shlex
 import sys
-import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -31,6 +30,10 @@ sys.path.insert(0, HERE)
 from language import Network, TalkError, from_store, statement   # noqa: E402
 from runtime import Machine   # noqa: E402
 import body   # noqa: E402
+import diagnose   # noqa: E402
+import editor   # noqa: E402
+import graph   # noqa: E402
+import mind   # noqa: E402
 
 try:
     from pygrm import units as _units
@@ -70,6 +73,12 @@ class VM:
         self.machine = None
         self.note = "blank"
         self.history = {}           # output -> recent values (for the body); "surprise" too
+        self.past = []              # the values of the last ticks (the master equation at t - n)
+        self.events = []            # what the machine has to say by itself (errors, warnings, what it did)
+        self._read = set()          # the nodes read since the last tick (their use)
+        self._reported = set()      # relations already said to be far from holding
+        self.clock_hz = 0.0         # the clock the body runs it at (0: only on Enter)
+        self._loading = False
         if not blank and memory and os.path.exists(memory):
             try:
                 self.machine = Machine.wake(memory)
@@ -82,6 +91,7 @@ class VM:
             self.note = ""
         if not blank and os.path.exists(BASE):
             statement(self.net, "use base.grm", HERE)
+            mind.mark(self.net, set(), set(), "base")
             self.note += f"born with its base ({len(self.net.nodes)} points of the world)"
         else:
             self.note += "blank"
@@ -90,7 +100,10 @@ class VM:
     def say(self, line, base=None):
         """A statement of the language. The machine is rebuilt when the network changes; what the network holds
         (variables, weights, measurements) is kept, so it settles again from where it was."""
+        nodes, relations = set(self.net.nodes), {r["name"] for r in self.net.relations}
         said = statement(self.net, line, base or HERE)
+        mind.mark(self.net, nodes, relations, "written")
+        self.events += diagnose.names(self.net, nodes, line)
         if said is not None and self.net.recording is None and said:
             self.machine = None
         return said
@@ -124,22 +137,28 @@ class VM:
     def get(self, name):
         m = self.m()
         m.run(5000)              # what it says once it has heard everything new
+        self._read.add(name)
         return m.value_si(name)
 
     def outputs(self):
         return [n for n, s in self.net.nodes.items() if s.get("output")]
 
     def tick(self, n=1, learn=False, max_rounds=2000):
-        m = self.m()
         writes = {}
         for _ in range(n):
+            m = self.m()
             m.last_surprise = {}
+            r0 = m.rounds
             writes = m.tick(max_rounds, learn=learn)
+            settled = m.settled
+            mind.measure(self.net, m.rounds - r0, self.clock_hz)
             for o in self.outputs():
                 self.remember(o, self.get(o))
             z = list(m.last_surprise.values())
+            surprise = None
             if z:   # how far the inputs were from what the network expected of them (rms, in sigmas)
-                self.remember("surprise", math.sqrt(sum(v * v for v in z) / len(z)))
+                surprise = math.sqrt(sum(v * v for v in z) / len(z))
+                self.remember("surprise", surprise)
             # what it has seen, kept for what it finds by itself: the inputs of each new moment, and how far each
             # relation was from holding then
             row = {k: self.net.measured[k][0] for k, sp in self.net.nodes.items()
@@ -152,6 +171,13 @@ class VM:
                     h = self.net.tension.setdefault(rel, [])
                     h.append(r)
                     del h[:-ROWS]
+            # what is wrong is said (and felt: an error is displeasure)
+            problems = diagnose.machine(m, settled, self._reported)
+            if any(p.startswith("error") for p in problems):
+                mind.reward(self.net, -0.5)
+            self.events += problems
+            # what it feels and keeps, and what it does by itself to flourish
+            self.events += mind.after_tick(self, surprise, explore=not self._loading)
         return writes
 
     def remember(self, name, v):
@@ -191,21 +217,25 @@ class VM:
         weights = [n for n, s in self.net.nodes.items() if s.get("learn")]
         before = {w: self.get(w) for w in weights}
         used = 0
-        for rec in rows:
-            given = False
-            for k, v in rec.items():
-                try:
-                    x = float(v)
-                except (TypeError, ValueError):
-                    continue
-                k = k.strip()
-                if not k:
-                    continue
-                self.put(k, x)
-                given = True
-            if given:
-                self.tick(learn=True)
-                used += 1
+        self._loading = True
+        try:
+            for rec in rows:
+                given = False
+                for k, v in rec.items():
+                    try:
+                        x = float(v)
+                    except (TypeError, ValueError):
+                        continue
+                    k = k.strip()
+                    if not k:
+                        continue
+                    self.put(k, x)
+                    given = True
+                if given:
+                    self.tick(learn=True)
+                    used += 1
+        finally:
+            self._loading = False
         out = f"{used} rows learned"
         for w in weights:
             out += f"\n    {w}: {fmt(before[w])} -> {fmt(self.get(w))}  (± {self.m().sigma(w):.3g})"
@@ -218,9 +248,13 @@ class VM:
         """Everything the machine does by itself with what it has seen, after a file and at night: it fuses what is
         one thing under two names, writes the relations that hold among its inputs and that it did not know, and makes
         a node appear where a relation keeps missing something. Returns what it did, in words."""
+        nodes, relations = set(self.net.nodes), {r["name"] for r in self.net.relations}
         done = self.self_fuse()
         done += self.self_discover()
         done += self.self_hidden()
+        mind.mark(self.net, nodes, relations, "found")
+        if done:
+            mind.reward(self.net, 0.6)      # finding something by itself: a burst of pleasure
         return done
 
     def linked(self):
@@ -297,8 +331,30 @@ class VM:
                         f"rows{extra})")
         return done
 
-    def _weight(self, name, value, sigma, positive=False):
-        statement(self.net, f"learn {name} = {value!r}" + (" positive" if positive else ""))
+    def _dimv(self, name):
+        """The dimension of a node, [M L T Q K] (zeros for a pure number)."""
+        d = self.net.nodes.get(name, {}).get("dim")
+        return [float(x) for x in d] if d else [0.0] * 5
+
+    @staticmethod
+    def _dim_text(d):
+        if d is None or all(abs(x) < 1e-12 for x in d):
+            return ""
+        return " [" + " ".join(f"{x:g}" for x in d) + "]"
+
+    @staticmethod
+    def _combine(*parts):
+        """sum of k * dim over (k, dim)."""
+        out = [0.0] * 5
+        for k, d in parts:
+            out = [a + k * b for a, b in zip(out, d)]
+        return out
+
+    def _weight(self, name, value, sigma, positive=False, dim=None):
+        """A weight the machine writes for itself. Its dimension balances the relation it is in: inside, the machine
+        counts in its own units (c = hbar = G = kB = 1), so a relation is only right in SI if its two sides have the
+        same dimension."""
+        statement(self.net, f"learn {name} = {value!r}" + (" positive" if positive else "") + self._dim_text(dim))
         self.net.measured[name] = (value, max(sigma, 1e-9 if not positive else 1e-6))
         return name
 
@@ -313,35 +369,39 @@ class VM:
     def _write_power(self, rel, name, k):
         for n in [rel["target"], *rel["terms"]]:
             self.make_positive(n)
-        K = self._weight(f"K_{k}", rel["constant"], rel["constant_sigma"], positive=True)
+        dim = self._combine((1, self._dimv(rel["target"])), *((-p, self._dimv(x)) for x, p in rel["terms"].items()))
+        K = self._weight(f"K_{k}", rel["constant"], rel["constant_sigma"], positive=True, dim=dim)
         right = " * ".join([K] + [f"{x}^{p!r}" for x, p in rel["terms"].items()])
         statement(self.net, f"relate {name}: {rel['target']} = {right} ± {max(rel['sigma'], 1e-4)!r} dex")
 
     def _write_linear(self, rel, name, k):
         (x, a), b = next(iter(rel["terms"].items())), rel["constant"]
-        sa = self._weight(f"a_{k}", a, rel.get("slope_sigma", 1.0))
-        sb = self._weight(f"b_{k}", b, rel["constant_sigma"])
+        dy = self._dimv(rel["target"])
+        sa = self._weight(f"a_{k}", a, rel.get("slope_sigma", 1.0), dim=self._combine((1, dy), (-1, self._dimv(x))))
+        sb = self._weight(f"b_{k}", b, rel["constant_sigma"], dim=dy)
         statement(self.net, f"relate {name}: {rel['target']} = {sa} * {x} + {sb} ± {max(rel['sigma'], 1e-9)!r}")
 
     def _write_exponential(self, rel, name, k):
         # y = A e^(kx)  <=>  ln y = k x + ln A: a straight line between x and the exponent of y
         (x, kk), A = next(iter(rel["terms"].items())), rel["constant"]
         L = self._ln(rel["target"])
-        sk = self._weight(f"k_{k}", kk, abs(kk) * 1e-3 + 1e-9)
+        sk = self._weight(f"k_{k}", kk, abs(kk) * 1e-3 + 1e-9, dim=self._combine((-1, self._dimv(x))))
         sa = self._weight(f"lnA_{k}", math.log(A), rel["constant_sigma"] * math.log(10))
         statement(self.net, f"relate {name}: {L} = {sk} * {x} + {sa} ± {max(rel['sigma'] * math.log(10), 1e-9)!r}")
 
     def _write_log(self, rel, name, k):
         (x, a), b = next(iter(rel["terms"].items())), rel["constant"]
         L = self._ln(x)
-        sa = self._weight(f"a_{k}", a, abs(a) * 1e-3 + 1e-9)
-        sb = self._weight(f"b_{k}", b, rel["constant_sigma"])
+        dy = self._dimv(rel["target"])
+        sa = self._weight(f"a_{k}", a, abs(a) * 1e-3 + 1e-9, dim=dy)
+        sb = self._weight(f"b_{k}", b, rel["constant_sigma"], dim=dy)
         statement(self.net, f"relate {name}: {rel['target']} = {sa} * {L} + {sb} ± {max(rel['sigma'], 1e-9)!r}")
 
     def _write_sum(self, rel, name, k):
         # a sum built on products: each product its own node (found once, used by every relation that needs it),
         # then the sum of those nodes
         parts = []
+        dy = self._dimv(rel["target"])
         for j, (a, mono) in enumerate(rel["terms"]):
             if len(mono) == 1 and next(iter(mono.values())) == 1.0:
                 node = next(iter(mono))
@@ -352,9 +412,13 @@ class VM:
                         self.make_positive(x)
                     right = " * ".join(x if p == 1 else f"{x}^{p!r}" for x, p in mono.items())
                     statement(self.net, f"relate product_{node}: {node} = {right}")
-            w = self._weight(f"a{j + 1}_{k}", a, abs(a) * 1e-3 + 1e-9)
+                    dim = self._combine(*((p, self._dimv(x)) for x, p in mono.items()))
+                    if self._dim_text(dim):
+                        self.net.nodes[node]["dim"] = dim     # the product carries the dimension of its factors
+            w = self._weight(f"a{j + 1}_{k}", a, abs(a) * 1e-3 + 1e-9,
+                             dim=self._combine((1, dy), (-1, self._dimv(node))))
             parts.append(f"{w} * {node}")
-        b = self._weight(f"b_{k}", rel["constant"], rel["constant_sigma"])
+        b = self._weight(f"b_{k}", rel["constant"], rel["constant_sigma"], dim=dy)
         statement(self.net, f"relate {name}: {rel['target']} = " + " + ".join(parts)
                   + f" + {b} ± {max(rel['sigma'], 1e-9)!r}")
 
@@ -363,14 +427,15 @@ class VM:
         x = rel["target"]
         last = [r[x] for r in self.net.rows if x in r][-2:]
         before, before2 = f"{x}_before", f"{x}_before2"
-        statement(self.net, f"var {before} = {last[-1]!r}")
+        dx = self._dim_text(self._dimv(x))
+        statement(self.net, f"var {before} = {last[-1]!r}" + dx)
         terms = [f"{self._weight(f'a1_{k}', rel['lags'][0], 1e-3 * abs(rel['lags'][0]) + 1e-9)} * {before}"]
         if len(rel["lags"]) > 1:
-            statement(self.net, f"var {before2} = {last[0]!r}")
+            statement(self.net, f"var {before2} = {last[0]!r}" + dx)
             terms.append(f"{self._weight(f'a2_{k}', rel['lags'][1], 1e-3 * abs(rel['lags'][1]) + 1e-9)} * {before2}")
             statement(self.net, f"set {before2} = {before}")
         statement(self.net, f"set {before} = {x}")
-        c = self._weight(f"c_{k}", rel["constant"], rel["sigma"] + 1e-9)
+        c = self._weight(f"c_{k}", rel["constant"], rel["sigma"] + 1e-9, dim=self._dimv(x))
         statement(self.net, f"relate {name}: {x} = " + " + ".join(terms) + f" + {c} ± {max(rel['sigma'], 1e-9)!r}")
 
     def self_hidden(self):
@@ -402,7 +467,7 @@ class VM:
             sigma = max(rel["sigma"], 1e-6)
             if rel.get("kind") == "sum":
                 value = -verdict["value"] * sigma
-                statement(self.net, f"learn {h} = {value!r}")
+                statement(self.net, f"learn {h} = {value!r}" + self._dim_text(self._sum_dim(rel)))
                 self.net.measured[h] = (value, max(verdict["sigma"] * sigma, 1e-9))
                 rel["terms"].append((1.0, {h: 1.0}))
             else:
@@ -424,8 +489,9 @@ class VM:
         h, before = f"drift_{k}", f"drift_{k}_before"
         sigma = max(rel["sigma"], 1e-6)
         last = -res[-1] * sigma
-        statement(self.net, f"node {h} = {last!r} signed")
-        statement(self.net, f"var {before} = {last!r}")
+        dim = self._dim_text(self._sum_dim(rel))
+        statement(self.net, f"node {h} = {last!r} signed" + dim)
+        statement(self.net, f"var {before} = {last!r}" + dim)
         rho = self._weight(f"rho_{k}", drift["rho"], 0.05)
         statement(self.net, f"relate {h}_law: {h} = {rho} * {before} ± {max(drift['sigma'] * sigma, 1e-9)!r}")
         statement(self.net, f"set {before} = {h}")
@@ -435,6 +501,14 @@ class VM:
         self.machine = None
         return (f"a node nobody mentioned, that changes: {h} in {rel['name']} (its misses followed each other: "
                 f"each one {drift['rho']:.2f} of the one before, over {drift['rows']} rows)")
+
+    def _sum_dim(self, rel):
+        """The dimension of a sum relation's terms (that of its first node with one)."""
+        for _, t in rel["terms"]:
+            for n in t:
+                if self.net.nodes.get(n, {}).get("dim"):
+                    return self._dimv(n)
+        return None
 
     def self_fuse(self):
         """The machine's own routine against writing a node twice: it looks at what its inputs have been and fuses
@@ -525,18 +599,31 @@ class VM:
         done = []
         if night:
             done = self.grow()               # at night, the machine puts together what it has seen
-            self.m().downscale(NIGHT)
+            done += mind.prune(self, night=True)   # and forgets what it no longer uses
+            # the weights loosen, less those that learned under pleasure, more those that learned under displeasure
+            self.m().downscale(NIGHT, mind.night_factors(self.net, NIGHT))
+            tags = mind.mood(self.net)["tags"]
+            for w in tags:
+                tags[w] *= 0.5
         self.m().sleep(path or self.memory)
         return done
 
     def wake(self, path=None):
         self.machine = Machine.wake(path or self.memory)
         self.net = self.machine.net
+        self.past = []
+        self._reported = set()
 
     def blank(self):
         self.net = Network()
         self.machine = None
         self.history = {}
+        self.past = []
+        self._reported = set()
+
+    def pop_events(self):
+        out, self.events = self.events, []
+        return out
 
 
 class Shell(cmd.Cmd):
@@ -551,11 +638,15 @@ class Shell(cmd.Cmd):
         self.base = HERE
         self.sound = False
         self.clock = 0.0
-        self.intro = (f"GRM machine: {vm.note}. Talk to it in its words (var, set, relate, learn, input, output...); "
-                      f"Enter alone = one tick. `help` for the rest.")
+        enc = getattr(sys.stdout, "encoding", None) if out is None else "utf-8"
+        self.intro = (editor.banner(enc) + f"\n  {vm.note}.\n  Talk to it in its words (var, set, relate, learn, input, "
+                      f"output...); Enter alone = one tick; Tab completes. `help` for the rest.")
 
     def emptyline(self):
         self.do_tick("")
+
+    def commands(self):
+        return [n[3:] for n in self.get_names() if n.startswith("do_") and n not in ("do_EOF",)]
 
     def default(self, line):
         word = line.split()[0].lower() if line.split() else ""
@@ -564,22 +655,52 @@ class Shell(cmd.Cmd):
                 said = self.vm.say(line, self.base)
             except TalkError as e:
                 self.write(f"  ? {e}")
+                mind.reward(self.vm.net, -0.2)
                 return
             if said:
                 self.write(f"  {said}")
             return
-        self.write(f"  ? '{word}' is not a word of the machine (help)")
+        like = diagnose.close(word, list(self.WORDS) + self.commands())
+        self.write(f"  ? '{word}' is not a word of the machine" + (f"; did you mean {' or '.join(like)}?" if like
+                                                                    else " (help)"))
 
     def onecmd(self, line):
-        if self.vm.net.recording is not None:
-            self.default(line)
+        try:
+            if self.vm.net.recording is not None:
+                self.default(line)
+                return False
+            if ";" in line:
+                for part in line.split(";"):
+                    if part.strip() and self.onecmd(part.strip()):
+                        return True
+                return False
+            return super().onecmd(line)
+        except Exception as e:  # noqa: BLE001 - an error of the machine is said, never a crash
+            self.write("  ! " + diagnose.internal(e))
+            mind.reward(self.vm.net, -0.5)
             return False
-        if ";" in line:
-            for part in line.split(";"):
-                if part.strip() and self.onecmd(part.strip()):
-                    return True
-            return False
-        return super().onecmd(line)
+        finally:
+            self.say_events()
+
+    def say_events(self):
+        for ev in self.vm.pop_events():
+            mark = "!" if ev.startswith(("error", "warning")) else "~"
+            self.write(f"  {mark} {ev}")
+
+    # --------------------------------------------------------------- Tab (terminal, with readline)
+    def _complete(self, line, endidx):
+        net = self.vm.net
+        start, found = editor.complete(line, endidx, nodes=net.nodes, relations=[r["name"] for r in net.relations],
+                                       commands=self.commands(), networks=net.networks, base=self.base)
+        return start, found
+
+    def completenames(self, text, *ignored):
+        return self.completedefault(text, text, 0, len(text))
+
+    def completedefault(self, text, line, begidx, endidx):
+        start, found = self._complete(line, endidx)
+        cut = begidx - start
+        return [f[cut:] for f in found if len(f) >= cut]
 
     # --------------------------------------------------------------- running
     def do_tick(self, arg):
@@ -632,7 +753,8 @@ class Shell(cmd.Cmd):
         """ask NODE: its value (± what the messages say of its uncertainty)"""
         name = arg.strip()
         if name not in self.vm.net.nodes:
-            self.write(f"  ? no node {name}")
+            like = diagnose.close(name, self.vm.net.nodes)
+            self.write(f"  ? no node {name}" + (f"; did you mean {' or '.join(like)}?" if like else ""))
             return
         m = self.vm.m()
         m.run(5000)
@@ -699,7 +821,102 @@ class Shell(cmd.Cmd):
         except ValueError:
             self.write("  clock HZ")
             return
+        self.vm.clock_hz = self.clock
         self.write(f"  clock {self.clock:g} Hz")
+
+    # --------------------------------------------------------------- inside
+    def do_master(self, arg):
+        """master [n]: the master equation of the network now, or n ticks ago (pygrm's master invariant)"""
+        try:
+            n = int(arg) if arg.strip() else 0
+        except ValueError:
+            self.write("  master [n]")
+            return
+        res = mind.master(self.vm, n)
+        when = f"t - {n}" if n else "now"
+        tick = f" (tick {res['tick']})" if res.get("tick") is not None else ""
+        self.write(f"  master equation, {when}{tick}: {res['text']}")
+        if "span" in res:
+            self.write(f"    ties {res['span']:.3g} decades of scale, residual {res['residual']:.3g}{res['unit']}"
+                       + ("; implied by the network: " + ", ".join(f"{k} × {v:g}" for k, v in res["relations"].items())
+                          if res.get("derived") and res.get("relations") else "; written as one of its relations"))
+
+    def do_mood(self, arg):
+        """mood: its pleasure, what it expects, how it flourishes"""
+        md = mind.mood(self.vm.net)
+        mind.flourishing(self.vm.net)
+        d = md["dopamine"]
+        feel = "pleasure" if d > 0.05 else "displeasure" if d < -0.05 else "calm"
+        exp = md["expected"]
+        self.write(f"    dopamine     {d:+.3f}  ({feel})")
+        self.write(f"    expects      {exp:.3g} sigma of surprise" if exp is not None else
+                   "    expects      nothing yet (no input has surprised it)")
+        self.write(f"    flourishing  {md['flourishing']:.3f}  = sqrt(accuracy {md['accuracy']:.3f} × room "
+                   f"{md['room']:.3f})")
+        self.write(f"    progress     {md['progress']:+.3f}  (how much its surprise is falling)")
+        net = self.vm.net
+        self.write(f"    links        {mind.links(net)} of {mind.capacity(net)}" + ("  (set by hand)" if net.capacity
+                                                                                     else f"  ({self._host_text()})"))
+        self.write(f"    rent         {mind.price(net):.3g} bits per link per tick")
+
+    def do_capacity(self, arg):
+        """capacity [N | auto]: how many links (synapses) the network may hold (auto: what the host's budget allows);
+        beyond, it forgets what pays the least"""
+        net = self.vm.net
+        if arg.strip().lower() == "auto":
+            net.capacity = None
+        elif arg.strip():
+            try:
+                net.capacity = max(1, int(float(arg)))
+            except ValueError:
+                self.write("  capacity [N | auto]")
+                return
+        if arg.strip():
+            for line in mind.prune(self.vm):
+                self.write(f"  ~ {line}")
+        cap = mind.capacity(net)
+        self.write(f"  {mind.links(net)} links of {cap}" + ("  (set by hand)" if net.capacity else
+                                                            f"  ({self._host_text()})"))
+        self.write(f"  rent: {mind.price(net):.3g} bits per link per tick")
+
+    def _host_text(self):
+        h = self.vm.net.host
+        caps = h.get("caps") or {}
+        if not caps:
+            return f"nothing measured on this host: {mind.CAPACITY} by default"
+        parts = [f"{k} {int(v):,}".replace(",", " ") for k, v in sorted(caps.items())]
+        return "the host's budget: " + ", ".join(parts) + f"; limited by {h.get('limit')}"
+
+    def do_prune(self, arg):
+        """prune: forget now what a night would forget (what it found and no longer uses, and beyond capacity)"""
+        done = mind.prune(self.vm, night=True)
+        for line in done or ["nothing to forget"]:
+            self.write(f"  {line}")
+
+    def do_check(self, arg):
+        """check: everything that is wrong now (values that are not numbers, no settling, relations far from holding)"""
+        m = self.vm.m()
+        m.run(5000)
+        problems = diagnose.machine(m, m.quiet)
+        for p in problems or ["no problem found"]:
+            self.write(f"  {p}")
+
+    def do_inspect(self, arg):
+        """inspect NAME: what a node or a relation holds (what the window shows under the mouse)"""
+        name = arg.strip()
+        net = self.vm.net
+        if name in net.nodes:
+            self.vm.m().run(5000)
+            lines = graph.node_card(self.vm, name)
+        elif net.relation(name):
+            self.vm.m().run(5000)
+            lines = graph.relation_card(self.vm, name)
+        else:
+            like = diagnose.close(name, list(net.nodes) + [r["name"] for r in net.relations])
+            self.write(f"  ? no node or relation {name}" + (f"; did you mean {' or '.join(like)}?" if like else ""))
+            return
+        for ln in lines:
+            self.write(f"    {ln}")
 
     def do_help(self, arg):
         if arg:
@@ -712,7 +929,9 @@ class Shell(cmd.Cmd):
                 input x [= v]        output y           node NAME [M L T Q K]
                 network NAME(a, b) ... end      call NAME(a=.., b=..)      use FILE.grm
   running       Enter: one tick      tick [n]           put NAME = value      load FILE.csv | FILE.json
-  looking       ask NODE             outputs            show
+  looking       ask NODE             outputs            show               inspect NAME
+                master [n]           check              (the window draws the network itself)
+  inside        mood                 capacity [N]       prune
   memory        sleep [FILE]         wake [FILE]        blank      (quit puts it to sleep)
   the body      sound on | off       clock HZ (window)
                 quit""")
@@ -730,10 +949,15 @@ class Shell(cmd.Cmd):
 
 
 def main(argv):
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except (AttributeError, ValueError):  # pragma: no cover
+        pass
     vm = VM(blank="--blank" in argv)
     argv = [a for a in argv if a != "--blank"]
     if "--window" in argv:
-        body.window(vm, Shell)
+        argv = [a for a in argv if a != "--window"]
+        body.window(vm, Shell, " ".join(argv[1:]) if argv and argv[0] == "-c" else None)
         return
     shell = Shell(vm)
     if argv and argv[0] == "-c":

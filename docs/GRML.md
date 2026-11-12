@@ -337,6 +337,25 @@ relation was from holding), the machine:
 
 It says what it did, in words, after the file or when it goes to sleep.
 
+The constants it writes (`K_1`, `a_2`...) carry the dimension that balances their relation: h = K t² with t in
+seconds gives K in s^-2. Inside, the machine counts in its own units (c = hbar = G = kB = 1), and a relation whose
+two sides have different dimensions would be off by tens of decades there.
+
+It also:
+- **feels**: less surprised than it expected is pleasure, more is displeasure; finding something by itself is a burst
+  of pleasure, an error a burst of displeasure. What works under pleasure is kept longer, and the weights that learned
+  under it keep more of their precision through the night (`mood`);
+- **forgets**: its room comes from the host (the time a tick may take at the clock it runs at, the memory
+  available, divided by what a link costs there); every relation pays a rent in bits per link and per tick, whose
+  price grows as room runs out, against the information it brings (how much it narrows its nodes); every node and
+  relation also has a trace of its use. At night, what it found and no longer uses or no longer pays its rent goes;
+  beyond its capacity, what pays the least goes first. Never its base, its inputs, its outputs (`prune` does now
+  what a night does; `capacity N` sets the room by hand, `capacity auto` gives it back to the host);
+- **goes looking**: when it stays surprised and has stopped learning, it looks for relations and missing nodes by
+  itself, without waiting for the night (curiosity), and says what it found;
+- **tends to flourish**: accuracy (its inputs no longer surprise it) times room (links left), and the progress of its
+  learning (`mood`).
+
 ## The tick
 
 At each tick:
@@ -360,11 +379,21 @@ Typed at the prompt of `python vm/grm_vm.py` (or in the window, `--window`), nex
 | `ask NODE` | its value |
 | `outputs` | the outputs and the surprise |
 | `show` | what the network is |
+| `inspect NAME` | what a node or a relation holds (what the window shows under the mouse) |
+| `master [n]` | the master equation now, or n ticks ago (the last 240 are kept) |
+| `check` | everything that is wrong now |
+| `mood` | pleasure, what it expects, flourishing, progress, links, rent |
+| `capacity [N \| auto]` | the links it may hold (auto: the host's budget); beyond, it forgets what pays the least |
+| `prune` | forget now what a night would forget |
 | `sleep [FILE]`, `wake [FILE]` | memory |
 | `blank` | forget everything |
 | `sound on` / `off` | a voice per output |
 | `clock HZ` | ticks by themselves (window) |
-| `quit` | the night: fusions, then sleep in `vm/memory.json` |
+| `quit` | the night: fusions, relations found, forgetting, then sleep in `vm/memory.json` |
+
+Tab completes (statements, commands, nodes, relations, files, networks); in the window, what is typed is coloured,
+and Up and Down go back through it. Errors are said with where they are: a file's line, a name that looks like a
+known one, a network that does not settle, relations that contradict each other.
 
 ## Pitfalls
 
@@ -374,6 +403,8 @@ Typed at the prompt of `python vm/grm_vm.py` (or in the window, `--window`), nex
 - **A percent on a sum**: `± 1%` is for product relations and measurements; a sum takes its sigma in its own unit.
 - **Spaces in conditions**: `x in 3-0.25 .. 8` and not `x in 3 - 0.25 .. 8`.
 - **`e`, `pi`, `tau`, `inf` are constants in lower case only**: `E` is a name (an energy), `e` is Euler's number.
+- **A typo is a new node**: `relate r: heigt = g * t` makes a node `heigt`. The machine says it (`'heigt' is a new
+  node; did you mean 'height'?`). There is no statement yet to remove a node: `blank`, and say the program again.
 - **After a tick, the machine is already at the next moment**: a variable written by `set` (a counter, the past of
   an oscillation) has its new value, and what depends on it follows. `ask` after a tick answers for the moment that
   begins.
@@ -398,6 +429,7 @@ Typed at the prompt of `python vm/grm_vm.py` (or in the window, `--window`), nex
 | `vm/programs/fibonacci.grm` | the writes of a tick, all at once |
 | `vm/programs/thermostat.grm` | choices, a state, a loop with the outside |
 | `vm/programs/circles.grm` | a network called twice |
+| `vm/programs/universe.grm` | the constants of the universe and the seven relations of the chain: the master equation the machine derives, S · Equant² = ħc⁵/(4πG), over 175 decades (with Estock · Equant = ħc⁵/(4πG): S · Equant = Estock, never written) |
 | `vm/programs/mean.grm` + `numbers.csv` | learning a mean |
 | `vm/programs/fit.grm` + `measures.csv` | weights that learn together |
 | `vm/programs/double.grm` | a Minsky machine |

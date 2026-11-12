@@ -1,0 +1,50 @@
+# The constants of the universe and the seven relations of the chain (grm-core README, "The chain the network
+# took"): what the machine makes of them, and the master equation that comes out.
+#
+#     use programs/universe.grm ; tick ; master
+#     ask S ; ask Equant ; ask Estock
+#
+# Every node carries its dimension [M L T Q K] and is given and read in SI. Inside, the machine counts in its own
+# units, where c, hbar, G and kB are 1: written below, they are the SI values of its own units of length, time,
+# mass and temperature.
+#
+# S x Equant = Estock is not written. The master equation the machine brings up (pygrm's master invariant, every node
+# eliminated but the two farthest apart and the constants) is, over 175 decades:
+#     S · Equant^2 = hbar c^5 / (4 pi G)          (from planck × -1, floor × 2, quantum × 2, entropy × 1)
+# and among the other equations it implies, over 122 decades:
+#     Estock · Equant = hbar c^5 / (4 pi G)
+# The same right side: S · Equant^2 = Estock · Equant, that is S · Equant = Estock.
+
+# the constants of the universe: exact by definition (SI 2019), and G (CODATA 2018, measured to 0.0022 %, held
+# here as the constant it is: a master equation keeps the constants and eliminates everything else)
+node c = 299792458 fixed [0 1 -1 0 0]               # m/s
+node hbar = 1.054571817e-34 fixed [1 2 -1 0 0]      # J s
+node kB = 1.380649e-23 fixed [1 2 -2 0 -1]          # J/K
+node G = 6.67430e-11 fixed [-1 3 -2 0 0]            # m^3 kg^-1 s^-2
+
+# the universe today (Planck 2018)
+node H0 [0 0 -1 0 0]
+observe H0 = 2.184e-18 ± 0.74%                      # 1/s (67.4 km/s/Mpc)
+observe OmegaL = 0.6847 ± 1.07%                     # the share of the vacuum, a pure number
+
+# what the seven relations speak of
+node lP [0 1 0 0 0]                                 # the Planck length (m)
+node Hend [0 0 -1 0 0]                              # the rate the expansion tends to (1/s)
+node rhoL [1 -1 -2 0 0]                             # the energy density of the vacuum (J/m^3)
+node Estock [1 2 -2 0 0]                            # the vacuum inside the horizon (J)
+node Tfloor [0 0 0 0 1]                             # the temperature of the horizon (K)
+node Equant [1 2 -2 0 0]                            # its quantum of energy (J)
+node S                                              # the entropy of the horizon, a pure number
+
+# the seven relations of the chain
+relate planck:  lP^2 * c^3 = hbar * G                          # (0)       lP = sqrt(hbar G / c^3)
+relate end:     Hend^2 = H0^2 * OmegaL                         # (0 -> 1)  Hend = H0 sqrt(OmegaL)
+relate vacuum:  rhoL * 8 * pi * G = 3 * c^2 * H0^2 * OmegaL    # (1 -> 2A) energy density of the vacuum
+relate stock:   Estock * 3 * Hend^3 = 4 * pi * rhoL * c^3      # (1 -> 2A) the vacuum inside the horizon
+relate floor:   Tfloor * 2 * pi * kB = hbar * Hend             # (1 -> 2B) the horizon's temperature
+relate quantum: Equant = kB * Tfloor                           # (1 -> 2B) its quantum
+relate entropy: S * Hend^2 * lP^2 = pi * c^2                   # (2A <-> 2B) the horizon in Planck cells
+
+output S
+output Equant
+output Estock

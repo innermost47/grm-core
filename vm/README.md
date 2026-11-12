@@ -9,10 +9,13 @@ what is known of the brain where it can (see [Inspired by the brain](#inspired-b
 ```bash
 pip install pygrm                         # for the machine's units (optional otherwise)
 python vm/grm_vm.py                       # the machine in the terminal
-python vm/grm_vm.py --window              # the machine in a window: the outputs shown and heard
+python vm/grm_vm.py --window              # the machine in a window: the network drawn, the outputs shown and heard
+python vm/grm_vm.py --window -c "use programs/fall.grm; tick 5"   # ... with commands said at the start
 python vm/grm_vm.py --blank               # start blank: no memory, no base
 python -m pytest vm/test_vm.py
 ```
+
+![The window: the words on the left, the network in the middle (the mouse over a relation found by itself), the master equation above it, the outputs and what the machine feels on the right](../docs/grm_vm_window.png)
 
 ![The panel of outputs: a Minsky machine doubling 5 (s, b), a line learned from 100 rows (y), then a row it did not expect (surprise)](../docs/grm_vm_panel.png)
 
@@ -127,6 +130,42 @@ What the machine takes from what is known of the brain, and where:
   scaled down during sleep (about 80 % of the cortical synapses sampled in mice shrank by nearly 20 %), which makes
   room for new learning. Here, at the end of a session (`quit`), the precision of every learned weight is multiplied
   by 0.8 before it is written to memory; its value is kept.
+- **An energy budget, not a number of synapses.** A brain does not count its synapses: it has an energy budget
+  (about 20 W), most of it spent on synaptic transmission (Attwell & Laughlin 2001), and what it can hold follows.
+  Here the energy is what the host machine gives: time (a tick within half the clock's period, or within 50 ms when
+  no clock runs: real time) and memory (a quarter of what is available now). The machine measures what a link costs
+  on this host (its rounds timed once a session, the rounds a tick takes as it goes, about 4 kB of memory a link),
+  and its capacity (in links: one node in one relation, a synapse) is the budget divided by that cost. A faster host
+  gives it more room, a faster clock less. The host is measured again at each session; `capacity N` sets it by hand,
+  `capacity auto` gives it back to the host.
+- **Entropy: every relation pays a rent, in bits.** A relation brings information: how much it narrows what its
+  nodes can be. For Gaussian beliefs it is exact: without its message a node's entropy would rise by
+  1/2 log2(precision / (precision - its message)) bits. One that alone fixes a node brings tens of bits; an echo (a
+  relation that says what another says) under one. Holding a link costs a rent, in bits per tick, whose price grows
+  as room runs out (occupancy / (1 - occupancy) × 0.1: nothing in an empty network, more and more in a full one):
+  Rissanen's minimum description length, with a price set by scarcity. At night, what the machine found by itself
+  and no longer pays its rent is forgotten; when room runs out, what pays the least goes first (what it found, then
+  what was written), with the nodes it had made for it.
+- **Use and pruning.** Synapses that are not used weaken and are pruned, mostly during sleep. Here every node and
+  relation also carries a trace of its use: it rises each time it works (a relation that answers, a node that moves
+  or is read) and halves every 1000 ticks when nothing uses it; at night, what it found by itself and no longer uses
+  (trace under 0.01) is forgotten. Never the base it was born with, never its inputs and outputs.
+- **Pleasure and displeasure.** The dopamine neurons signal not a reward but the difference between what was
+  expected and what came (a reward prediction error: Schultz, Dayan & Montague 1997). Here the machine expects a
+  certain surprise from its inputs (a running mean); less surprised than expected (a prediction that holds) is
+  pleasure, more is displeasure; finding something by itself (a relation, a fusion, a missing node) is a burst of
+  pleasure, an error (a calculation that does not settle, a value that is not a number, an error of the machine) a
+  burst of displeasure. Dopamine is the third factor of learning (Frémaux & Gerstner 2016): it tags what has just
+  worked. A relation that works under pleasure gains more trace (kept longer), under displeasure less; a weight that
+  learned under pleasure keeps more of its precision through the night (up to all of it), under displeasure less
+  (down to 60 %): sleep consolidates what was rewarded.
+- **Flourishing.** Two things together. (a) Learning progress: how much the surprise is falling (Oudeyer & Kaplan's
+  intrinsic motivation: drawn neither to what it knows nor to what it cannot understand, but to what it is learning).
+  (b) Economy: explaining much with little, accuracy (1 / (1 + mean surprise²)) times room (1 - links / capacity),
+  in the spirit of Friston's free energy. Flourishing = sqrt(accuracy × room), and progress beside it. The machine
+  tends to it by itself: when it stays surprised (more than 2 sigma over 20 ticks) and has stopped learning, it goes
+  looking for what it misses (relations, missing nodes) without waiting for the night (curiosity, at most every 50
+  ticks); when it has no room left, it forgets.
 - **Many paths, not echoes.** More relations make the network more exact only if they bring something new: a
   relation that says again what others say made the messages swing and blow up. A relation that sees its answers swing
   calms down.
@@ -137,14 +176,61 @@ Sources: [Dehaene et al. 2008, Log or linear? Distinct intuitions of the number 
 Sources: [Aitchison et al., Synaptic plasticity as Bayesian inference (arXiv 1410.1029; Nature Neuroscience 2021)](https://arxiv.org/abs/1410.1029);
 [Rao & Ballard, predictive coding (review: arXiv 2112.10048)](https://arxiv.org/pdf/2112.10048);
 [Tononi & Cirelli 2006, Sleep function and synaptic homeostasis](https://www.psychiatry.wisc.edu/courses/Nitschke/seminar/tononi%20&%20cirelli%202006%20sleep%20medicine%20reviews.pdf);
-[NIMH 2017, sleep may trim neural connections](https://www.nimh.nih.gov/news/science-news/2017/sleep-may-trim-neural-connections-to-restore-learning-ability).
+[NIMH 2017, sleep may trim neural connections](https://www.nimh.nih.gov/news/science-news/2017/sleep-may-trim-neural-connections-to-restore-learning-ability);
+Schultz, Dayan & Montague 1997, A neural substrate of prediction and reward (Science 275);
+Attwell & Laughlin 2001, An energy budget for signaling in the grey matter of the brain (Journal of Cerebral Blood
+Flow & Metabolism 21);
+Rissanen 1978, Modeling by shortest data description (Automatica 14);
+Frémaux & Gerstner 2016, Neuromodulated spike-timing-dependent plasticity, and theory of three-factor learning rules
+(Frontiers in Neural Circuits 9);
+Oudeyer & Kaplan 2007, What is intrinsic motivation? A typology of computational approaches (Frontiers in
+Neurorobotics 1);
+Friston 2010, The free-energy principle: a unified brain theory? (Nature Reviews Neuroscience 11).
+
+## The master equation
+
+pygrm's master invariant (`GlobalRelationalNetwork.extract_master_invariant`): of the relations the network holds,
+and of those it implies between its farthest scales (every other node eliminated, the constants kept), the one that
+ties the widest span of scales with the smallest residual (merit = span in decades / (1 + 10^7 residual)). The
+machine keeps a picture of its values at each tick (the last 240), so it can be read now (`master`) and at t - n
+(`master n`, or the slider of the window). A sum whose terms are not all of some size (a counter at 0) spans no
+scale and is left out.
+
+## When something is wrong
+
+Nothing passes in silence:
+- an error in a file says the file, the line and what was on it;
+- a name written for the first time that looks like a known one (`heigt` next to `height`) is said: a typo makes a
+  new node and the program then computes something else without a word;
+- a word or a node that does not exist: what it looks like (`tikc`: did you mean `tick`?);
+- values that are not numbers; a network that does not settle in the rounds it was given (and why: what still moves,
+  or exact relations that say the same thing twice or contradict each other); a relation of the program far from
+  holding (more than 5 sigma: two relations that contradict each other). Each is said once, again only after it has
+  come back. Relations that hear inputs are far from holding when data surprise them: that is the surprise, shown on
+  its own;
+- an error of the machine itself (Python) is said with where it happened, never a crash;
+- `check` lists everything that is wrong now, `inspect NAME` shows what a node or a relation holds.
 
 ## The body (`body.py`)
 
 The only part that is not the network: what a human uses to talk to it and to perceive what it gives out.
-- In: the keyboard (statements, `put NAME = value`, Enter), files (`load`).
-- Out, for the eyes: the window keeps a part for the outputs only: each output with its value, a bar and its last
-  240 ticks. Nothing else is drawn.
+- In: the keyboard (statements, `put NAME = value`, Enter), files (`load`). What is typed is coloured as it is typed
+  (statements, commands, known nodes, relations, new names, numbers, comments); Tab completes (statements and
+  commands, then nodes and relations, files after `use` and `load`, networks after `call`; twice lists the
+  candidates); Up and Down go back through what was typed. In the terminal, Tab completes the same way (readline).
+- Out, for the eyes: the window in three parts.
+  - Left: the words and the answers (errors in red, what the machine did by itself in teal).
+  - Middle: the network itself: a round for each node (blue: input, orange: output, purple: variable, green:
+    weight, grey: the base, dashed: made by itself), a square for each relation (grey: holds, amber: 1 to 3 sigma
+    from holding, red: beyond), a line for each link, a dashed arrow for each write of a tick (`set`), dashed lines
+    for a relation whose conditions do not hold; a ring around what has just moved. The mouse over a node shows its
+    value and uncertainty, unit, measurement, names, relations, origin, use; over a relation, its text, how far it is
+    from holding, its conditions, swings, weights, last surprise, where it comes from (r² when it was found), its
+    use, and the information it brings in bits against its rent. Drag a node to move it (it stays), drag the background to move the picture, the wheel zooms, a double
+    click puts everything back. Above it: the master equation, now or at t - n (slider).
+  - Right: inside (pleasure, flourishing, progress, links of capacity and what limits it, the rent), then the
+    outputs: each with its value, a bar
+    and its last 240 ticks, and the surprise.
 - Out, for the ears (`sound on`): each output is a voice. Its pitch is where its value stands between the lowest
   and the highest it has had (two octaves from 220 Hz); its loudness is how much it has just moved. A network that
   holds still is silent. (winsound on Windows; sounddevice elsewhere if it is installed; otherwise silent.)
@@ -164,6 +250,13 @@ The only part that is not the network: what a human uses to talk to it and to pe
   the base, it holds that node at its value.
 - **What it finds by itself**: the forms above, between up to three inputs (a sum: up to three products). Every input
   is looked at; with many inputs, it will have to look first near what moves together.
+- **Capacity**: the cost of a link is measured on a chain where every processor works at every round (the worst
+  case) and its memory is an estimate (about 4 kB, measured once): the room is a budget, not an exact count. When
+  nothing can be measured, 10 000 links.
+- **Information** is that of Gaussian messages: around loops, belief propagation counts some of it twice, so an echo
+  shows a little information (under one bit) instead of none.
+- **The picture** of the network is drawn with forces, a few steps at each redraw: past a few hundred nodes it gets
+  slow and crowded.
 - **It is Python**: the relational machine is simulated one processor after the other. A tick of a small program
   takes well under a millisecond here; a network of thousands of processors, more.
 
@@ -173,11 +266,20 @@ The only part that is not the network: what a human uses to talk to it and to pe
 - `runtime.py`: the relational machine (messages, conditions, converters, contacts, terms that multiply nodes,
   ticks, learning, sleep and wake).
 - `grm_vm.py`: the machine (its memory, its units, data files) and its shell.
-- `body.py`: the window, the outputs' panel, the voices.
+- `body.py`: the window (the words, the network drawn, the outputs' panel), the voices.
+- `mind.py`: what the machine feels and keeps: use and entropy (what it forgets), pleasure and displeasure,
+  flourishing and curiosity, the master equation now and at t - n.
+- `diagnose.py`: what can go wrong, said (typos, values that are not numbers, no settling, contradictions, errors of
+  the machine).
+- `editor.py`: the colours of a line of GRML, what Tab completes, the banner.
+- `graph.py`: where the nodes and relations go on the screen, and what each one holds (what the mouse shows).
 - `base.grm`: the base it is born with.
 - `programs/`: the examples of [docs/GRML.md](../docs/GRML.md) (`hello`, `fall`, `count`, `fibonacci`, `thermostat`,
-  `circles`, `mean` + `numbers.csv`, `fit` + `measures.csv`, `double`), each one run by the tests.
+  `circles`, `mean` + `numbers.csv`, `fit` + `measures.csv`, `double`, `universe`: the constants and the seven
+  relations of the chain, and the master equation the machine derives from them), each one run by the tests.
 - `test_vm.py`: Turing completeness (Minsky addition and multiplication), loops, choices, terms that multiply nodes,
   learning from CSV and JSON and remembering it, weights learning together (the least squares exactly), surprise,
   fusion by hand and by itself (and none with a vague node), the base, a night of sleep, sleep and wake (the same run as never
-  sleeping), units, the voices, the shell.
+  sleeping), units, the voices, the shell; errors said (a file's line, typos, contradictions, errors of the
+  machine), the dimension of the weights it writes, colours and Tab, the picture and what the mouse shows, the master
+  equation now and before, traces and forgetting, pleasure and displeasure, curiosity, what it feels remembered.
