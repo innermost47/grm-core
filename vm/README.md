@@ -192,7 +192,8 @@ Friston 2010, The free-energy principle: a unified brain theory? (Nature Reviews
 pygrm's master invariant (`GlobalRelationalNetwork.extract_master_invariant`): of the relations the network holds,
 and of those it implies between its farthest scales (pairs and, since pygrm 0.5.0, triples of nodes, every other node
 eliminated), the one that ties the widest span of scales with the smallest residual (merit = span in decades /
-(1 + 10^7 residual); a residual within the precision of exact relations counts as none). From the seven relations of
+(1 + 10^7 residual); a residual within the precision of exact relations counts as none, and a node that is a pure
+number times another is the same scale). From the seven relations of
 `programs/universe.grm` it brings up S · Equant = Estock over 175 decades, every constant cancelling; how robust that
 is, `test_universe_unbiased.py` says (seven runs: G measured, nothing fixed, distractors, neutral names, another H0,
 and a wrong relation that must not give it). The

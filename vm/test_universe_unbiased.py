@@ -162,3 +162,25 @@ if __name__ == "__main__":
             print("   implied by the seven: " + (f"yes (= {imp['value']:.9g})" if imp else "no"))
             print(f"   master equation:      {r['master']}   [{span} decades, residual {resid}]"
                   + ("   <- S·Equant = Estock" if r["is_target"] else ""))
+
+
+README_NETWORK = os.path.join(HERE, "..", "equation", "data", "grm_network_fully_enriched.json")
+
+
+@pytest.mark.skipif(not NEW_ENOUGH, reason="needs pygrm >= 0.5.0")
+@pytest.mark.skipif(not os.path.exists(README_NETWORK), reason="the README network is not here")
+def test_the_readme_network_brings_it_up_through_the_seven_relations():
+    """The 199 quantities of the README, solved: the master invariant is S x Equant = Estock, and the relations it
+    comes from are the seven of the chain (i_lP x -2 is planck, i_Hend x 2 is end, as written in that network)."""
+    sys.path.insert(0, os.path.join(HERE, "..", "equation"))
+    from store import load_grm_network_safely        # the loader of equation/ (the README's scripts)
+    data = load_grm_network_safely(README_NETWORK)
+    g = pygrm.GlobalRelationalNetwork(nodes_spec=data["nodes_spec"], relations_spec=data["relations_spec"])
+    measured = {k: tuple(m) if isinstance(m, list) else m for k, m in data.get("measured", {}).items()}
+    sol = g.solve(measured_dict=measured)
+    m = g.extract_master_invariant(sol["values"], display_mode="compact")
+    assert m["terms"] == {"S": 1.0, "Equant": 1.0, "Estock": -1.0} or \
+        {k: -c for k, c in m["terms"].items()} == {"S": 1.0, "Equant": 1.0, "Estock": -1.0}
+    assert abs(m["rhs"]) < 1e-9 and m["span"] > 175
+    assert {k: abs(w) for k, w in m["relations"].items()} == {
+        "i_lP": 2.0, "i_Hend": 2.0, "i_rhoL": 1.0, "i_Estock": 1.0, "i_Tfloor": 1.0, "i_Equant": 1.0, "i_S": 1.0}

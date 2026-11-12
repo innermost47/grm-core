@@ -551,11 +551,14 @@ def equation_text(best):
             sign = ("-" if c < 0 else "") if k == 0 else (" - " if c < 0 else " + ")
             parts.append(sign + coef + body)
         return "".join(parts) + f" = {_fmt(best['rhs'])}"
-    parts = []
-    for n, c in terms.items():
-        c = float(c)
-        parts.append(n if c == 1 else f"{n}^{c:g}")
     rhs = best["rhs"]
+    terms = {n: float(c) for n, c in terms.items()}
+    if sum(c < 0 for c in terms.values()) > sum(c > 0 for c in terms.values()):
+        terms = {n: -c for n, c in terms.items()}           # the same equation, the other way up
+        rhs = -rhs
+    parts = []
+    for n, c in sorted(terms.items(), key=lambda kv: kv[1] < 0):     # the positive powers first
+        parts.append(n if c == 1 else f"{n}^{c:g}")
     right = _fmt(10.0 ** rhs) if abs(rhs) < 300 else f"10^{rhs:.6f}"
     return " · ".join(parts) + f" = {right}"
 

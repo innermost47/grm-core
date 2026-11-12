@@ -642,7 +642,7 @@ def test_master_equation_now_and_before():
     pytest.importorskip("pygrm")
     vm = example("fall")
     now = mind.master(vm)
-    assert now["text"] == "height · g^-1 · t^-2 = 0.5" and now["residual"] < 1e-9
+    assert now["text"] == "g · t^2 · height^-1 = 2" and now["residual"] < 1e-9
     vm.say("relate run: distance = height * 3")
     vm.say("observe distance = 58.86")
     vm.tick(3)

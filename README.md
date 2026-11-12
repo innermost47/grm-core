@@ -139,7 +139,9 @@ python equation_wave.py              # the wave of the equation over a cycle (pi
 
 Nothing new was measured. One GRM network holds 199 quantities already known (cosmology, the Planck units, atoms,
 planets, rock, a guitar, a voice), 123 relations and 98 measurements (`data/grm_network_fully_enriched.json`). Solved
-and asked for the invariant that ties the widest span of scales together, it brings up, over 175 decades:
+and asked for the invariant that ties the widest span of scales together (pygrm ≥ 0.5.0: the equations the network
+implies between pairs and triples of its nodes, a node that is a pure number times another counted as one scale), it
+brings up, over 175 decades:
 
 ```math
 S \cdot E_{quant} = E_{stock}
@@ -152,6 +154,13 @@ E_{stock} = \frac{c^5}{2 G H} \approx 10^{70}\ \text{J}
 S is the entropy of the horizon (its area in Planck cells), E_quant the energy of the horizon's temperature (the
 quantum, ħ only), E_stock the energy that fills the horizon (gravity, G only). The equation holds for any H: it ties the
 quantum and gravity through S, the only term that holds both.
+
+`vm/test_universe_unbiased.py` checks it, with its criteria fixed before running: on this network (the invariant
+comes from exactly the seven relations below), and on the seven relations alone (`vm/programs/universe.grm`), run
+seven ways: as written, G measured, nothing fixed, among distractors, with neutral names, with another H, and with one
+relation made wrong, which must not give it (it does not). With G measured, the GRM machine settles its values less
+finely than its exact relations and brings up S · E_quant² · l_P² = ħ²c²/(4π) instead; the equation is still
+implied, exactly.
 
 ### The chain the network took
 
