@@ -339,6 +339,18 @@ nœud ses autres relations dépasse la borne (un sol qui retient un corps qui to
 La machine fusionne aussi toute seule (après un fichier, la nuit) : deux entrées qui s'accordent ligne à ligne ; une
 entrée qui est l'inverse d'une autre ligne à ligne ; une entrée qui reste immobile à la valeur d'un nœud connu à 1 %.
 
+### Retirer
+
+| commande | |
+|---|---|
+| `remove RÉSEAU` | un réseau du réseau (un programme, un fichier, ce qu'elle a trouvé) : ses relations, et ses nœuds qu'aucun autre réseau ne tient |
+| `remove NŒUD` | le nœud et chaque relation qui le tient |
+| `remove RELATION` | la relation (celle d'un `set` : le set part avec) |
+| `remove node|relation|network NOM` | quand un même nom désigne deux choses |
+
+Elle dit ce qu'elle retirerait et demande d'abord, en rouge (`o`/`n`), comme `rm` ; retirer `base` est signalé en plus.
+C'est noté dans le journal.
+
 ## Ce que la machine fait toute seule
 
 Après chaque fichier qu'elle charge et la nuit, avec ce qu'elle a vu (les entrées de chaque instant, dans l'ordre,
@@ -465,6 +477,11 @@ programme :
 
 Un en-tête qui n'est pas un nom du langage (`Température (°C)`, `CO2 (ppm)`, `2020`) en devient un (`Temperature_C`,
 `CO2_ppm`, `_2020`), et la machine le dit.
+
+Une ligne de titre au-dessus des noms, ou une ligne de formats en dessous, n'est pas prise pour l'en-tête : l'en-tête
+est la première ligne de noms distincts. Une case vide n'est pas une mesure (le nœud garde ce qu'il croit, on ne lui
+redit pas la valeur précédente). Les lois sont cherchées dans des lignes prises tout le long du fichier, pas seulement
+à sa fin ; une colonne remplie sur trop peu de lignes est laissée hors de la recherche.
 
 **Ce qui a été tapé** est gardé de session en session dans `vm/history.txt`, à côté de la mémoire : Haut et Bas le
 retrouvent, dans la fenêtre comme dans le terminal.

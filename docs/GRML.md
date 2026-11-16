@@ -329,6 +329,18 @@ relations say of it is beyond the bound (a floor that holds a falling body, not 
 The machine also fuses by itself (after a file, at night): two inputs that agree row by row; an input that is the
 inverse of another row by row; an input that holds still at the value of a node known to 1 %.
 
+### Taking away
+
+| command | |
+|---|---|
+| `remove NETWORK` | a network in the network (a program, a file, what it found): its relations, and its nodes no other network holds |
+| `remove NODE` | the node and every relation that holds it |
+| `remove RELATION` | the relation (a `set`'s: the set goes with it) |
+| `remove node|relation|network NAME` | when one name is two things |
+
+It says what it would take away and asks first, in red (`y`/`n`), as `rm` does; removing `base` is said twice over. It
+goes in the logbook.
+
 ## What the machine does by itself
 
 After every file it loads and at night, with what it has seen (the inputs of each moment, in order, and how far each
@@ -448,6 +460,11 @@ Tab completes paths after each of them (`cd` offers only folders).
 
 A header that is not a name of the language (`Température (°C)`, `CO2 (ppm)`, `2020`) becomes one (`Temperature_C`,
 `CO2_ppm`, `_2020`), and the machine says so.
+
+A title row above the names, or a row of formats below them, is not taken for the header: the header is the first
+row of distinct names. An empty cell is no measurement (the node keeps what it believes, it is not told the last
+value again). The laws are looked for in rows taken all along the file, not only at its end; a column filled on too
+few rows is left out of the search.
 
 **What was typed** is kept from session to session in `vm/history.txt`, next to the memory: Up and Down find it again,
 in the window and in the terminal.
