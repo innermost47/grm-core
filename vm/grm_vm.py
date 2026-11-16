@@ -58,6 +58,7 @@ MEMORY = os.path.join(HERE, "memory.json")
 BASE = os.path.join(HERE, "base.grm")
 UNITS = "ticks"
 ROWS = 500         # how many moments the machine keeps to find relations and missing nodes in
+SAMPLE = 400       # rows of a file it looks for laws in, taken all along the file
 MAX_NEW = 5        # relations it may add in one go
 SEEN = 240         # how many past values of each input the machine keeps (for its fusions)
 SAME = 0.01        # two series are one when they agree row by row (correlation 0.999) and in level and spread to 1 %
@@ -85,6 +86,19 @@ def group_of(line):
             first = m.group(2).split(",")[0].split("=")[-1].strip()
             return f"{m.group(1)}({first})" if first else m.group(1)
     return "typed"
+
+
+def complete(rows, dense=0.8):
+    """The rows that have a value for every column present in most of them (`dense` of them): a column that is
+    mostly empty is left out rather than filled with what it said before."""
+    if not rows:
+        return []
+    count = {}
+    for r in rows:
+        for k in r:
+            count[k] = count.get(k, 0) + 1
+    keep = [k for k, c in count.items() if c >= dense * len(rows)]     # in the order of the columns
+    return [{k: r[k] for k in keep} for r in rows if set(keep) <= set(r)] if keep else []
 
 
 def number(v):
@@ -121,6 +135,25 @@ def name_of(column):
     return "_" + t if t[0].isdigit() else t
 
 
+def header_line(table, look=6):
+    """Which of the first lines is the header: the one most like names (cells all different, not numbers, not
+    formats such as %6.3f). A title above it ("All CF4 Individual Distances" repeated) or a line of formats or units
+    under it is not taken for one."""
+    width = max((len(r) for r in table[:look]), default=0)
+    best, score = 0, -1
+    for i, row in enumerate(table[:look]):
+        cells = [c.strip() for c in row if c.strip()]
+        if not cells:
+            continue
+        names = [c for c in cells if number(c) is None and not c.startswith("%")]
+        distinct = len(set(names))
+        if len(names) < 0.6 * len(cells) or distinct < 0.6 * width:
+            continue
+        if distinct > score:
+            best, score = i, distinct
+    return best
+
+
 def read_table(path):
     """The rows of a CSV as written by any program: UTF-8 (with or without BOM) or Windows' own encoding, separated
     by , ; or tabs, decimal points or commas. Returns (rows, {header: the name it became}) ."""
@@ -140,8 +173,10 @@ def read_table(path):
         sep = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
     except csv.Error:
         sep = max(",;\t", key=lambda d: lines[0].count(d))
-    reader = csv.reader(lines, delimiter=sep)
-    header = next(reader)
+    table = list(csv.reader(lines, delimiter=sep))
+    top = header_line(table)
+    header = table[top]
+    reader = iter(table[top + 1:])
     names, renamed = [], {}
     for h in header:
         n = name_of(h)
@@ -256,6 +291,62 @@ class VM:
         g["nodes"] += [n for n in sorted(new_nodes) if n not in g["nodes"]]
         g["relations"] += [r["name"] for r in new_rel if r["name"] not in g["relations"]]
         return True
+
+    # ------------------------------------------------------------------ taking a part of the network away
+    def removal(self, words):
+        """What `remove` would take away, without taking it: {"kind", "name", "nodes", "relations"}.
+            remove NETWORK    its relations, and its nodes no other network holds
+            remove NODE       the node and every relation that holds it
+            remove RELATION   the relation (a `set`'s: with what it writes)"""
+        net = self.net
+        kind = words[0].lower() if words and words[0].lower() in ("network", "node", "relation") else None
+        name = words[1] if kind and len(words) > 1 else (words[0] if words else "")
+        found = graph.groups(net)
+        if kind in (None, "network") and name in found:
+            nodes, rels = found[name]
+            others = set()
+            for g, (n_other, _) in found.items():
+                if g not in (name, "found"):
+                    others |= n_other
+            rels = sorted(rels)
+            held = {n for r in net.relations if r["name"] not in rels for n in net.nodes_of(r)}
+            nodes = sorted(n for n in nodes if n not in others and n not in held)
+            return {"kind": "network", "name": name, "nodes": nodes, "relations": rels}
+        name = net.aliases.get(name, name)
+        if kind in (None, "node") and name in net.nodes:
+            rels = sorted(r["name"] for r in net.relations if name in net.nodes_of(r))
+            return {"kind": "node", "name": name, "nodes": [name], "relations": rels}
+        if kind in (None, "relation") and net.relation(name) is not None:
+            return {"kind": "relation", "name": name, "nodes": [], "relations": [name]}
+        raise TalkError(tr("nothing called {name} (focus: the networks)", name=name))
+
+    def remove(self, plan):
+        """Takes away what removal() said, then what nothing holds any more; it goes in the logbook."""
+        net = self.net
+        for r in plan["relations"]:
+            rel = net.relation(r)
+            if rel is None:
+                continue
+            for st in [st for st in net.sets if "__next" in st["source"]
+                       and r == "set_" + st["target"] + "_" + st["source"].rsplit("__next", 1)[1]]:
+                net.sets.remove(st)                      # a `set`'s relation: the set goes with it
+                mind._remove_node(net, st["source"])
+            mind._remove_relation(net, r)
+        for n in plan["nodes"]:
+            for r in [r["name"] for r in net.relations if n in net.nodes_of(r)]:
+                mind._remove_relation(net, r)
+            mind._remove_node(net, n)
+        mind._tidy(net)
+        if plan["kind"] == "network":
+            net.groups.pop(plan["name"], None)
+        if self.focus and plan["name"] in self.focus[1:]:
+            self.focus = None
+        self.watches = [w for w in self.watches if w.target not in plan["nodes"] + plan["relations"]]
+        self.machine = None
+        journal.write(net, "removed", what=plan["kind"], name=plan["name"], nodes=len(plan["nodes"]),
+                      relations=len(plan["relations"]))
+        return tr("removed {what} {name}: {n} node(s), {r} relation(s)", what=tr(plan["kind"]), name=plan["name"],
+                  n=len(plan["nodes"]), r=len(plan["relations"]))
 
     def progress(self, done, total, what):
         if self.on_progress is not None:
@@ -383,6 +474,9 @@ class VM:
         # relation was from holding then
         row = {k: self.net.measured[k][0] for k, sp in self.net.nodes.items()
                if sp.get("input") and k in self.net.measured}
+        given = getattr(self, "_given", None)
+        if given is not None:                           # a row of a file: only the values it really has
+            row = {k: v for k, v in row.items() if k in given}
         if row and (learn or row != getattr(self, "_last_row", None)):
             self._last_row = row
             self.net.rows.append(row)
@@ -447,26 +541,40 @@ class VM:
         group = os.path.splitext(os.path.basename(path))[0]
         nodes0, relations0 = set(self.net.nodes), {r["name"] for r in self.net.relations}
         self.group = group
+        # what it looks for laws in: rows taken all along the file (not only its end), each with only the values it
+        # really has (an empty cell is no value, not the one before)
+        every = max(1, len(rows) // SAMPLE)
+        self._sample = []
+        columns = {k.strip() for r in rows[:1] for k in r if k.strip()}
         what = tr("rows")
         try:
             for k_row, rec in enumerate(rows, 1):
                 self.progress(k_row, len(rows), what)
-                given = False
+                given = {}
                 for k, v in rec.items():
                     x = number(v)
-                    if x is None:
-                        continue
                     k = k.strip()
-                    if not k:
+                    if x is None or not k:
                         continue
+                    given[k] = x
+                if not given:
+                    continue
+                m = self.m()
+                for k in columns - set(given):          # an empty cell: no measurement on this row
+                    k = self.net.aliases.get(k, k)
+                    if k in self.net.measured and k in m.index:
+                        m.forget(k)
+                for k, x in given.items():
                     self.put(k, x)
-                    given = True
-                if given:
-                    self.tick(learn=True)
-                    used += 1
+                self._given = set(given)
+                self.tick(learn=True)
+                used += 1
+                if k_row % every == 0 and len(self._sample) < SAMPLE:
+                    self._sample.append(dict(given))
         finally:
             self._loading = False
             self.group = None
+            self._given = None
         out = tr("{n} rows learned", n=used)
         if renamed:
             out += "\n    " + tr("columns named as the machine can write them: {names}", names=", ".join(
@@ -478,6 +586,7 @@ class VM:
                       columns=sorted({k for r in rows[:1] for k in r}))
         for line in self.grow():
             out += f"\n    {line}"
+        self._sample = None
         self.join(group, nodes0, relations0)                 # the file's inputs, and what was found in them
         self.focus = ("group", group)
         return out
@@ -545,12 +654,18 @@ class VM:
         if _discover is None or len(self.net.rows) < 8:
             return []
         names = [n for n in self.net.nodes if self.net.nodes[n].get("input")]
-        rows = [{k: r[k] for k in names if k in r} for r in self.net.rows]
-        rows = [r for r in rows if len(r) == len(rows[-1]) and set(r) == set(rows[-1])]
+        recent = [{k: r[k] for k in names if k in r} for r in self.net.rows]
+        sample = getattr(self, "_sample", None) or recent
+        sample = [{self.net.aliases.get(k, k): v for k, v in r.items() if self.net.aliases.get(k, k) in names}
+                  for r in sample]
+        laws = complete(sample)[:300]                   # where to look for laws: rows that have every value used
+        recent = complete(recent)[-200:]                # what carries from one moment to the next: the last rows
+        if len(laws) < 8:
+            return []
         try:
-            found = _discover.find_relations(rows[-200:], exclude=self.linked())
+            found = _discover.find_relations(laws, exclude=self.linked())
             moving = getattr(_discover, "find_dynamics", None)
-            dyn = moving(rows[-200:]) if moving else []
+            dyn = moving(recent) if moving and len(recent) >= 8 else []
         except (ValueError, ZeroDivisionError):
             return []
         done = []
@@ -2006,11 +2121,30 @@ class Shell(cmd.Cmd):
     def answer(self, line):
         what, found = self.asking
         self.asking = None
-        if line.strip().lower() in YES:
-            self._lines(lambda _a: files.remove(found), "")
-        else:
+        if line.strip().lower() not in YES:
             self.write("  " + tr("nothing deleted"))
+        elif what == "remove":
+            self.write("  " + self.vm.remove(found))
+        else:
+            self._lines(lambda _a: files.remove(found), "")
         return False
+
+    def do_remove(self, arg):
+        """remove NETWORK | NODE | RELATION (or remove network|node|relation NAME): taken away from the network, once
+        the human has said yes"""
+        words = arg.split()
+        if not words:
+            self.usage("remove")
+            return
+        try:
+            plan = self.vm.removal(words)
+        except TalkError as e:
+            self.write(f"  ? {e}")
+            return
+        self.asking = ("remove", plan)
+        base = "  " + tr("(its base: the points of the world it was born with)") if plan["name"] == "base" else ""
+        self.write("  ! " + tr("remove {what} {name}: {n} node(s), {r} relation(s)? (y/n)", what=tr(plan["kind"]),
+                               name=plan["name"], n=len(plan["nodes"]), r=len(plan["relations"])) + base)
 
     # --------------------------------------------------------------- help
     def do_lang(self, arg):

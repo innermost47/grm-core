@@ -118,7 +118,7 @@ def discovery(vm, f):
     elif powers and kind == "power":
         x, p = max(powers.items(), key=lambda kv: abs(kv[1]))
         sentence = tr("when {x} doubles, {y} is multiplied by {k}", x=x, y=target, k=f"{2 ** p:.3g}")
-    elif kind == "line":
+    elif kind in ("line", "linear"):
         sentence = tr("{y} follows a straight line", y=target)
     elif kind == "sum":
         sentence = tr("{y} is a sum of products: two worlds of the machine, stacked", y=target)

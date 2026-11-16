@@ -51,6 +51,7 @@ DOCS = {
     "input": ("input NAME [= value]", "an input, given at each moment", "input x"),
     "output": ("output NAME", "an output: shown, drawn, heard", "output height"),
     "fuse": ("fuse A B [inverse]", "B was A under another name", "fuse period T inverse"),
+    "remove": ("remove NETWORK | NODE | RELATION", "taken away, once asked", "remove cf4"),
     # commands: running
     "tick": ("tick [n]", "n ticks (Enter alone, F10: one)", "tick 10"),
     "put": ("put NAME = value [+/- sigma]", "give an input its value", "put x = 3"),

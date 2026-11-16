@@ -712,4 +712,15 @@ FR = {
         "un nouvel onglet : save NOM.ext lui donne son nom (dans {folder})",
     "a name first: save NAME.ext (in {folder})": "d'abord un nom : save NOM.ext (dans {folder})",
     "{name} is not a program (.grm): nothing to run": "{name} n'est pas un programme (.grm) : rien à exécuter",
+    "taken away, once asked": "retiré, une fois demandé",
+    "A network in the network (a program, a file, what it found), a node or a relation, taken away. A network's nodes "
+    "that another network holds stay. It asks first, in red; it goes in the logbook.":
+        "Un réseau du réseau (un programme, un fichier, ce qu'elle a trouvé), un nœud ou une relation, retiré. Les "
+        "nœuds d'un réseau qu'un autre réseau tient restent. Elle demande d'abord, en rouge ; c'est noté dans le journal.",
+    "nothing called {name} (focus: the networks)": "rien ne s'appelle {name} (focus : les réseaux)",
+    "removed {what} {name}: {n} node(s), {r} relation(s)": "retiré : {what} {name} : {n} nœud(s), {r} relation(s)",
+    "remove {what} {name}: {n} node(s), {r} relation(s)? (y/n)":
+        "retirer {what} {name} : {n} nœud(s), {r} relation(s) ? (o/n)",
+    "(its base: the points of the world it was born with)": "(sa base : les points du monde avec lesquels elle est née)",
+    "network": "réseau",
 }

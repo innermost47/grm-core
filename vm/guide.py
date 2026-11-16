@@ -9,6 +9,7 @@ from i18n import label, tr
 
 GROUPS = [
     ("the network", ["node", "relate", "observe", "forget", "keep", "var", "set", "learn", "input", "output", "fuse",
+                     "remove",
                      "network", "call", "end", "use"]),
     ("running", ["tick", "put", "run", "load", "clock"]),
     ("seeing it work", ["play", "pause", "step", "watch", "unwatch", "why"]),
@@ -89,6 +90,8 @@ MORE = {
     "journal": "What it lived, day after day: when it woke, the programs and files it was given, what it found by "
                "itself (with the law, a sentence and the points), what surprised it, what each night kept or "
                "forgot. Kept with its memory; read in the language of the machine.",
+    "remove": "A network in the network (a program, a file, what it found), a node or a relation, taken away. A "
+              "network's nodes that another network holds stay. It asks first, in red; it goes in the logbook.",
     "master": "pygrm's master invariant: the equation the network holds or implies that ties the widest span of "
               "scales.",
     "help": "help on / off: the menu of words while typing (the line of help under the prompt stays).",

@@ -33,6 +33,7 @@ relate r: y = k * x + c [± 0.5] [when s in 0.5 .. 1.5]
 learn k = 0                     a weight: what it learns stays (together with the weights it shares relations with)
 fuse A B                        B was A under another name: one node, every relation of B now on A (the machine
                                 also does it by itself)
+remove cf4                      a network, a node or a relation taken away, once asked (red, y/n); in the logbook
 input x [= 3]                   a node the outside measures (put, a file, the keyboard)
 output y                        a node the outside reads (shown and heard)
 input g positive [0 1 -2 0 0]   a positive node with its dimension [M L T Q K]: given and read in SI

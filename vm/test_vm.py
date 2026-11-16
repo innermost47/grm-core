@@ -1555,3 +1555,63 @@ def test_a_warning_is_not_an_error():
     sh, out = shell_of(vm)
     sh.onecmd("relate r: pressure = 2")
     assert any(s.startswith("  ⚠ warning: 'pressure' is a new node") for s in out)
+
+
+def test_a_title_row_above_the_names_is_not_the_header(tmp_path):
+    p = tmp_path / "t.csv"
+    p.write_text("Distances,,,\npgc,Vcmb,DM,eDM\n%d,%7.1f,%6.3f,%5.3f\n1,100,30,0.1\n2,200,31.5,0.1\n")
+    rows, _ = grm_vm.read_table(str(p))
+    assert set(rows[0]) == {"pgc", "Vcmb", "DM", "eDM"}
+
+
+def test_an_empty_cell_is_no_measurement(tmp_path):
+    p = tmp_path / "e.csv"
+    lines = ["x,y,z"] + [f"{i},{2 * i + 1}," + (f"{i % 7}" if i % 3 == 0 else "") for i in range(1, 60)]
+    p.write_text("\n".join(lines) + "\n")
+    vm = grm_vm.VM(memory=None, blank=True)
+    vm.load(str(p))
+    rows = vm.net.rows
+    assert not any("z" in r for r, i in zip(rows, range(1, 60)) if i % 3)       # an empty cell is not the last value
+
+
+def test_remove_a_network_keeps_what_others_hold():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    vm.say("relate a1: y = 2 * x", "base", group="one")
+    vm.say("relate b1: z = 3 * x", "base", group="two")
+    sh.onecmd("remove one")
+    assert any("(y/n)" in s for s in out) and vm.net.relation("a1") is not None     # nothing yet: it asks
+    sh.onecmd("y")
+    assert vm.net.relation("a1") is None and "y" not in vm.net.nodes
+    assert "x" in vm.net.nodes and vm.net.relation("b1") is not None                # held by the other network
+    assert "one" not in vm.net.groups
+    assert vm.net.journal[-1]["kind"] == "removed"
+
+
+def test_remove_a_node_takes_its_relations_and_no_says_no():
+    vm = grm_vm.VM(memory=None, blank=True)
+    sh, out = shell_of(vm)
+    vm.say("relate a1: y = 2 * x", "base")
+    sh.onecmd("remove node y")
+    sh.onecmd("n")
+    assert "y" in vm.net.nodes
+    sh.onecmd("remove y")
+    sh.onecmd("y")
+    assert "y" not in vm.net.nodes and vm.net.relation("a1") is None
+    sh.onecmd("remove nothing_here")
+    assert any(s.startswith("  ? ") for s in out)
+
+
+def test_removing_a_set_relation_takes_the_set():
+    vm = grm_vm.VM(memory=None, blank=True)
+    vm.say("var n = 1", "base")
+    vm.say("set n = n + 1", "base")
+    vm.remove(vm.removal(["set_n_1"]))
+    assert not vm.net.sets and "n__next1" not in vm.net.nodes and "n" in vm.net.nodes
+
+
+def test_a_straight_line_is_said():
+    import senses
+    vm = grm_vm.VM(memory=None, blank=True)
+    s = senses.discovery(vm, {"relation": "r", "text": "y = 2*x", "target": "y", "kind": "line", "powers": {}})
+    assert "straight line" in s["sentence"]

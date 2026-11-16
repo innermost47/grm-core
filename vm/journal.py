@@ -17,7 +17,7 @@ from i18n import tr
 
 KEEP = 3000          # entries kept
 ICONS = {"born": "☀", "woke": "☀", "program": "◆", "file": "⇣", "discovery": "✦", "found": "✧", "surprise": "≈",
-         "night": "☾", "kept": "⧉"}
+         "night": "☾", "kept": "⧉", "removed": "⌫"}
 
 
 def write(net, kind, **what):
@@ -98,6 +98,9 @@ def say(e):
         return icon, tr("a night: {d} found, {f} files, {s} surprises today; flourishing {fl}",
                         d=e.get("discoveries", 0), f=e.get("files", 0), s=e.get("surprises", 0),
                         fl=f"{e.get('flourishing', 1.0):.2f}"), more
+    if k == "removed":
+        return icon, tr("removed {what} {name}: {n} node(s), {r} relation(s)", what=tr(e.get("what", "")),
+                        name=e.get("name", "?"), n=e.get("nodes", 0), r=e.get("relations", 0)), []
     if k == "kept":
         return icon, tr("kept from the sandbox: {what}", what=", ".join(e.get("names", []))), []
     return icon, e.get("text", ""), []
